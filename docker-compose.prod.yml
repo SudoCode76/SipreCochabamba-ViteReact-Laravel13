@@ -1,0 +1,12 @@
+services:
+  frontend-prod:
+    build:
+      context: ./frontend
+      target: production
+    container_name: sipre-frontend-prod
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "4173:80"

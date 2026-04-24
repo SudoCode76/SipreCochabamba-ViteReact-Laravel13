@@ -28,16 +28,69 @@ Desde la raiz del proyecto:
 docker compose up --build
 ```
 
+Ese comando levanta:
+
+- `backend` en modo desarrollo con el codigo montado desde `./backend`
+- `frontend` en modo desarrollo con Vite y recarga en caliente desde `./frontend`
+- `db` con PostgreSQL y restauracion automatica del dump en la primera inicializacion
+
+Por defecto, el proyecto usa el frontend en modo desarrollo.
+
 Para dejarlo en segundo plano:
 
 ```bash
 docker compose up -d --build
 ```
 
+Si cambias archivos en `backend/` o `frontend/`, los contenedores ya ven esos cambios sin reconstruir imagenes.
+
+- Backend: refleja el codigo montado localmente.
+- Frontend: Vite recompila y recarga automaticamente en `http://localhost:5173`.
+
 Para detener los servicios:
 
 ```bash
 docker compose down
+```
+
+Si cambias dependencias del frontend o Dockerfile del frontend, si conviene recrear el servicio:
+
+```bash
+docker compose up -d --build frontend
+```
+
+Si cambias dependencias del backend o Dockerfile del backend:
+
+```bash
+docker compose up -d --build backend
+```
+
+## Frontend en produccion
+
+Tambien existe un archivo separado `docker-compose.prod.yml` para levantar el frontend compilado y servido por Nginx.
+
+Levantar frontend compilado en produccion:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build frontend-prod
+```
+
+Ese comando agrega el servicio `frontend-prod`, que usa el target `production` del `frontend/Dockerfile`.
+
+Disponible en:
+
+- Frontend produccion: `http://localhost:4173`
+
+Notas importantes:
+
+- `docker-compose.yml` es el flujo de desarrollo.
+- `docker-compose.prod.yml` es para validar o ejecutar el frontend compilado.
+- Puedes tener `frontend` y `frontend-prod` al mismo tiempo porque usan puertos distintos.
+- Si prefieres dejar solo el frontend compilado, deten el dev server antes:
+
+```bash
+docker compose stop frontend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build frontend-prod
 ```
 
 Para eliminar volumenes y restaurar el dump desde cero:
@@ -49,10 +102,49 @@ docker compose up --build
 
 ## Servicios disponibles
 
-- Frontend: `http://localhost:5173`
+- Frontend Vite dev server: `http://localhost:5173`
+- Frontend build produccion: `http://localhost:4173`
 - Backend: `http://localhost:8000`
 - API health: `http://localhost:8000/api/health`
 - PostgreSQL Docker: `localhost:5433`
+
+## Flujo de desarrollo recomendado
+
+1. Levanta el stack:
+
+```bash
+docker compose up -d --build
+```
+
+2. Abre el frontend en `http://localhost:5173`
+3. Abre la API en `http://localhost:8000`
+4. Edita archivos en `frontend/src/` o `backend/` normalmente desde tu editor
+5. Para revisar logs:
+
+```bash
+docker compose logs -f frontend
+docker compose logs -f backend
+```
+
+6. Si el frontend deja de reflejar cambios, recrealo:
+
+```bash
+docker compose up -d --build frontend
+```
+
+7. Si quieres validar como queda el frontend compilado para produccion:
+
+```bash
+docker compose stop frontend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build frontend-prod
+```
+
+8. Para volver al frontend de desarrollo:
+
+```bash
+docker compose stop frontend
+docker compose up -d --build frontend
+```
 
 ## Conexion a PostgreSQL desde DataGrip u otro cliente
 
