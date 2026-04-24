@@ -1,0 +1,50 @@
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.production
+
+# Logs
+*.log
+logs/
+
+# Dependencies and build outputs
+backend/vendor/
+backend/node_modules/
+backend/public/build/
+backend/public/hot
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+
+# Laravel runtime
+backend/bootstrap/cache/*.php
+backend/storage/logs/*.log
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/app/private/*
+backend/storage/app/public/*
+!backend/storage/app/.gitignore
+!backend/storage/app/private/.gitignore
+!backend/storage/app/public/.gitignore
+!backend/storage/framework/.gitignore
+!backend/storage/framework/cache/.gitignore
+!backend/storage/framework/cache/data/.gitignore
+!backend/storage/framework/sessions/.gitignore
+!backend/storage/framework/views/.gitignore
+!backend/storage/logs/.gitignore
+
+# Local tooling
+frontend/*.local
+
+# Unrelated local artifacts
+testApis/
