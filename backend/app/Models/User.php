@@ -82,4 +82,13 @@ class User extends Authenticatable
     {
         return strtoupper((string) $this->estado) === 'AC';
     }
+
+    public function isAdministrator(): bool
+    {
+        $roleName = strtoupper(trim((string) $this->role?->nombre_rol));
+
+        return $this->isActive()
+            && $this->role?->isActive()
+            && $roleName === 'ADMINISTRADOR';
+    }
 }
