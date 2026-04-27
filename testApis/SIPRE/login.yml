@@ -1,0 +1,23 @@
+info:
+  name: login
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:8000/api/v1/auth/login
+  body:
+    type: json
+    data: |-
+      {
+        "username": "PRUEBA",
+        "clave": "123",
+        "device_name": "bruno"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
