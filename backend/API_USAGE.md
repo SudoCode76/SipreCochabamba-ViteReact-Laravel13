@@ -283,7 +283,110 @@ Accept: application/json
 - `422`: nueva contrasena igual a la actual
 - `422`: validacion fallida, por ejemplo si `password_confirmation` no coincide o si la nueva contrasena tiene menos de 8 caracteres
 
-## 6. Ver Permisos de un Rol
+## 6. Crear Rol
+
+Sirve para registrar un nuevo rol del sistema.
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/roles`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Content-Type: application/json
+Accept: application/json
+```
+
+### Body
+
+```json
+{
+  "nombre_rol": "Supervisor",
+  "estado": "AC"
+}
+```
+
+Restricciones:
+
+- `nombre_rol` es obligatorio
+- `nombre_rol` debe ser unico
+- `nombre_rol` admite hasta `20` caracteres para mantener compatibilidad con la tabla legacy `permiso`
+- `estado` debe ser `AC` o `DC`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Rol creado correctamente.",
+  "data": {
+    "role": {
+      "id": 6,
+      "name": "Supervisor",
+      "status": "AC"
+    }
+  }
+}
+```
+
+## 7. Editar Rol
+
+Sirve para actualizar el nombre o estado de un rol existente.
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/roles/{role}`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Importante
+
+- Si cambia el nombre del rol, tambien se actualiza `nombre_rol` en la tabla legacy `permiso` para mantener consistencia.
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Content-Type: application/json
+Accept: application/json
+```
+
+### Body
+
+```json
+{
+  "nombre_rol": "Supervisor Tecnico",
+  "estado": "DC"
+}
+```
+
+Restricciones:
+
+- `nombre_rol` es obligatorio
+- `nombre_rol` debe ser unico
+- `nombre_rol` admite hasta `20` caracteres para mantener compatibilidad con la tabla legacy `permiso`
+- `estado` debe ser `AC` o `DC`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Rol actualizado correctamente.",
+  "data": {
+    "role": {
+      "id": 2,
+      "name": "Supervisor Tecnico",
+      "status": "DC"
+    },
+    "previous_name": "Tecnico"
+  }
+}
+```
+
+## 8. Ver Permisos de un Rol
 
 Sirve para obtener los permisos activos asignados actualmente a un rol especifico.
 
@@ -340,7 +443,7 @@ GET http://localhost:8000/api/v1/roles/1/permissions
 }
 ```
 
-## 7. Actualizar Permisos de un Rol
+## 9. Actualizar Permisos de un Rol
 
 Sirve para sincronizar los permisos de un rol a partir de una lista completa de funciones permitidas.
 
@@ -602,7 +705,7 @@ Accept: application/json
 }
 ```
 
-## 8. Ver Matriz de Permisos
+## 10. Ver Matriz de Permisos
 
 Sirve para obtener una matriz completa de permisos por roles y funciones, optimizada para construir una UI tipo tabla o checkboxes.
 
