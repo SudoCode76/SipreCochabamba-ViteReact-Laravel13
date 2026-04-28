@@ -3,8 +3,8 @@ name: siprecochabamba-new
 services:
   db:
     build:
-      context: .
-      dockerfile: .docker/postgres/Dockerfile
+      context: ./.docker/postgres
+      dockerfile: Dockerfile
     container_name: sipre-db
     restart: unless-stopped
     environment:
