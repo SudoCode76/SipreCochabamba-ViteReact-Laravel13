@@ -101,8 +101,29 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build fr
 Para eliminar volumenes y restaurar el dump desde cero:
 
 ```bash
-docker compose down -v
+docker compose down -v --remove-orphans
 docker compose up --build
+```
+
+Explicacion importante:
+
+- `docker compose up -d --build` solo restaura el dump si el volumen de PostgreSQL esta vacio o no existe.
+- Si PostgreSQL muestra `Database directory appears to contain a database; Skipping initialization`, entonces el volumen sigue existiendo y no se volvera a importar el dump.
+- Para forzar una restauracion completa debes borrar el volumen con `down -v`.
+- El proyecto ahora fija el nombre Docker `siprecochabamba`, asi que el volumen de base queda consistente entre equipos.
+
+Tambien puedes usar los scripts incluidos:
+
+Windows PowerShell:
+
+```powershell
+./scripts/reset-db.ps1
+```
+
+Linux/macOS/Git Bash:
+
+```bash
+sh ./scripts/reset-db.sh
 ```
 
 ## Servicios disponibles

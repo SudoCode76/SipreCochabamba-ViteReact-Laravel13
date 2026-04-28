@@ -2,7 +2,9 @@ name: siprecochabamba-new
 
 services:
   db:
-    image: postgres:16-bookworm
+    build:
+      context: .
+      dockerfile: .docker/postgres/Dockerfile
     container_name: sipre-db
     restart: unless-stopped
     environment:
@@ -14,7 +16,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sipre-202604201330_pg_backup.dmp:/docker-entrypoint-initdb.d/sipre-202604201330_pg_backup.dmp:ro
-      - ./.docker/postgres/init/10-restore-backup.sh:/docker-entrypoint-initdb.d/10-restore-backup.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
