@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\RoleController;
 use App\Http\Controllers\Api\V1\RolePermissionController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +27,8 @@ Route::prefix('v1')->group(function (): void {
     });
 
     Route::middleware(['auth:sanctum', 'admin'])->group(function (): void {
+        Route::post('/roles', [RoleController::class, 'store']);
+        Route::put('/roles/{role}', [RoleController::class, 'update']);
         Route::get('/roles/{role}/permissions', [RolePermissionController::class, 'show']);
         Route::put('/roles/{role}/permissions', [RolePermissionController::class, 'update']);
         Route::post('/roles/{role}/permissions/attach', [RolePermissionController::class, 'attach']);
