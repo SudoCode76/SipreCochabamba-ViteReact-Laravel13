@@ -11,6 +11,10 @@ mkdir -p \
   storage/framework/views \
   storage/logs
 
+rm -f \
+  bootstrap/cache/*.php \
+  bootstrap/cache/*.json
+
 if [ ! -f vendor/autoload.php ]; then
   composer install --no-interaction --prefer-dist
 fi
