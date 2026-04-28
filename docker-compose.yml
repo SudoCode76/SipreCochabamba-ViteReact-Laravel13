@@ -1,3 +1,5 @@
+name: siprecochabamba-new
+
 services:
   db:
     image: postgres:16-bookworm
