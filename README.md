@@ -31,6 +31,7 @@ docker compose up --build
 Ese comando levanta:
 
 - `backend` en modo desarrollo con el codigo montado desde `./backend`
+- `backend` guarda `vendor` en un volumen Docker para no depender del PHP o Composer del equipo local
 - `frontend` en modo desarrollo con Vite y recarga en caliente desde `./frontend`
 - `db` con PostgreSQL y restauracion automatica del dump en la primera inicializacion
 
@@ -45,6 +46,7 @@ docker compose up -d --build
 Si cambias archivos en `backend/` o `frontend/`, los contenedores ya ven esos cambios sin reconstruir imagenes.
 
 - Backend: refleja el codigo montado localmente.
+- Backend: instala dependencias PHP dentro del contenedor y no usa `backend/vendor` del host.
 - Frontend: Vite recompila y recarga automaticamente en `http://localhost:5173`.
 
 Para detener los servicios:
@@ -64,6 +66,9 @@ Si cambias dependencias del backend o Dockerfile del backend:
 ```bash
 docker compose up -d --build backend
 ```
+
+En equipos nuevos no hace falta ejecutar `composer install` localmente para el backend.
+El contenedor resuelve dependencias por si mismo y las guarda en el volumen `backend_vendor`.
 
 ## Frontend en produccion
 
@@ -119,27 +124,28 @@ docker compose up -d --build
 2. Abre el frontend en `http://localhost:5173`
 3. Abre la API en `http://localhost:8000`
 4. Edita archivos en `frontend/src/` o `backend/` normalmente desde tu editor
-5. Para revisar logs:
+5. No hace falta tener PHP o Composer compatibles instalados localmente para levantar el backend.
+6. Para revisar logs:
 
 ```bash
 docker compose logs -f frontend
 docker compose logs -f backend
 ```
 
-6. Si el frontend deja de reflejar cambios, recrealo:
+7. Si el frontend deja de reflejar cambios, recrealo:
 
 ```bash
 docker compose up -d --build frontend
 ```
 
-7. Si quieres validar como queda el frontend compilado para produccion:
+8. Si quieres validar como queda el frontend compilado para produccion:
 
 ```bash
 docker compose stop frontend
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build frontend-prod
 ```
 
-8. Para volver al frontend de desarrollo:
+9. Para volver al frontend de desarrollo:
 
 ```bash
 docker compose stop frontend
