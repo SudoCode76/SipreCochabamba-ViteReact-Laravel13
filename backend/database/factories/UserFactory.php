@@ -2,10 +2,11 @@
 
 namespace Database\Factories;
 
+use App\Models\Role;
+use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 /**
  * @extends Factory<User>
@@ -24,22 +25,40 @@ class UserFactory extends Factory
      */
     public function definition(): array
     {
+        $unit = Unit::query()->firstOrCreate(
+            ['id_unidad' => 1],
+            [
+                'descripcion' => 'Unidad Central',
+                'estado' => 'AC',
+            ],
+        );
+
+        $role = Role::query()->firstOrCreate(
+            ['id_rol' => 1],
+            [
+                'nombre_rol' => 'Administrador',
+                'estado' => 'AC',
+            ],
+        );
+
         return [
-            'name' => fake()->name(),
-            'email' => fake()->unique()->safeEmail(),
-            'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
-            'remember_token' => Str::random(10),
+            'funcionario' => fake()->name(),
+            'ci' => fake()->unique()->numerify('########'),
+            'username' => fake()->unique()->userName(),
+            'clave' => static::$password ??= Hash::make('password'),
+            'estado' => 'AC',
+            'id_unidad' => $unit->id_unidad,
+            'rol' => $role->id_rol,
+            'item' => null,
+            'fecha' => now()->toDateString(),
+            'subalcaldia' => null,
         ];
     }
 
-    /**
-     * Indicate that the model's email address should be unverified.
-     */
-    public function unverified(): static
+    public function inactive(): static
     {
         return $this->state(fn (array $attributes) => [
-            'email_verified_at' => null,
+            'estado' => 'DC',
         ]);
     }
 }
