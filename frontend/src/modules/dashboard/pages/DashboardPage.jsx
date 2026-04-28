@@ -1,87 +1,212 @@
-import { LayoutDashboard, Users, FileText, Package, BarChart3, Settings, LogOut } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChevronLeft, ChevronRight, FileText, Package, Search, SlidersHorizontal } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+
+const supplyRows = [
+  {
+    id: 1,
+    description: "Abono foliar",
+    price: "85.00",
+    unit: "litro",
+    abbreviation: "L",
+    type: "MATERIAL",
+    quoteDate: "2020-11-11",
+    status: "HABILITADO",
+  },
+  {
+    id: 2,
+    description: "Abono vegetal",
+    price: "195.00",
+    unit: "metro cúbico",
+    abbreviation: "m³",
+    type: "MATERIAL",
+    quoteDate: "2025-06-05",
+    status: "HABILITADO",
+  },
+  {
+    id: 3,
+    description: "Abono vegetal preparado",
+    price: "150.00",
+    unit: "metro cúbico",
+    abbreviation: "m³",
+    type: "MATERIAL",
+    quoteDate: "2025-06-30",
+    status: "HABILITADO",
+  },
+  {
+    id: 4,
+    description: "Abrazadera de sujeción metálico para tubo conduit de 1/2\"",
+    price: "1.50",
+    unit: "pieza",
+    abbreviation: "pza.",
+    type: "MATERIAL",
+    quoteDate: "2021-07-21",
+    status: "HABILITADO",
+  },
+  {
+    id: 5,
+    description: "Abrazadera de sujeción para letrero vial",
+    price: "20.00",
+    unit: "pieza",
+    abbreviation: "pza.",
+    type: "MATERIAL",
+    quoteDate: "2021-03-30",
+    status: "HABILITADO",
+  },
+];
+
+const pagination = [1, 2, 3, 4, 5];
 
 export default function DashboardPage() {
-  const stats = [
-    { title: "Proyectos Activos", value: "12", icon: FileText, color: "text-blue-600" },
-    { title: "Usuarios del Sistema", value: "48", icon: Users, color: "text-amber-600" },
-    { title: "Ítems Registrados", value: "1,240", icon: Package, color: "text-green-600" },
-    { title: "Reportes Generados", value: "85", icon: BarChart3, color: "text-purple-600" },
-  ];
-
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Panel de Control</h1>
-        <p className="text-slate-500 dark:text-slate-400">Bienvenido al Sistema de Gestión de Proyectos e Insumos (SIPRE).</p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, i) => (
-          <Card key={i} className="border-none shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600">{stat.title}</CardTitle>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-slate-400 mt-1">+2% desde el último mes</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4 border-none shadow-sm">
-          <CardHeader>
-            <CardTitle>Proyectos Recientes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[1, 2, 3].map((item) => (
-                <div key={item} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold">
-                      P{item}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">Proyecto de Infraestructura {item}</p>
-                      <p className="text-xs text-slate-400">Actualizado hace 2 horas</p>
-                    </div>
-                  </div>
-                  <div className="text-xs font-medium px-2 py-1 rounded bg-green-100 text-green-700 uppercase">
-                    Activo
-                  </div>
-                </div>
-              ))}
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+      <Card className="border border-border/70 bg-white/86 shadow-[0_24px_90px_rgba(15,23,42,0.08)] backdrop-blur">
+        <CardHeader className="gap-4 border-b border-border/70 bg-muted/25">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex size-11 items-center justify-center rounded-2xl bg-foreground text-background">
+                <Package className="size-5" />
+              </div>
+              <div>
+                <CardTitle className="text-2xl tracking-[-0.04em]">Insumos</CardTitle>
+                <CardDescription>
+                  Catálogo visible con búsqueda rápida y paginación resumida.
+                </CardDescription>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="col-span-3 border-none shadow-sm">
-          <CardHeader>
-            <CardTitle>Accesos Rápidos</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2">
-             <button className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-50 hover:bg-amber-50 hover:text-amber-700 transition-colors gap-2 border border-slate-100">
-                <Package className="h-6 w-6" />
-                <span className="text-xs font-bold">Nuevo Ítem</span>
-             </button>
-             <button className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-50 hover:bg-amber-50 hover:text-amber-700 transition-colors gap-2 border border-slate-100">
-                <FileText className="h-6 w-6" />
-                <span className="text-xs font-bold">Nuevo Proy</span>
-             </button>
-             <button className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-50 hover:bg-amber-50 hover:text-amber-700 transition-colors gap-2 border border-slate-100">
-                <Users className="h-6 w-6" />
-                <span className="text-xs font-bold">Usuarios</span>
-             </button>
-             <button className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-50 hover:bg-amber-50 hover:text-amber-700 transition-colors gap-2 border border-slate-100">
-                <BarChart3 className="h-6 w-6" />
-                <span className="text-xs font-bold">Reportes</span>
-             </button>
-          </CardContent>
-        </Card>
-      </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" className="rounded-full border-border/70 bg-background/80">
+                <SlidersHorizontal data-icon="inline-start" />
+                Filtros
+              </Button>
+              <Button variant="outline" className="rounded-full border-border/70 bg-background/80">
+                <FileText data-icon="inline-start" />
+                Exportar
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex items-end gap-3">
+              <div className="flex flex-col gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Mostrar
+                </span>
+                <div className="relative">
+                  <select className="h-12 min-w-32 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20">
+                    <option>10</option>
+                    <option>25</option>
+                    <option>50</option>
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex w-full max-w-sm flex-col gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Buscar
+              </span>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar insumo"
+                  className="h-12 rounded-2xl border-border/80 bg-background/90 pl-11"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-[28px] border border-border/70 bg-background/90">
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-border/70 bg-muted/30 text-left">
+                    <th className="px-5 py-4 font-semibold text-foreground">N°</th>
+                    <th className="px-5 py-4 font-semibold text-foreground">Descripción</th>
+                    <th className="px-5 py-4 font-semibold text-foreground">Precio</th>
+                    <th className="px-5 py-4 font-semibold text-foreground">Unidad de medida</th>
+                    <th className="px-5 py-4 font-semibold text-foreground">Abreviatura</th>
+                    <th className="px-5 py-4 font-semibold text-foreground">Tipo insumo</th>
+                    <th className="px-5 py-4 font-semibold text-foreground">Fecha cotización</th>
+                    <th className="px-5 py-4 font-semibold text-foreground">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {supplyRows.map((row, index) => (
+                    <tr key={row.id} className={index < supplyRows.length - 1 ? "border-b border-border/60" : ""}>
+                      <td className="px-5 py-4 align-top text-foreground">{row.id}</td>
+                      <td className="px-5 py-4 align-top text-foreground">
+                        <div className="max-w-[260px] leading-7">{row.description}</div>
+                      </td>
+                      <td className="px-5 py-4 align-top text-foreground">{row.price}</td>
+                      <td className="px-5 py-4 align-top text-muted-foreground">{row.unit}</td>
+                      <td className="px-5 py-4 align-top text-muted-foreground">{row.abbreviation}</td>
+                      <td className="px-5 py-4 align-top">
+                        <Badge variant="outline" className="rounded-full border-border/70 bg-muted/30 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-foreground">
+                          {row.type}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-4 align-top text-muted-foreground">{row.quoteDate}</td>
+                      <td className="px-5 py-4 align-top">
+                        <Badge className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-white">
+                          {row.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <Separator className="bg-border/70" />
+
+            <div className="flex flex-col gap-4 px-5 py-4 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
+              <p>Mostrando registros del 1 al 5 de un total de 3,821 registros</p>
+
+              <div className="flex items-center gap-2 self-end lg:self-auto">
+                <Button variant="ghost" size="sm" className="rounded-full text-muted-foreground">
+                  <ChevronLeft data-icon="inline-start" />
+                  Anterior
+                </Button>
+                <div className="flex items-center gap-1">
+                  {pagination.map((page) => (
+                    <Button
+                      key={page}
+                      variant={page === 1 ? "default" : "ghost"}
+                      size="icon-sm"
+                      className={page === 1 ? "rounded-full bg-foreground text-background" : "rounded-full text-muted-foreground"}
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                  <span className="px-2 text-muted-foreground">...</span>
+                  <Button variant="ghost" size="icon-sm" className="rounded-full text-muted-foreground">
+                    765
+                  </Button>
+                </div>
+                <Button variant="ghost" size="sm" className="rounded-full text-muted-foreground">
+                  Siguiente
+                  <ChevronRight data-icon="inline-end" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

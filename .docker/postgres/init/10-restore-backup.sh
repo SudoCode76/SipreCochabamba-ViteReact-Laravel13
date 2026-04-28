@@ -1,5 +1,5 @@
-#!/bin/bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 BACKUP_FILE="/docker-entrypoint-initdb.d/sipre-202604201330_pg_backup.dmp"
 

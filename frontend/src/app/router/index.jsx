@@ -1,9 +1,21 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
-import LoginPage from "@/modules/auth/pages/LoginPage";
-import ChangePasswordPage from "@/modules/auth/pages/ChangePasswordPage";
-import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
-import MainLayout from "@/app/layouts/MainLayout";
 
+import MainLayout from "@/app/layouts/MainLayout";
+import ModulePlaceholder from "@/components/ModulePlaceholder";
+import ChangePasswordPage from "@/modules/auth/pages/ChangePasswordPage";
+import LoginPage from "@/modules/auth/pages/LoginPage";
+import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
+
+function placeholder(title, description, section, accent) {
+  return (
+    <ModulePlaceholder
+      title={title}
+      description={description}
+      section={section}
+      accent={accent}
+    />
+  );
+}
 
 export const router = createBrowserRouter([
   {
@@ -21,76 +33,70 @@ export const router = createBrowserRouter([
         path: "/dashboard",
         element: <DashboardPage />,
       },
-      // Otros módulos se agregarán aquí
       {
         path: "/items",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Items (En construcción)</h1></div>,
+        element: placeholder("Items", "Composición, detalle técnico y flujo operativo de ítems.", "Operaciones", "slate"),
       },
       {
         path: "/analisis/fndr",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Análisis FNDR (En construcción)</h1></div>,
+        element: placeholder("Análisis FNDR", "Espacio reservado para revisión, cálculo y seguimiento del flujo FNDR.", "Operaciones", "emerald"),
       },
       {
         path: "/analisis/upre",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Análisis UPRE (En construcción)</h1></div>,
+        element: placeholder("Análisis UPRE", "Pantalla preparada para evaluaciones y decisiones del circuito UPRE.", "Operaciones", "amber"),
       },
       {
         path: "/analisis/fps",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Análisis FPS (En construcción)</h1></div>,
+        element: placeholder("Análisis FPS", "Contenedor listo para controles, aprobación y trazabilidad de análisis FPS.", "Operaciones", "sky"),
       },
       {
         path: "/analisis/obras-publicas",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Análisis Obras Públicas (En construcción)</h1></div>,
+        element: placeholder("Análisis Obras Públicas", "Base visual lista para incorporar reglas, filtros y seguimiento de obras públicas.", "Operaciones", "violet"),
       },
       {
         path: "/analisis/proman",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Análisis Proman (En construcción)</h1></div>,
+        element: placeholder("Análisis Proman", "Interfaz pendiente de integrar con el flujo Proman sin cambiar el nuevo sistema visual.", "Operaciones", "rose"),
       },
-
       {
         path: "/insumos",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Insumos (En construcción)</h1></div>,
+        element: placeholder("Insumos", "Módulo destinado al catálogo, historial y control operativo de insumos.", "Gestión", "emerald"),
       },
       {
         path: "/proyectos",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Proyectos (En construcción)</h1></div>,
+        element: placeholder("Proyectos", "Vista preparada para coordinación, resumen y detalle de proyectos institucionales.", "Gestión", "sky"),
       },
       {
         path: "/parametros",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Parámetros (En construcción)</h1></div>,
+        element: placeholder("Parámetros", "Aquí pueden entrar catálogos maestros, configuraciones y reglas base del sistema.", "Gestión", "amber"),
       },
       {
         path: "/administracion",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Administración (En construcción)</h1></div>,
+        element: placeholder("Administración", "Centro de control para gobierno del sistema, permisos y operación interna.", "Administración", "slate"),
       },
       {
         path: "/administracion/usuarios",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Gestión de Usuarios (En construcción)</h1></div>,
+        element: placeholder("Gestión de Usuarios", "Pantalla lista para listado, filtros y administración del personal del sistema.", "Administración", "emerald"),
       },
       {
         path: "/administracion/funciones",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Gestión de Funciones (En construcción)</h1></div>,
+        element: placeholder("Gestión de Funciones", "Base visual prevista para funciones del sistema y acciones autorizables.", "Administración", "sky"),
       },
       {
         path: "/administracion/roles",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Gestión de Roles</h1></div>,
+        element: placeholder("Gestión de Roles", "Módulo pensado para roles, matrices de acceso y cambios controlados.", "Administración", "violet"),
       },
       {
         path: "/administracion/autorizaciones",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Gestión de Autorizaciones</h1></div>,
+        element: placeholder("Gestión de Autorizaciones", "Interfaz reservada para permisos específicos y revisiones sensibles.", "Administración", "amber"),
       },
-
       {
         path: "/perfil",
-        element: <div className="p-8 text-center"><h1 className="text-2xl font-bold">Perfil de usuario</h1></div>,
+        element: placeholder("Perfil de usuario", "Espacio listo para datos personales, preferencias y actividad reciente.", "Perfil", "slate"),
       },
       {
         path: "/perfil/password",
         element: <ChangePasswordPage />,
       },
-
-
-
     ],
   },
 ]);
