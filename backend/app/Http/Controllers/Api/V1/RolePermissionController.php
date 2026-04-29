@@ -59,6 +59,33 @@ class RolePermissionController extends Controller
 
         $this->rolePermissionSyncService->sync($role, $functionIds);
 
+        return $this->buildSyncResponse($role, 'Permisos del rol actualizados correctamente.');
+    }
+
+    public function sync(SyncRolePermissionsRequest $request, Role $role): JsonResponse
+    {
+        $functionIds = $request->validated('function_ids', []);
+
+        $this->rolePermissionSyncService->sync($role, $functionIds);
+
+        return $this->buildSyncResponse($role, 'Permisos del rol sincronizados correctamente.');
+    }
+
+    public function cloneFrom(Role $role, int $sourceRoleId): JsonResponse
+    {
+        $sourceRole = Role::query()->findOrFail($sourceRoleId);
+
+        $functionIds = Permission::query()
+            ->active()
+            ->where('id_rol', $sourceRole->id_rol)
+            ->orderBy('id_funcion')
+            ->pluck('id_funcion')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->values()
+            ->all();
+
+        $this->rolePermissionSyncService->sync($role, $functionIds);
+
         $role->load([
             'permissions' => fn ($query) => $query->active()
                 ->with('systemFunction')
@@ -67,13 +94,10 @@ class RolePermissionController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Permisos del rol actualizados correctamente.',
+            'message' => 'Permisos del rol clonados correctamente.',
             'data' => [
-                'role' => [
-                    'id' => $role->id_rol,
-                    'name' => $role->nombre_rol,
-                    'status' => $role->estado,
-                ],
+                'role' => $this->serializeRole($role),
+                'source_role' => $this->serializeRole($sourceRole),
                 'function_ids' => $role->permissions
                     ->pluck('id_funcion')
                     ->values()
@@ -146,11 +170,7 @@ class RolePermissionController extends Controller
             'success' => true,
             'message' => 'Permiso agregado correctamente al rol.',
             'data' => [
-                'role' => [
-                    'id' => $role->id_rol,
-                    'name' => $role->nombre_rol,
-                    'status' => $role->estado,
-                ],
+                'role' => $this->serializeRole($role),
                 'function_id' => $functionId,
             ],
         ]);
@@ -166,13 +186,40 @@ class RolePermissionController extends Controller
             'success' => true,
             'message' => 'Permiso quitado correctamente del rol.',
             'data' => [
-                'role' => [
-                    'id' => $role->id_rol,
-                    'name' => $role->nombre_rol,
-                    'status' => $role->estado,
-                ],
+                'role' => $this->serializeRole($role),
                 'function_id' => $functionId,
             ],
         ]);
+    }
+
+    private function buildSyncResponse(Role $role, string $message): JsonResponse
+    {
+        $role->load([
+            'permissions' => fn ($query) => $query->active()
+                ->with('systemFunction')
+                ->orderBy('id_funcion'),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => [
+                'role' => $this->serializeRole($role),
+                'function_ids' => $role->permissions
+                    ->pluck('id_funcion')
+                    ->values()
+                    ->all(),
+                'permissions_count' => $role->permissions->count(),
+            ],
+        ]);
+    }
+
+    private function serializeRole(Role $role): array
+    {
+        return [
+            'id' => $role->id_rol,
+            'name' => $role->nombre_rol,
+            'status' => $role->estado,
+        ];
     }
 }

@@ -87,6 +87,16 @@ Sirve para autenticar un usuario y devolver un token Bearer de Sanctum.
 }
 ```
 
+### Body Para Bruno o Postman
+
+```json
+{
+  "username": "PRUEBA",
+  "clave": "123",
+  "device_name": "bruno"
+}
+```
+
 Campos:
 
 - `username`: nombre de usuario
@@ -266,6 +276,16 @@ Accept: application/json
 }
 ```
 
+### Body Para Bruno o Postman
+
+```json
+{
+  "current_password": "123",
+  "password": "NuevaClave123",
+  "password_confirmation": "NuevaClave123"
+}
+```
+
 ### Ejemplo de respuesta exitosa
 
 ```json
@@ -283,7 +303,123 @@ Accept: application/json
 - `422`: nueva contrasena igual a la actual
 - `422`: validacion fallida, por ejemplo si `password_confirmation` no coincide o si la nueva contrasena tiene menos de 8 caracteres
 
-## 6. Crear Rol
+## 6. Perfil
+
+Sirve para consultar los datos del usuario autenticado.
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/profile`
+- Autenticacion: `Bearer token`
+
+### Como funciona
+
+- Usa el token actual de Sanctum.
+- Devuelve los datos del propio usuario autenticado.
+- Incluye rol, unidad y permisos activos.
+- Este endpoint es solo de consulta.
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Accept: application/json
+```
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Perfil obtenido correctamente.",
+  "data": {
+    "user": {
+      "id": 141,
+      "full_name": "USUARIO DE PRUEBA",
+      "ci": "99999999",
+      "username": "PRUEBA",
+      "status": "AC"
+    }
+  }
+}
+```
+
+## 7. Cambiar Contrasena Desde Perfil
+
+Sirve para que el usuario autenticado cambie solo su propia contrasena desde el modulo de perfil.
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/profile/password`
+- Autenticacion: `Bearer token`
+
+### Como funciona
+
+- Solo aplica al usuario autenticado.
+- No permite cambiar ningun otro dato del perfil.
+- Usa la misma validacion de seguridad que el cambio de contrasena de auth.
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Content-Type: application/json
+Accept: application/json
+```
+
+### Body
+
+```json
+{
+  "current_password": "123",
+  "password": "NuevaClave123",
+  "password_confirmation": "NuevaClave123"
+}
+```
+
+### Body Para Bruno o Postman
+
+```json
+{
+  "current_password": "123",
+  "password": "NuevaClave123",
+  "password_confirmation": "NuevaClave123"
+}
+```
+
+## 8. Listar Roles
+
+Sirve para obtener los roles registrados en la tabla legacy `rol`.
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/roles`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Accept: application/json
+```
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Roles obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "name": "ADMINISTRADOR",
+        "status": "AC"
+      }
+    ]
+  }
+}
+```
+
+## 9. Crear Rol
 
 Sirve para registrar un nuevo rol del sistema.
 
@@ -332,7 +468,39 @@ Restricciones:
 }
 ```
 
-## 7. Editar Rol
+## 10. Ver Detalle de Rol
+
+Sirve para obtener un rol especifico por su `id_rol` legacy.
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/roles/{role}`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Accept: application/json
+```
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Rol obtenido correctamente.",
+  "data": {
+    "role": {
+      "id": 1,
+      "name": "ADMINISTRADOR",
+      "status": "AC"
+    }
+  }
+}
+```
+
+## 11. Editar Rol
 
 Sirve para actualizar el nombre o estado de un rol existente.
 
@@ -382,6 +550,51 @@ Restricciones:
       "status": "DC"
     },
     "previous_name": "Tecnico"
+  }
+}
+```
+
+## 12. Activar o Desactivar Rol
+
+Sirve para cambiar solamente el estado de un rol existente.
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/roles/{role}/status`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Content-Type: application/json
+Accept: application/json
+```
+
+### Body
+
+```json
+{
+  "estado": "DC"
+}
+```
+
+Restricciones:
+
+- `estado` debe ser `AC` o `DC`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Estado del rol actualizado correctamente.",
+  "data": {
+    "role": {
+      "id": 2,
+      "name": "Supervisor Tecnico",
+      "status": "DC"
+    }
   }
 }
 ```
@@ -705,7 +918,95 @@ Accept: application/json
 }
 ```
 
-## 10. Ver Matriz de Permisos
+## 10. Sincronizar Permisos de un Rol
+
+Sirve para sincronizar permisos usando `POST` en lugar de `PUT`, manteniendo el mismo comportamiento de reemplazo total de la lista final.
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/roles/{role}/permissions/sync`
+- Autenticacion: `Bearer token`
+- Content-Type: `application/json`
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Content-Type: application/json
+Accept: application/json
+```
+
+### Body
+
+```json
+{
+  "function_ids": [4, 8, 20]
+}
+```
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Permisos del rol sincronizados correctamente.",
+  "data": {
+    "role": {
+      "id": 1,
+      "name": "ADMINISTRADOR",
+      "status": "AC"
+    },
+    "function_ids": [4, 8, 20],
+    "permissions_count": 3
+  }
+}
+```
+
+## 11. Clonar Permisos Desde Otro Rol
+
+Sirve para copiar al rol destino la lista activa de permisos de otro rol origen.
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/roles/{role}/permissions/clone-from/{sourceRoleId}`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Como funciona
+
+- Toma los permisos activos del rol origen `sourceRoleId`.
+- Reemplaza la lista activa del rol destino `{role}` con esa lista.
+- Si el rol destino tenia permisos extras, se desactivan.
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Accept: application/json
+```
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Permisos del rol clonados correctamente.",
+  "data": {
+    "role": {
+      "id": 2,
+      "name": "TECNICO",
+      "status": "AC"
+    },
+    "source_role": {
+      "id": 1,
+      "name": "ADMINISTRADOR",
+      "status": "AC"
+    },
+    "function_ids": [4, 8, 20],
+    "permissions_count": 3
+  }
+}
+```
+
+## 12. Ver Matriz de Permisos
 
 Sirve para obtener una matriz completa de permisos por roles y funciones, optimizada para construir una UI tipo tabla o checkboxes.
 
@@ -782,15 +1083,286 @@ Accept: application/json
 - Ademas, solo pueden ser usados por usuarios cuyo rol activo sea `ADMINISTRADOR`.
 - Si un usuario autenticado no administrador intenta usarlos, el backend responde `403 Forbidden`.
 
+## 13. Gestion de Insumos
+
+Estos endpoints permiten administrar la tabla legacy `insumo`, su historico, trazabilidad y cotizaciones.
+
+### 13.1 Listar Insumos
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Paginacion
+
+Este endpoint no devuelve todos los insumos en una sola respuesta.
+
+- Por defecto devuelve `15` registros por pagina.
+- Puedes cambiar la cantidad con `per_page`.
+- El maximo actual permitido es `100` por pagina.
+- Para recorrer todo el listado debes avanzar por `page=1`, `page=2`, `page=3`, etc.
+
+Ejemplo:
+
+```text
+GET /api/v1/inputs?page=1&per_page=100
+```
+
+La respuesta incluye metadatos para seguir paginando:
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [],
+    "meta": {
+      "current_page": 1,
+      "per_page": 100,
+      "total": 3821
+    }
+  }
+}
+```
+
+Si necesitas ver todos los insumos desde frontend, debes consumir todas las paginas usando esos metadatos.
+
+Filtros disponibles:
+
+- `description`
+- `type_id`
+- `unit_measure_id`
+- `status`
+- `quote_date`
+- `per_page`
+
+### 13.2 Crear Insumo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/inputs`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Body ejemplo:
+
+```json
+{
+  "description": "Cemento Portland",
+  "unit_measure_id": 54,
+  "price": 65.5,
+  "type_id": 1,
+  "status": "AC",
+  "code": "INS-100",
+  "quote_date": "2026-04-29",
+  "observation": "Cotizacion base"
+}
+```
+
+### 13.3 Ver Detalle de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}`
+
+### 13.4 Editar Insumo
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/inputs/{input}`
+
+Usa el mismo body de creacion, con `status` obligatorio.
+
+### 13.5 Cambiar Estado de Insumo
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/status`
+
+Body ejemplo:
+
+```json
+{
+  "status": "DC"
+}
+```
+
+Estados soportados segun datos legacy observados:
+
+- `AC`
+- `DC`
+- `DP`
+
+### 13.6 Ver Historico de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/history`
+
+### 13.7 Ver Logs de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/logs`
+
+### 13.8 Ver Cotizaciones de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/quotes`
+
+### 13.9 Registrar Cotizacion de Insumo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/quotes`
+
+Body ejemplo:
+
+```json
+{
+  "condition": "CONTADO",
+  "status": "AC",
+  "log_id": 10,
+  "file": "public/cotizaciones/cotizacion.pdf",
+  "date": "2026-04-29",
+  "file_1": "public/cotizaciones/anexo1.pdf",
+  "file_2": "public/cotizaciones/anexo2.pdf",
+  "request_id": 8
+}
+```
+
+## 14. Gestion de Usuarios
+
+Estos endpoints son administrativos y permiten listar, crear y actualizar usuarios del sistema legacy.
+
+### 14.1 Listar Usuarios
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/users`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Filtros disponibles:
+
+- `name`
+- `username`
+- `status`
+- `role_id`
+- `unit_id`
+- `per_page`
+
+Ejemplo:
+
+```text
+GET /api/v1/users?name=juan&status=AC&per_page=10
+```
+
+### 14.2 Crear Usuario
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/users`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Body Para Bruno o Postman
+
+```json
+{
+  "funcionario": "Nuevo Usuario",
+  "ci": "33333333",
+  "username": "nuevo",
+  "password": "newSecret123",
+  "password_confirmation": "newSecret123",
+  "estado": "AC",
+  "role_id": 1,
+  "unit_id": 1,
+  "item": null,
+  "subalcaldia": null
+}
+```
+
+### 11.3 Ver Usuario
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/users/{id}`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Ejemplo:
+
+```text
+GET /api/v1/users/143
+```
+
+### 11.4 Editar Usuario
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/users/{id}`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Body Para Bruno o Postman
+
+```json
+{
+  "funcionario": "Usuario Editado",
+  "ci": "55555555",
+  "username": "editado",
+  "estado": "AC",
+  "role_id": 1,
+  "unit_id": 1,
+  "item": 10,
+  "subalcaldia": 20
+}
+```
+
+### 11.5 Cambiar Estado de Usuario
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/users/{id}/status`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Body Para Bruno o Postman
+
+```json
+{
+  "estado": "DC"
+}
+```
+
+### 11.6 Cambiar Rol de Usuario
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/users/{id}/role`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Body Para Bruno o Postman
+
+```json
+{
+  "role_id": 2
+}
+```
+
+### 11.7 Cambiar Unidad de Usuario
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/users/{id}/unit`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Body Para Bruno o Postman
+
+```json
+{
+  "unit_id": 2
+}
+```
+
 ## Flujo Recomendado de Uso
 
 1. Verificar que el backend esta disponible con `GET /api/health`.
 2. Iniciar sesion con `POST /api/v1/auth/login`.
 3. Guardar el valor de `data.token`.
-4. Enviar ese token como `Bearer` para consumir `GET /api/v1/auth/me`.
+4. Enviar ese token como `Bearer` para consumir `GET /api/v1/auth/me` o `GET /api/v1/profile`.
 5. Si necesitas inspeccionar la matriz completa de permisos, consumir `GET /api/v1/permissions/matrix`.
 6. Si necesitas ver o actualizar permisos de un rol, usar `GET` o `PUT /api/v1/roles/{role}/permissions`.
-7. Si el usuario desea actualizar su contrasena, llamar a `POST /api/v1/auth/change-password` con el mismo token.
+7. Si el usuario desea actualizar su contrasena, llamar a `PUT /api/v1/profile/password` o `POST /api/v1/auth/change-password` con el mismo token.
 8. Cuando el usuario termine, llamar a `POST /api/v1/auth/logout` con el mismo token.
 
 ## Endpoints Aun No Implementados

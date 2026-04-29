@@ -1,8 +1,9 @@
-import { ArrowRight, ChevronDown, ShieldCheck } from "lucide-react";
+import { ArrowRight, ChevronDown, LogOut, ShieldCheck, User } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { navigationSections } from "@/app/navigation";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/modules/auth/hooks/useAuth";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ function isSectionActive(section, pathname) {
 
 export default function MainLayout() {
   const location = useLocation();
+  const { user, logout, isLoggingOut } = useAuth();
 
   return (
     <div className="relative min-h-screen bg-background text-foreground">
@@ -108,6 +110,37 @@ export default function MainLayout() {
               );
             })}
           </nav>
+
+          <div className="flex items-center gap-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-10 rounded-full border border-border/70 bg-background/80 hover:bg-muted">
+                  <User className="size-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 rounded-2xl border-border/70 bg-background/95 p-2 shadow-xl backdrop-blur-xl">
+                <DropdownMenuLabel className="px-2 py-2">
+                  <p className="text-sm font-medium text-foreground">{user?.username || "Usuario"}</p>
+                  <p className="text-xs text-muted-foreground">{user?.email || "Sin correo"}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-border/70" />
+                <DropdownMenuItem asChild className="rounded-xl px-3 py-2 cursor-pointer">
+                  <Link to="/perfil/password">
+                    <User className="mr-2 size-4" />
+                    <span>Cambiar contraseña</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  className="rounded-xl px-3 py-2 text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer mt-1"
+                  onClick={logout}
+                  disabled={isLoggingOut}
+                >
+                  <LogOut className="mr-2 size-4" />
+                  <span>{isLoggingOut ? "Saliendo..." : "Cerrar sesión"}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </header>
 

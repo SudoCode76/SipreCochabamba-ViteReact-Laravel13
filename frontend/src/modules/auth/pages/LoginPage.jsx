@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowRight, KeyRound } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { authService } from "../services/auth.service";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,14 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (event) => {
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [navigate]);
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (!username || !password) {
@@ -33,10 +41,42 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const data = await authService.login({ username, password });
+      
+      if (data.success === false) {
+        // Handle explicit success: false from backend (like the Bruno screenshot)
+        let errorMsg = data.message || "Credenciales inválidas.";
+        if (data.errors && data.errors.username) {
+          errorMsg = data.errors.username[0];
+        }
+        setError(errorMsg);
+        setIsLoading(false);
+        return;
+      }
+
+      // Assuming the API returns a token directly or inside data
+      const token = data.token || (data.data && data.data.token);
+      if (token) {
+        localStorage.setItem("token", token);
+      }
+      
       navigate("/dashboard");
-    }, 1000);
+    } catch (err) {
+      // Handle axios errors
+      if (err.response && err.response.data) {
+        const errorData = err.response.data;
+        let errorMsg = errorData.message || "Error al iniciar sesión.";
+        if (errorData.errors && errorData.errors.username) {
+          errorMsg = errorData.errors.username[0];
+        }
+        setError(errorMsg);
+      } else {
+        setError("Error de conexión al servidor.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -115,4 +155,4 @@ export default function LoginPage() {
       </div>
     </div>
   );
-}
+}
