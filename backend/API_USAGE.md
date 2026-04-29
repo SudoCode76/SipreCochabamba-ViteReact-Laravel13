@@ -918,7 +918,95 @@ Accept: application/json
 }
 ```
 
-## 10. Ver Matriz de Permisos
+## 10. Sincronizar Permisos de un Rol
+
+Sirve para sincronizar permisos usando `POST` en lugar de `PUT`, manteniendo el mismo comportamiento de reemplazo total de la lista final.
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/roles/{role}/permissions/sync`
+- Autenticacion: `Bearer token`
+- Content-Type: `application/json`
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Content-Type: application/json
+Accept: application/json
+```
+
+### Body
+
+```json
+{
+  "function_ids": [4, 8, 20]
+}
+```
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Permisos del rol sincronizados correctamente.",
+  "data": {
+    "role": {
+      "id": 1,
+      "name": "ADMINISTRADOR",
+      "status": "AC"
+    },
+    "function_ids": [4, 8, 20],
+    "permissions_count": 3
+  }
+}
+```
+
+## 11. Clonar Permisos Desde Otro Rol
+
+Sirve para copiar al rol destino la lista activa de permisos de otro rol origen.
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/roles/{role}/permissions/clone-from/{sourceRoleId}`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Como funciona
+
+- Toma los permisos activos del rol origen `sourceRoleId`.
+- Reemplaza la lista activa del rol destino `{role}` con esa lista.
+- Si el rol destino tenia permisos extras, se desactivan.
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Accept: application/json
+```
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Permisos del rol clonados correctamente.",
+  "data": {
+    "role": {
+      "id": 2,
+      "name": "TECNICO",
+      "status": "AC"
+    },
+    "source_role": {
+      "id": 1,
+      "name": "ADMINISTRADOR",
+      "status": "AC"
+    },
+    "function_ids": [4, 8, 20],
+    "permissions_count": 3
+  }
+}
+```
+
+## 12. Ver Matriz de Permisos
 
 Sirve para obtener una matriz completa de permisos por roles y funciones, optimizada para construir una UI tipo tabla o checkboxes.
 
@@ -995,7 +1083,7 @@ Accept: application/json
 - Ademas, solo pueden ser usados por usuarios cuyo rol activo sea `ADMINISTRADOR`.
 - Si un usuario autenticado no administrador intenta usarlos, el backend responde `403 Forbidden`.
 
-## 11. Gestion de Usuarios
+## 13. Gestion de Usuarios
 
 Estos endpoints son administrativos y permiten listar, crear y actualizar usuarios del sistema legacy.
 

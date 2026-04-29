@@ -50,6 +50,8 @@ Route::prefix('v1')->group(function (): void {
         Route::put('/roles/{role}/permissions', [RolePermissionController::class, 'update']);
         Route::post('/roles/{role}/permissions/attach', [RolePermissionController::class, 'attach']);
         Route::post('/roles/{role}/permissions/detach', [RolePermissionController::class, 'detach']);
+        Route::post('/roles/{role}/permissions/sync', [RolePermissionController::class, 'sync']);
+        Route::post('/roles/{role}/permissions/clone-from/{sourceRoleId}', [RolePermissionController::class, 'cloneFrom']);
         Route::get('/permissions/matrix', [RolePermissionController::class, 'matrix']);
     });
 });
