@@ -23,6 +23,10 @@ if [ ! -d vendor/laravel/sanctum ]; then
   composer install --no-interaction --prefer-dist
 fi
 
+if [ ! -f vendor/bin/phpunit ]; then
+  composer install --no-interaction --prefer-dist
+fi
+
 php artisan migrate --force --path=database/migrations/2026_04_24_173439_create_personal_access_tokens_table.php
 
 php artisan config:clear
