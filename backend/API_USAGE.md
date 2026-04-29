@@ -884,6 +884,136 @@ Accept: application/json
 - Ademas, solo pueden ser usados por usuarios cuyo rol activo sea `ADMINISTRADOR`.
 - Si un usuario autenticado no administrador intenta usarlos, el backend responde `403 Forbidden`.
 
+## 11. Gestion de Usuarios
+
+Estos endpoints son administrativos y permiten listar, crear y actualizar usuarios del sistema legacy.
+
+### 11.1 Listar Usuarios
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/users`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Filtros disponibles:
+
+- `name`
+- `username`
+- `status`
+- `role_id`
+- `unit_id`
+- `per_page`
+
+Ejemplo:
+
+```text
+GET /api/v1/users?name=juan&status=AC&per_page=10
+```
+
+### 11.2 Crear Usuario
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/users`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Body Para Bruno o Postman
+
+```json
+{
+  "funcionario": "Nuevo Usuario",
+  "ci": "33333333",
+  "username": "nuevo",
+  "password": "newSecret123",
+  "password_confirmation": "newSecret123",
+  "estado": "AC",
+  "role_id": 1,
+  "unit_id": 1,
+  "item": null,
+  "subalcaldia": null
+}
+```
+
+### 11.3 Ver Usuario
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/users/{id}`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Ejemplo:
+
+```text
+GET /api/v1/users/143
+```
+
+### 11.4 Editar Usuario
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/users/{id}`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Body Para Bruno o Postman
+
+```json
+{
+  "funcionario": "Usuario Editado",
+  "ci": "55555555",
+  "username": "editado",
+  "estado": "AC",
+  "role_id": 1,
+  "unit_id": 1,
+  "item": 10,
+  "subalcaldia": 20
+}
+```
+
+### 11.5 Cambiar Estado de Usuario
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/users/{id}/status`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Body Para Bruno o Postman
+
+```json
+{
+  "estado": "DC"
+}
+```
+
+### 11.6 Cambiar Rol de Usuario
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/users/{id}/role`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Body Para Bruno o Postman
+
+```json
+{
+  "role_id": 2
+}
+```
+
+### 11.7 Cambiar Unidad de Usuario
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/users/{id}/unit`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Body Para Bruno o Postman
+
+```json
+{
+  "unit_id": 2
+}
+```
+
 ## Flujo Recomendado de Uso
 
 1. Verificar que el backend esta disponible con `GET /api/health`.
