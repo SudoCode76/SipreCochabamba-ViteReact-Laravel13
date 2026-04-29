@@ -87,6 +87,16 @@ Sirve para autenticar un usuario y devolver un token Bearer de Sanctum.
 }
 ```
 
+### Body Para Bruno o Postman
+
+```json
+{
+  "username": "PRUEBA",
+  "clave": "123",
+  "device_name": "bruno"
+}
+```
+
 Campos:
 
 - `username`: nombre de usuario
@@ -266,6 +276,16 @@ Accept: application/json
 }
 ```
 
+### Body Para Bruno o Postman
+
+```json
+{
+  "current_password": "123",
+  "password": "NuevaClave123",
+  "password_confirmation": "NuevaClave123"
+}
+```
+
 ### Ejemplo de respuesta exitosa
 
 ```json
@@ -283,7 +303,89 @@ Accept: application/json
 - `422`: nueva contrasena igual a la actual
 - `422`: validacion fallida, por ejemplo si `password_confirmation` no coincide o si la nueva contrasena tiene menos de 8 caracteres
 
-## 6. Crear Rol
+## 6. Perfil
+
+Sirve para consultar los datos del usuario autenticado.
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/profile`
+- Autenticacion: `Bearer token`
+
+### Como funciona
+
+- Usa el token actual de Sanctum.
+- Devuelve los datos del propio usuario autenticado.
+- Incluye rol, unidad y permisos activos.
+- Este endpoint es solo de consulta.
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Accept: application/json
+```
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Perfil obtenido correctamente.",
+  "data": {
+    "user": {
+      "id": 141,
+      "full_name": "USUARIO DE PRUEBA",
+      "ci": "99999999",
+      "username": "PRUEBA",
+      "status": "AC"
+    }
+  }
+}
+```
+
+## 7. Cambiar Contrasena Desde Perfil
+
+Sirve para que el usuario autenticado cambie solo su propia contrasena desde el modulo de perfil.
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/profile/password`
+- Autenticacion: `Bearer token`
+
+### Como funciona
+
+- Solo aplica al usuario autenticado.
+- No permite cambiar ningun otro dato del perfil.
+- Usa la misma validacion de seguridad que el cambio de contrasena de auth.
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Content-Type: application/json
+Accept: application/json
+```
+
+### Body
+
+```json
+{
+  "current_password": "123",
+  "password": "NuevaClave123",
+  "password_confirmation": "NuevaClave123"
+}
+```
+
+### Body Para Bruno o Postman
+
+```json
+{
+  "current_password": "123",
+  "password": "NuevaClave123",
+  "password_confirmation": "NuevaClave123"
+}
+```
+
+## 8. Crear Rol
 
 Sirve para registrar un nuevo rol del sistema.
 
@@ -332,7 +434,7 @@ Restricciones:
 }
 ```
 
-## 7. Editar Rol
+## 9. Editar Rol
 
 Sirve para actualizar el nombre o estado de un rol existente.
 
@@ -787,10 +889,10 @@ Accept: application/json
 1. Verificar que el backend esta disponible con `GET /api/health`.
 2. Iniciar sesion con `POST /api/v1/auth/login`.
 3. Guardar el valor de `data.token`.
-4. Enviar ese token como `Bearer` para consumir `GET /api/v1/auth/me`.
+4. Enviar ese token como `Bearer` para consumir `GET /api/v1/auth/me` o `GET /api/v1/profile`.
 5. Si necesitas inspeccionar la matriz completa de permisos, consumir `GET /api/v1/permissions/matrix`.
 6. Si necesitas ver o actualizar permisos de un rol, usar `GET` o `PUT /api/v1/roles/{role}/permissions`.
-7. Si el usuario desea actualizar su contrasena, llamar a `POST /api/v1/auth/change-password` con el mismo token.
+7. Si el usuario desea actualizar su contrasena, llamar a `PUT /api/v1/profile/password` o `POST /api/v1/auth/change-password` con el mismo token.
 8. Cuando el usuario termine, llamar a `POST /api/v1/auth/logout` con el mismo token.
 
 ## Endpoints Aun No Implementados

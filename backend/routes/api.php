@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\RoleController;
 use App\Http\Controllers\Api\V1\RolePermissionController;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,11 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/logout', [AuthController::class, 'logout']);
             Route::post('/change-password', [AuthController::class, 'changePassword']);
         });
+    });
+
+    Route::middleware('auth:sanctum')->prefix('profile')->group(function (): void {
+        Route::get('/', [ProfileController::class, 'show']);
+        Route::put('/password', [ProfileController::class, 'updatePassword']);
     });
 
     Route::middleware(['auth:sanctum', 'admin'])->group(function (): void {
