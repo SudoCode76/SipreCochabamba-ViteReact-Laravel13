@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\InputController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\RoleController;
 use App\Http\Controllers\Api\V1\RolePermissionController;
@@ -53,5 +54,14 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/roles/{role}/permissions/sync', [RolePermissionController::class, 'sync']);
         Route::post('/roles/{role}/permissions/clone-from/{sourceRoleId}', [RolePermissionController::class, 'cloneFrom']);
         Route::get('/permissions/matrix', [RolePermissionController::class, 'matrix']);
+        Route::get('/inputs', [InputController::class, 'index']);
+        Route::post('/inputs', [InputController::class, 'store']);
+        Route::get('/inputs/{input}', [InputController::class, 'show']);
+        Route::put('/inputs/{input}', [InputController::class, 'update']);
+        Route::patch('/inputs/{input}/status', [InputController::class, 'updateStatus']);
+        Route::get('/inputs/{input}/history', [InputController::class, 'history']);
+        Route::get('/inputs/{input}/logs', [InputController::class, 'logs']);
+        Route::get('/inputs/{input}/quotes', [InputController::class, 'quotes']);
+        Route::post('/inputs/{input}/quotes', [InputController::class, 'storeQuote']);
     });
 });

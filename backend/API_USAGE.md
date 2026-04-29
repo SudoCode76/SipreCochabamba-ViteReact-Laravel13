@@ -1083,11 +1083,152 @@ Accept: application/json
 - Ademas, solo pueden ser usados por usuarios cuyo rol activo sea `ADMINISTRADOR`.
 - Si un usuario autenticado no administrador intenta usarlos, el backend responde `403 Forbidden`.
 
-## 13. Gestion de Usuarios
+## 13. Gestion de Insumos
+
+Estos endpoints permiten administrar la tabla legacy `insumo`, su historico, trazabilidad y cotizaciones.
+
+### 13.1 Listar Insumos
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Paginacion
+
+Este endpoint no devuelve todos los insumos en una sola respuesta.
+
+- Por defecto devuelve `15` registros por pagina.
+- Puedes cambiar la cantidad con `per_page`.
+- El maximo actual permitido es `100` por pagina.
+- Para recorrer todo el listado debes avanzar por `page=1`, `page=2`, `page=3`, etc.
+
+Ejemplo:
+
+```text
+GET /api/v1/inputs?page=1&per_page=100
+```
+
+La respuesta incluye metadatos para seguir paginando:
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [],
+    "meta": {
+      "current_page": 1,
+      "per_page": 100,
+      "total": 3821
+    }
+  }
+}
+```
+
+Si necesitas ver todos los insumos desde frontend, debes consumir todas las paginas usando esos metadatos.
+
+Filtros disponibles:
+
+- `description`
+- `type_id`
+- `unit_measure_id`
+- `status`
+- `quote_date`
+- `per_page`
+
+### 13.2 Crear Insumo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/inputs`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Body ejemplo:
+
+```json
+{
+  "description": "Cemento Portland",
+  "unit_measure_id": 54,
+  "price": 65.5,
+  "type_id": 1,
+  "status": "AC",
+  "code": "INS-100",
+  "quote_date": "2026-04-29",
+  "observation": "Cotizacion base"
+}
+```
+
+### 13.3 Ver Detalle de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}`
+
+### 13.4 Editar Insumo
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/inputs/{input}`
+
+Usa el mismo body de creacion, con `status` obligatorio.
+
+### 13.5 Cambiar Estado de Insumo
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/status`
+
+Body ejemplo:
+
+```json
+{
+  "status": "DC"
+}
+```
+
+Estados soportados segun datos legacy observados:
+
+- `AC`
+- `DC`
+- `DP`
+
+### 13.6 Ver Historico de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/history`
+
+### 13.7 Ver Logs de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/logs`
+
+### 13.8 Ver Cotizaciones de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/quotes`
+
+### 13.9 Registrar Cotizacion de Insumo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/quotes`
+
+Body ejemplo:
+
+```json
+{
+  "condition": "CONTADO",
+  "status": "AC",
+  "log_id": 10,
+  "file": "public/cotizaciones/cotizacion.pdf",
+  "date": "2026-04-29",
+  "file_1": "public/cotizaciones/anexo1.pdf",
+  "file_2": "public/cotizaciones/anexo2.pdf",
+  "request_id": 8
+}
+```
+
+## 14. Gestion de Usuarios
 
 Estos endpoints son administrativos y permiten listar, crear y actualizar usuarios del sistema legacy.
 
-### 11.1 Listar Usuarios
+### 14.1 Listar Usuarios
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/users`
@@ -1109,7 +1250,7 @@ Ejemplo:
 GET /api/v1/users?name=juan&status=AC&per_page=10
 ```
 
-### 11.2 Crear Usuario
+### 14.2 Crear Usuario
 
 - Metodo: `POST`
 - URL: `http://localhost:8000/api/v1/users`
