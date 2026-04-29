@@ -41,8 +41,11 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/users/{user}/status', [UserController::class, 'updateStatus']);
         Route::patch('/users/{user}/role', [UserController::class, 'updateRole']);
         Route::patch('/users/{user}/unit', [UserController::class, 'updateUnit']);
+        Route::get('/roles', [RoleController::class, 'index']);
         Route::post('/roles', [RoleController::class, 'store']);
+        Route::get('/roles/{role}', [RoleController::class, 'show']);
         Route::put('/roles/{role}', [RoleController::class, 'update']);
+        Route::patch('/roles/{role}/status', [RoleController::class, 'updateStatus']);
         Route::get('/roles/{role}/permissions', [RolePermissionController::class, 'show']);
         Route::put('/roles/{role}/permissions', [RolePermissionController::class, 'update']);
         Route::post('/roles/{role}/permissions/attach', [RolePermissionController::class, 'attach']);

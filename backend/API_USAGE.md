@@ -385,7 +385,41 @@ Accept: application/json
 }
 ```
 
-## 8. Crear Rol
+## 8. Listar Roles
+
+Sirve para obtener los roles registrados en la tabla legacy `rol`.
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/roles`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Accept: application/json
+```
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Roles obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "name": "ADMINISTRADOR",
+        "status": "AC"
+      }
+    ]
+  }
+}
+```
+
+## 9. Crear Rol
 
 Sirve para registrar un nuevo rol del sistema.
 
@@ -434,7 +468,39 @@ Restricciones:
 }
 ```
 
-## 9. Editar Rol
+## 10. Ver Detalle de Rol
+
+Sirve para obtener un rol especifico por su `id_rol` legacy.
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/roles/{role}`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Accept: application/json
+```
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Rol obtenido correctamente.",
+  "data": {
+    "role": {
+      "id": 1,
+      "name": "ADMINISTRADOR",
+      "status": "AC"
+    }
+  }
+}
+```
+
+## 11. Editar Rol
 
 Sirve para actualizar el nombre o estado de un rol existente.
 
@@ -484,6 +550,51 @@ Restricciones:
       "status": "DC"
     },
     "previous_name": "Tecnico"
+  }
+}
+```
+
+## 12. Activar o Desactivar Rol
+
+Sirve para cambiar solamente el estado de un rol existente.
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/roles/{role}/status`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+### Headers
+
+```text
+Authorization: Bearer TU_TOKEN
+Content-Type: application/json
+Accept: application/json
+```
+
+### Body
+
+```json
+{
+  "estado": "DC"
+}
+```
+
+Restricciones:
+
+- `estado` debe ser `AC` o `DC`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Estado del rol actualizado correctamente.",
+  "data": {
+    "role": {
+      "id": 2,
+      "name": "Supervisor Tecnico",
+      "status": "DC"
+    }
   }
 }
 ```
