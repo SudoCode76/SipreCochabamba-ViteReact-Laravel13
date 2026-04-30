@@ -1,12 +1,5 @@
 <?php
 
-use App\Http\Controllers\Api\V1\AuthController;
-use App\Http\Controllers\Api\V1\FunctionController;
-use App\Http\Controllers\Api\V1\InputController;
-use App\Http\Controllers\Api\V1\ProfileController;
-use App\Http\Controllers\Api\V1\RoleController;
-use App\Http\Controllers\Api\V1\RolePermissionController;
-use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
@@ -20,54 +13,10 @@ Route::get('/health', function () {
 });
 
 Route::prefix('v1')->group(function (): void {
-    Route::prefix('auth')->group(function (): void {
-        Route::post('/login', [AuthController::class, 'login']);
-
-        Route::middleware('auth:sanctum')->group(function (): void {
-            Route::get('/me', [AuthController::class, 'me']);
-            Route::post('/logout', [AuthController::class, 'logout']);
-            Route::post('/change-password', [AuthController::class, 'changePassword']);
-        });
-    });
-
-    Route::middleware('auth:sanctum')->prefix('profile')->group(function (): void {
-        Route::get('/', [ProfileController::class, 'show']);
-        Route::put('/password', [ProfileController::class, 'updatePassword']);
-    });
-
-    Route::middleware(['auth:sanctum', 'admin'])->group(function (): void {
-        Route::get('/users', [UserController::class, 'index']);
-        Route::post('/users', [UserController::class, 'store']);
-        Route::get('/users/{user}', [UserController::class, 'show']);
-        Route::put('/users/{user}', [UserController::class, 'update']);
-        Route::patch('/users/{user}/status', [UserController::class, 'updateStatus']);
-        Route::patch('/users/{user}/role', [UserController::class, 'updateRole']);
-        Route::patch('/users/{user}/unit', [UserController::class, 'updateUnit']);
-        Route::get('/roles', [RoleController::class, 'index']);
-        Route::post('/roles', [RoleController::class, 'store']);
-        Route::get('/roles/{role}', [RoleController::class, 'show']);
-        Route::put('/roles/{role}', [RoleController::class, 'update']);
-        Route::patch('/roles/{role}/status', [RoleController::class, 'updateStatus']);
-        Route::get('/roles/{role}/permissions', [RolePermissionController::class, 'show']);
-        Route::put('/roles/{role}/permissions', [RolePermissionController::class, 'update']);
-        Route::post('/roles/{role}/permissions/attach', [RolePermissionController::class, 'attach']);
-        Route::post('/roles/{role}/permissions/detach', [RolePermissionController::class, 'detach']);
-        Route::post('/roles/{role}/permissions/sync', [RolePermissionController::class, 'sync']);
-        Route::post('/roles/{role}/permissions/clone-from/{sourceRoleId}', [RolePermissionController::class, 'cloneFrom']);
-        Route::get('/permissions/matrix', [RolePermissionController::class, 'matrix']);
-        Route::get('/functions', [FunctionController::class, 'index']);
-        Route::post('/functions', [FunctionController::class, 'store']);
-        Route::get('/functions/{function}', [FunctionController::class, 'show']);
-        Route::put('/functions/{function}', [FunctionController::class, 'update']);
-        Route::patch('/functions/{function}/status', [FunctionController::class, 'updateStatus']);
-        Route::get('/inputs', [InputController::class, 'index']);
-        Route::post('/inputs', [InputController::class, 'store']);
-        Route::get('/inputs/{input}', [InputController::class, 'show']);
-        Route::put('/inputs/{input}', [InputController::class, 'update']);
-        Route::patch('/inputs/{input}/status', [InputController::class, 'updateStatus']);
-        Route::get('/inputs/{input}/history', [InputController::class, 'history']);
-        Route::get('/inputs/{input}/logs', [InputController::class, 'logs']);
-        Route::get('/inputs/{input}/quotes', [InputController::class, 'quotes']);
-        Route::post('/inputs/{input}/quotes', [InputController::class, 'storeQuote']);
-    });
+    require __DIR__.'/api/v1/auth.php';
+    require __DIR__.'/api/v1/profile.php';
+    require __DIR__.'/api/v1/users.php';
+    require __DIR__.'/api/v1/roles.php';
+    require __DIR__.'/api/v1/functions.php';
+    require __DIR__.'/api/v1/inputs.php';
 });
