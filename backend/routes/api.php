@@ -18,5 +18,6 @@ Route::prefix('v1')->group(function (): void {
     require __DIR__.'/api/v1/users.php';
     require __DIR__.'/api/v1/roles.php';
     require __DIR__.'/api/v1/functions.php';
+    require __DIR__.'/api/v1/items.php';
     require __DIR__.'/api/v1/inputs.php';
 });

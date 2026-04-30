@@ -10,6 +10,16 @@ class InputResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            'id_insumo' => $this->id_insumo,
+            'descripcion' => $this->descripcion,
+            'precio' => $this->precio !== null ? (float) $this->precio : null,
+            'id_tipo' => $this->tipo,
+            'nombre_tipo' => $this->type?->descripcion,
+            'id_unidad_medida' => $this->unidad_medida,
+            'nombre_unidad_medida' => $this->unitMeasure?->descripcion,
+            'abreviatura' => $this->unitMeasure?->abreviatura,
+            'fecha_cotiz' => $this->fecha_cotiz?->toDateString(),
+            'estado' => $this->estado,
             'id' => $this->id_insumo,
             'description' => $this->descripcion,
             'price' => $this->precio !== null ? (float) $this->precio : null,

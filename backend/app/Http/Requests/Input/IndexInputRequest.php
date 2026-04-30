@@ -14,6 +14,7 @@ class IndexInputRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'search' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:100'],
             'type_id' => ['nullable', 'integer', 'exists:tipo_insumo,id_tipo'],
             'unit_measure_id' => ['nullable', 'integer', 'exists:unidad_medida,id_unidad_medida'],
