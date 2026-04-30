@@ -130,7 +130,7 @@ export default function MainLayout() {
                     <span>Cambiar contraseña</span>
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   className="rounded-xl px-3 py-2 text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer mt-1"
                   onClick={logout}
                   disabled={isLoggingOut}
