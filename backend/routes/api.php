@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\FunctionController;
 use App\Http\Controllers\Api\V1\InputController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\RoleController;
@@ -54,6 +55,11 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/roles/{role}/permissions/sync', [RolePermissionController::class, 'sync']);
         Route::post('/roles/{role}/permissions/clone-from/{sourceRoleId}', [RolePermissionController::class, 'cloneFrom']);
         Route::get('/permissions/matrix', [RolePermissionController::class, 'matrix']);
+        Route::get('/functions', [FunctionController::class, 'index']);
+        Route::post('/functions', [FunctionController::class, 'store']);
+        Route::get('/functions/{function}', [FunctionController::class, 'show']);
+        Route::put('/functions/{function}', [FunctionController::class, 'update']);
+        Route::patch('/functions/{function}/status', [FunctionController::class, 'updateStatus']);
         Route::get('/inputs', [InputController::class, 'index']);
         Route::post('/inputs', [InputController::class, 'store']);
         Route::get('/inputs/{input}', [InputController::class, 'show']);
