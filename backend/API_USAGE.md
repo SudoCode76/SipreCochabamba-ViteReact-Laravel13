@@ -1083,7 +1083,157 @@ Accept: application/json
 - Ademas, solo pueden ser usados por usuarios cuyo rol activo sea `ADMINISTRADOR`.
 - Si un usuario autenticado no administrador intenta usarlos, el backend responde `403 Forbidden`.
 
-## 13. Gestion de Insumos
+## 13. Funciones del Sistema
+
+Este modulo administra la tabla legacy `funcion`.
+
+### Que es una funcion del sistema
+
+Una funcion del sistema es una accion o modulo que puede ser autorizado a un rol.
+
+Ejemplos reales observados en la base legacy:
+
+- `USUARIOS`
+- `ROLES`
+- `INSUMO`
+- `LISTA_INSUMO`
+
+Cada funcion define:
+
+- el identificador funcional `nombre_funcion`
+- la descripcion visible
+- la clase o modulo al que pertenece
+- su estado
+
+### Diferencia entre `functions` y `permissions`
+
+Esto es importante para frontend y backend:
+
+- `functions` = catalogo maestro de acciones disponibles del sistema
+- `permissions` = asignaciones de esas funciones a cada rol
+
+En otras palabras:
+
+- primero existe una fila en `funcion`
+- luego un rol recibe acceso a esa funcion mediante una fila en `permiso`
+
+Ejemplo:
+
+- `function`: `INSUMO`
+- `permission`: el rol `ADMINISTRADOR` tiene asignada la funcion `INSUMO`
+
+Por eso:
+
+- si quieres crear o editar el catalogo base de acciones del sistema, usa `/api/v1/functions`
+- si quieres asignar o quitar acceso a un rol, usa `/api/v1/roles/{role}/permissions`
+
+### Regla importante de unicidad
+
+`nombre_funcion` se valida como unico global en toda la tabla `funcion`.
+
+Esto significa que no se permite repetir el mismo `nombre_funcion` aunque cambie la `clase`.
+
+### 13.1 Listar Funciones del Sistema
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/functions`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Orden actual de salida:
+
+- primero por `class`
+- luego por `name`
+
+Ejemplo de respuesta:
+
+```json
+{
+  "success": true,
+  "message": "Funciones del sistema obtenidas correctamente.",
+  "data": {
+    "items": [
+      {
+        "id": 7,
+        "name": "FUNCIONES",
+        "description": "MENU FUNCIONES",
+        "class": "ADMINISTRADOR",
+        "status": "AC"
+      }
+    ]
+  }
+}
+```
+
+### 13.2 Crear Funcion del Sistema
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/functions`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Body ejemplo:
+
+```json
+{
+  "nombre_funcion": "INPUT_QUOTES",
+  "descripcion": "Gestionar cotizaciones",
+  "clase": "INSUMO",
+  "estado": "AC"
+}
+```
+
+Restricciones:
+
+- `nombre_funcion` es obligatorio
+- `nombre_funcion` debe ser unico globalmente
+- `nombre_funcion` maximo `100` caracteres
+- `descripcion` maximo `50` caracteres
+- `clase` maximo `30` caracteres
+- `estado` debe ser `AC` o `DC`
+
+### 13.3 Ver Detalle de Funcion
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/functions/{function}`
+
+### 13.4 Editar Funcion del Sistema
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/functions/{function}`
+
+Usa el mismo body de creacion.
+
+### 13.5 Activar o Desactivar Funcion del Sistema
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/functions/{function}/status`
+
+Body ejemplo:
+
+```json
+{
+  "estado": "DC"
+}
+```
+
+### Como se relaciona esto con permisos por rol
+
+Flujo recomendado:
+
+1. Crear o actualizar la funcion en `/api/v1/functions`
+2. Consultar la matriz en `/api/v1/permissions/matrix`
+3. Asignar esa funcion a uno o varios roles con:
+
+```text
+PUT /api/v1/roles/{role}/permissions
+POST /api/v1/roles/{role}/permissions/attach
+POST /api/v1/roles/{role}/permissions/sync
+```
+
+Si una funcion existe pero no esta asignada a un rol, el rol no tiene acceso.
+
+## 14. Gestion de Insumos
 
 Estos endpoints permiten administrar la tabla legacy `insumo`, su historico, trazabilidad y cotizaciones.
 
@@ -1224,11 +1374,11 @@ Body ejemplo:
 }
 ```
 
-## 14. Gestion de Usuarios
+## 15. Gestion de Usuarios
 
 Estos endpoints son administrativos y permiten listar, crear y actualizar usuarios del sistema legacy.
 
-### 14.1 Listar Usuarios
+### 15.1 Listar Usuarios
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/users`
@@ -1250,7 +1400,7 @@ Ejemplo:
 GET /api/v1/users?name=juan&status=AC&per_page=10
 ```
 
-### 14.2 Crear Usuario
+### 15.2 Crear Usuario
 
 - Metodo: `POST`
 - URL: `http://localhost:8000/api/v1/users`
