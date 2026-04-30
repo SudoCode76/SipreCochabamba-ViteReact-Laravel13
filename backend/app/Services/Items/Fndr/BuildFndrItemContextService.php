@@ -33,7 +33,7 @@ class BuildFndrItemContextService
 
         $permissions = $this->permissionService->resolve($user, $mode);
         $mode = strtolower($mode);
-        $modeUpper = strtoupper($mode);
+        $meta = $this->resolveModeMeta($mode);
 
         return [
             'groups' => $groups->map(fn (GroupCatalog $group): array => [
@@ -71,12 +71,12 @@ class BuildFndrItemContextService
             ])->values()->all(),
             'permissions' => $permissions,
             'meta' => [
-                'screen' => 'items/'.$mode,
+                'screen' => $meta['screen'],
                 'mode' => $mode,
-                'price_formula' => $modeUpper,
+                'price_formula' => $meta['price_formula'],
                 'supports_dependent_subgroup_filter' => true,
                 'endpoints' => [
-                    'list' => '/api/v1/items/'.$mode,
+                    'list' => $meta['list_endpoint'],
                     'create' => '/api/v1/items',
                     'subgroups' => '/api/v1/subgroups?group_id={group_id}',
                     'price_analysis' => '/api/v1/items/{id}/price-analysis?mode='.$mode,
@@ -85,5 +85,42 @@ class BuildFndrItemContextService
                 'filters' => ['search', 'group_id', 'subgroup_id', 'status', 'page', 'per_page'],
             ],
         ];
+    }
+
+    private function resolveModeMeta(string $mode): array
+    {
+        return match ($mode) {
+            'general' => [
+                'screen' => 'items',
+                'price_formula' => 'GENERAL',
+                'list_endpoint' => '/api/v1/items',
+            ],
+            'fndr' => [
+                'screen' => 'items/fndr',
+                'price_formula' => 'FNDR',
+                'list_endpoint' => '/api/v1/items/fndr',
+            ],
+            'upre' => [
+                'screen' => 'items/upre',
+                'price_formula' => 'UPRE',
+                'list_endpoint' => '/api/v1/items/upre',
+            ],
+            'fps' => [
+                'screen' => 'items/fps',
+                'price_formula' => 'FPS',
+                'list_endpoint' => '/api/v1/items/fps',
+            ],
+            'obras' => [
+                'screen' => 'items/obras',
+                'price_formula' => 'OBRAS',
+                'list_endpoint' => '/api/v1/items/obras',
+            ],
+            'proman' => [
+                'screen' => 'items/proman',
+                'price_formula' => 'PROMAN',
+                'list_endpoint' => '/api/v1/items/proman',
+            ],
+            default => throw new \InvalidArgumentException('Modo de contexto no soportado.'),
+        };
     }
 }

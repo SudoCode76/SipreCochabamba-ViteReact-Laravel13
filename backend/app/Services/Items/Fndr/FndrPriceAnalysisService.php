@@ -3,9 +3,13 @@
 namespace App\Services\Items\Fndr;
 
 use App\Models\FndrCalculationPercentage;
+use App\Models\FpsCalculationPercentage;
+use App\Models\GeneralCalculationPercentage;
 use App\Models\InputLog;
 use App\Models\Item;
 use App\Models\ItemInput;
+use App\Models\ObrasCalculationPercentage;
+use App\Models\PromanCalculationPercentage;
 use App\Models\UpreCalculationPercentage;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
@@ -99,9 +103,13 @@ class FndrPriceAnalysisService
     {
         return ItemInput::query()
             ->from('item_insumo')
+            ->join('item', 'item.id_item', '=', 'item_insumo.id_item')
+            ->join('grupo', 'grupo.id_grupo', '=', 'item.grupo')
+            ->join('sub_grupo', 'sub_grupo.id_subgrupo', '=', 'item.subgrupo')
             ->join('insumo', 'insumo.id_insumo', '=', 'item_insumo.id_insumo')
             ->join('unidad_medida', 'unidad_medida.id_unidad_medida', '=', 'insumo.unidad_medida')
             ->where('item_insumo.id_item', $item->id_item)
+            ->where('insumo.estado', 'AC')
             ->where('item_insumo.estado', 'AC')
             ->select([
                 'item_insumo.id_item_insumo',
@@ -110,12 +118,15 @@ class FndrPriceAnalysisService
                 'insumo.tipo as type_id',
                 'insumo.descripcion',
                 'insumo.precio as unit_price',
+                'grupo.nombre_grupo as group_name',
+                'sub_grupo.descripcion as subgroup_name',
                 'unidad_medida.id_unidad_medida as unit_measure_id',
                 'unidad_medida.descripcion as unit_measure_description',
                 'unidad_medida.abreviatura as unit_measure_abbreviation',
             ])
             ->orderBy('insumo.tipo')
-            ->orderBy('insumo.descripcion')
+            ->orderBy('grupo.nombre_grupo')
+            ->orderBy('sub_grupo.descripcion')
             ->get();
     }
 
@@ -131,6 +142,9 @@ class FndrPriceAnalysisService
             ->joinSub($latestLogs, 'latest_logs', function ($join): void {
                 $join->on('latest_logs.id_insumo', '=', 'item_insumo.id_insumo');
             })
+            ->join('item', 'item.id_item', '=', 'item_insumo.id_item')
+            ->join('grupo', 'grupo.id_grupo', '=', 'item.grupo')
+            ->join('sub_grupo', 'sub_grupo.id_subgrupo', '=', 'item.subgrupo')
             ->join('log_insumo', 'log_insumo.id_log', '=', 'latest_logs.latest_log_id')
             ->join('unidad_medida', 'unidad_medida.id_unidad_medida', '=', 'log_insumo.unidad_medida')
             ->where('item_insumo.id_item', $item->id_item)
@@ -143,12 +157,14 @@ class FndrPriceAnalysisService
                 'log_insumo.descripcion',
                 'log_insumo.precio as unit_price',
                 'log_insumo.id_log',
+                'grupo.nombre_grupo as group_name',
+                'sub_grupo.descripcion as subgroup_name',
                 'unidad_medida.id_unidad_medida as unit_measure_id',
                 'unidad_medida.descripcion as unit_measure_description',
                 'unidad_medida.abreviatura as unit_measure_abbreviation',
             ])
-            ->orderBy('type_id')
-            ->orderBy('descripcion')
+            ->orderByDesc('item_insumo.id_insumo')
+            ->orderByDesc('log_insumo.id_log')
             ->get();
     }
 
@@ -168,6 +184,8 @@ class FndrPriceAnalysisService
                 'partial' => round($partial, 4),
                 'type_id' => (int) $component->type_id,
                 'log_id' => isset($component->id_log) ? (int) $component->id_log : null,
+                'group_name' => $component->group_name ?? null,
+                'subgroup_name' => $component->subgroup_name ?? null,
                 'unit_measure' => [
                     'id' => (int) $component->unit_measure_id,
                     'description' => $component->unit_measure_description,
@@ -259,11 +277,23 @@ class FndrPriceAnalysisService
     private function resolveModeConfig(string $mode): array
     {
         return match (strtolower($mode)) {
+            'general' => [
+                'model' => GeneralCalculationPercentage::class,
+            ],
             'fndr' => [
                 'model' => FndrCalculationPercentage::class,
             ],
             'upre' => [
                 'model' => UpreCalculationPercentage::class,
+            ],
+            'fps' => [
+                'model' => FpsCalculationPercentage::class,
+            ],
+            'obras' => [
+                'model' => ObrasCalculationPercentage::class,
+            ],
+            'proman' => [
+                'model' => PromanCalculationPercentage::class,
             ],
             default => throw new InvalidArgumentException('Modo de analisis no soportado.'),
         };

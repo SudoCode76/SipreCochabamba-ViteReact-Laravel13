@@ -31,6 +31,11 @@ class FndrPermissionService
     private function modeConfig(string $mode): array
     {
         return match (strtolower($mode)) {
+            'general' => [
+                'screen_function' => 'INDEX',
+                'analysis_function' => 'ANALISIS_PRECIO',
+                'recalculation_function' => 'RECALCULAR_ITEM',
+            ],
             'fndr' => [
                 'screen_function' => 'FNDR',
                 'analysis_function' => 'ANALISIS_PRECIO_FNDR',
@@ -40,6 +45,21 @@ class FndrPermissionService
                 'screen_function' => 'UPRE',
                 'analysis_function' => 'ANALISIS_PRECIO_UPRE',
                 'recalculation_function' => 'RECALCULAR_ITEM_UPRE',
+            ],
+            'fps' => [
+                'screen_function' => 'FPS',
+                'analysis_function' => 'ANALISIS_PRECIO_FPS',
+                'recalculation_function' => 'RECALCULAR_ITEM_FPS',
+            ],
+            'obras' => [
+                'screen_function' => 'OBRAS_PUBLICAS',
+                'analysis_function' => 'ANALISIS_PRECIO_OBRAS',
+                'recalculation_function' => 'RECALCULAR_ITEM_OBRAS',
+            ],
+            'proman' => [
+                'screen_function' => 'PROMAN',
+                'analysis_function' => 'ANALISIS_PRECIO_PROMAN',
+                'recalculation_function' => 'RECALCULAR_ITEM_PROMAN',
             ],
             default => throw new \InvalidArgumentException('Modo de items no soportado.'),
         };
