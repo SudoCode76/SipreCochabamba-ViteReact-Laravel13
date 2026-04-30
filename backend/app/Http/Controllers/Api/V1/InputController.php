@@ -15,6 +15,8 @@ use App\Http\Resources\Input\InputResource;
 use App\Models\Input;
 use App\Models\InputHistory;
 use App\Models\InputLog;
+use App\Models\InputType;
+use App\Models\UnitMeasure;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -28,9 +30,17 @@ class InputController extends Controller
             ->with(['type', 'unitMeasure', 'creator'])
             ->orderByDesc('id_insumo');
 
-        if ($request->filled('description')) {
-            $description = Str::lower(trim($request->string('description')->toString()));
-            $query->whereRaw('LOWER(TRIM(descripcion)) LIKE ?', ["%{$description}%"]);
+        $search = null;
+
+        if ($request->filled('search')) {
+            $search = $request->string('search')->toString();
+        } elseif ($request->filled('description')) {
+            $search = $request->string('description')->toString();
+        }
+
+        if ($search !== null) {
+            $normalizedSearch = Str::lower(trim($search));
+            $query->whereRaw('LOWER(TRIM(descripcion)) LIKE ?', ["%{$normalizedSearch}%"]);
         }
 
         if ($request->filled('type_id')) {
@@ -60,6 +70,57 @@ class InputController extends Controller
                     'current_page' => $inputs->currentPage(),
                     'per_page' => $inputs->perPage(),
                     'total' => $inputs->total(),
+                ],
+            ],
+        ]);
+    }
+
+    public function context(): JsonResponse
+    {
+        $types = InputType::query()
+            ->active()
+            ->orderBy('descripcion')
+            ->get()
+            ->map(fn (InputType $type): array => [
+                'id_tipo' => $type->id_tipo,
+                'descripcion' => $type->descripcion,
+                'estado' => $type->estado,
+            ])
+            ->values()
+            ->all();
+
+        $unitMeasures = UnitMeasure::query()
+            ->active()
+            ->orderBy('descripcion')
+            ->get()
+            ->map(fn (UnitMeasure $unitMeasure): array => [
+                'id_unidad_medida' => $unitMeasure->id_unidad_medida,
+                'descripcion' => $unitMeasure->descripcion,
+                'abreviatura' => $unitMeasure->abreviatura,
+                'estado' => $unitMeasure->estado,
+            ])
+            ->values()
+            ->all();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Contexto de insumos obtenido correctamente.',
+            'data' => [
+                'types' => $types,
+                'unit_measures' => $unitMeasures,
+                'statuses' => [
+                    ['code' => 'AC', 'label' => 'Activo'],
+                    ['code' => 'DC', 'label' => 'Descontinuado'],
+                    ['code' => 'DP', 'label' => 'Deshabilitado temporalmente'],
+                ],
+                'permissions' => [
+                    'can_view' => true,
+                    'can_create' => true,
+                    'can_update' => true,
+                    'can_change_status' => true,
+                    'can_view_history' => true,
+                    'can_view_logs' => true,
+                    'can_manage_quotes' => true,
                 ],
             ],
         ]);

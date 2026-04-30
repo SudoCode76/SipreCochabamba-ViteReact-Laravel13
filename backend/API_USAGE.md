@@ -1242,6 +1242,35 @@ Estos endpoints permiten administrar la tabla legacy `insumo`, su historico, tra
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/inputs`
 - Autenticacion: `Bearer token`
+- Uso principal: listado administrativo enriquecido para la tabla legacy de insumos
+
+Este endpoint devuelve cada insumo con datos listos para tabla, incluyendo joins con `tipo_insumo` y `unidad_medida`.
+
+Campos principales por registro:
+
+- `id_insumo`
+- `descripcion`
+- `precio`
+- `nombre_unidad_medida`
+- `abreviatura`
+- `nombre_tipo`
+- `fecha_cotiz`
+- `estado`
+- `id_tipo`
+- `id_unidad_medida`
+
+Filtros soportados:
+
+- `search`
+- `status`
+- `type_id`
+- `unit_measure_id`
+- `page`
+- `per_page`
+
+Compatibilidad:
+
+- `description` sigue siendo aceptado como alias de `search`
 - Restriccion: solo `ADMINISTRADOR`
 
 ### Paginacion
@@ -1256,7 +1285,22 @@ Este endpoint no devuelve todos los insumos en una sola respuesta.
 Ejemplo:
 
 ```text
-GET /api/v1/inputs?page=1&per_page=100
+GET /api/v1/inputs?search=acero&status=AC&type_id=1&unit_measure_id=1&page=1&per_page=100
+
+### 13.1.1 Contexto de Insumos
+
+Sirve para cargar metadata de la pantalla administrativa de insumos.
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/context`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- tipos de insumo activos
+- unidades de medida activas
+- estados posibles
+- permisos de la pantalla
 ```
 
 La respuesta incluye metadatos para seguir paginando:
@@ -1512,6 +1556,637 @@ GET /api/v1/users/143
 4. Enviar ese token como `Bearer` para consumir `GET /api/v1/auth/me` o `GET /api/v1/profile`.
 5. Si necesitas inspeccionar la matriz completa de permisos, consumir `GET /api/v1/permissions/matrix`.
 6. Si necesitas ver o actualizar permisos de un rol, usar `GET` o `PUT /api/v1/roles/{role}/permissions`.
+
+## 16. Items FNDR
+
+Estas APIs reemplazan la logica de la pantalla legacy `items/fndr`.
+
+El objetivo de este modulo es soportar completamente la pantalla React de analisis FNDR sin usar vistas server-side.
+
+### Diferencia entre estas APIs
+
+- `GET /api/v1/items/fndr/context`: carga el contexto inicial completo de la pantalla
+- `GET /api/v1/items/fndr`: lista paginada y filtrable de items FNDR
+- `POST /api/v1/items`: crea un item nuevo
+- `GET /api/v1/items/{id}/price-analysis?mode=fndr`: devuelve el analisis FNDR actual del item
+- `POST /api/v1/items/{id}/price-recalculation?mode=fndr`: recalcula el analisis usando `log_insumo` hasta una fecha dada
+- `GET /api/v1/subgroups?group_id=...`: llena el combo dependiente de subgrupos
+
+### Autorizacion funcional
+
+Este modulo no usa solamente el criterio de administrador.
+
+Internamente se resuelven permisos funcionales basados en la tabla `funcion` y las asignaciones en `permiso`.
+
+Los booleanos que devuelve el contexto son:
+
+- `can_view`: acceso a la pantalla FNDR
+- `can_create`: crear items
+- `can_view_price_analysis`: ver analisis de precio FNDR
+- `can_recalculate`: recalcular analisis FNDR por fecha
+
+### 16.1 Contexto FNDR
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/fndr/context`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Esta API existe para que frontend pueda cargar toda la pantalla FNDR con una sola solicitud inicial.
+
+Devuelve:
+
+- grupos activos
+- subgrupos activos en lista plana
+- subgrupos agrupados por grupo para combos dependientes
+- estados disponibles para filtros y formulario
+- unidades de medida activas para crear item
+- permisos funcionales del usuario autenticado
+- metadata de la pantalla y endpoints relacionados
+
+### Como usarla desde frontend
+
+Flujo recomendado:
+
+1. Llamar a `GET /api/v1/items/fndr/context` al montar la pantalla.
+2. Poblar el combo de grupos con `data.groups`.
+3. Poblar el combo dependiente de subgrupos con:
+   - `data.subgroups_by_group[groupId]` si ya quieres tener todo cargado en memoria, o
+   - `GET /api/v1/subgroups?group_id=...` si quieres pedirlos bajo demanda.
+4. Leer `data.permissions` para habilitar o deshabilitar botones de crear, analizar y recalcular.
+5. Consumir `GET /api/v1/items/fndr` para la tabla principal.
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Contexto FNDR obtenido correctamente.",
+  "data": {
+    "groups": [
+      {
+        "id": 6,
+        "name": "1.- OBRAS PRELIMINARES",
+        "code": "001-OPR",
+        "status": "AC"
+      }
+    ],
+    "subgroups": [
+      {
+        "id": 9,
+        "group_id": 6,
+        "description": "PRELIMINARES",
+        "code": "PRE",
+        "status": "AC"
+      }
+    ],
+    "subgroups_by_group": {
+      "6": [
+        {
+          "id": 9,
+          "group_id": 6,
+          "description": "PRELIMINARES",
+          "code": "PRE",
+          "status": "AC"
+        }
+      ]
+    },
+    "statuses": [
+      {
+        "code": "AC",
+        "label": "ACTIVO"
+      },
+      {
+        "code": "DC",
+        "label": "INACTIVO"
+      }
+    ],
+    "unit_measures": [
+      {
+        "id": 54,
+        "description": "pieza",
+        "abbreviation": "pza.",
+        "status": "AC"
+      }
+    ],
+    "permissions": {
+      "can_view": true,
+      "can_create": true,
+      "can_view_price_analysis": true,
+      "can_recalculate": true
+    },
+    "meta": {
+      "screen": "items/fndr",
+      "mode": "fndr",
+      "price_formula": "FNDR",
+      "supports_dependent_subgroup_filter": true,
+      "endpoints": {
+        "list": "/api/v1/items/fndr",
+        "create": "/api/v1/items",
+        "subgroups": "/api/v1/subgroups?group_id={group_id}",
+        "price_analysis": "/api/v1/items/{id}/price-analysis?mode=fndr",
+        "price_recalculation": "/api/v1/items/{id}/price-recalculation?mode=fndr"
+      },
+      "filters": ["search", "group_id", "subgroup_id", "status", "page", "per_page"]
+    }
+  }
+}
+```
+
+### 16.2 Listar Items FNDR
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/fndr`
+- Autenticacion: `Bearer token`
+
+### Filtros soportados
+
+- `search`
+- `group_id`
+- `subgroup_id`
+- `status`
+- `page`
+- `per_page`
+
+Ejemplo:
+
+```text
+GET /api/v1/items/fndr?search=ACERO&group_id=7&subgroup_id=10&status=AC&page=1&per_page=20
+```
+
+### Paginacion
+
+- usa paginacion clasica por `page`
+- `per_page` maximo actual: `100`
+- la respuesta devuelve `meta.current_page`, `meta.per_page` y `meta.total`
+
+### Precio calculado del listado FNDR
+
+`calculated_price` no sale directamente de `item.precio`.
+
+Se calcula en backend usando la logica FNDR del legacy sobre los insumos activos del item.
+
+La regla implementada es esta:
+
+1. materiales = suma de insumos tipo `1`
+2. mano de obra base = suma de insumos tipo `2`
+3. cargas sociales = porcentaje FNDR sobre mano de obra base
+4. IVA = porcentaje FNDR sobre mano de obra base + cargas sociales
+5. herramientas base = suma de insumos tipo `3`
+6. herramientas menores = porcentaje FNDR sobre el subtotal de mano de obra ajustada
+7. costo directo = materiales + mano de obra ajustada + herramientas ajustadas
+8. gastos generales y administrativos = porcentaje FNDR sobre costo directo
+9. utilidad = porcentaje FNDR sobre costo directo + gastos generales
+10. subtotal = costo directo + gastos generales + utilidad
+11. IT = porcentaje FNDR sobre subtotal
+12. total final = subtotal + IT
+
+La API devuelve ese valor ya calculado en `calculated_price`.
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Items FNDR obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_item": 3,
+        "name": "ACERO ESTRUCTURAL S/D",
+        "calculated_price": 62.2994,
+        "status": "AC",
+        "group": {
+          "id": 7,
+          "name": "2.- OBRA GRUESA",
+          "code": "002-OGR"
+        },
+        "subgroup": {
+          "id": 10,
+          "description": "ESTRUCTURAS",
+          "code": "EST"
+        },
+        "unit_measure": {
+          "id": 58,
+          "description": "kilogramo",
+          "abbreviation": "kg"
+        }
+      }
+    ],
+    "meta": {
+      "current_page": 1,
+      "per_page": 20,
+      "total": 2486
+    }
+  }
+}
+```
+
+### 16.3 Crear Item
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/items`
+- Autenticacion: `Bearer token`
+
+Body ejemplo:
+
+```json
+{
+  "group_id": 7,
+  "subgroup_id": 10,
+  "item": "ACERO ESTRUCTURAL S/D",
+  "unit_measure_id": 58,
+  "status": "AC",
+  "code": "ITM-001"
+}
+```
+
+### Validaciones importantes
+
+- `group_id` obligatorio
+- `subgroup_id` obligatorio
+- `item` obligatorio
+- `unit_measure_id` obligatorio
+- `status` obligatorio
+- el subgrupo debe pertenecer al grupo seleccionado
+- el item se guarda asociando `id_usuario` del autenticado
+- `fecha_item` se guarda en formato PostgreSQL `Y-m-d`
+
+### Regla de duplicados aplicada
+
+La regla fue endurecida respecto al legacy.
+
+Ahora no se permite repetir la combinacion:
+
+- `group_id`
+- `subgroup_id`
+- `item`
+
+Eso significa:
+
+- mismo nombre de item en el mismo grupo y subgrupo: rechazado
+- mismo nombre de item en otro subgrupo: permitido
+
+### 16.4 Ver Analisis de Precio FNDR
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/price-analysis?mode=fndr`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Devuelve el analisis actual del item usando precios actuales de `insumo`.
+
+Incluye:
+
+- datos base del item
+- materiales
+- mano de obra
+- herramientas
+- porcentajes activos de `porcentaje_calculo_fndr`
+- subtotales y total final
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Analisis de precio FNDR obtenido correctamente.",
+  "data": {
+    "item": {
+      "id_item": 3,
+      "name": "ACERO ESTRUCTURAL S/D"
+    },
+    "materials": [],
+    "labor": [],
+    "tools": [],
+    "percentages": [],
+    "totals": {
+      "materials_total": 0,
+      "labor_total": 0,
+      "tools_total": 0,
+      "total_price": 0
+    },
+    "meta": {
+      "mode": "fndr",
+      "source": "current_inputs",
+      "reference_date": null
+    }
+  }
+}
+```
+
+### 16.5 Recalcular Analisis FNDR por Fecha
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/items/{id}/price-recalculation?mode=fndr`
+- Autenticacion: `Bearer token`
+
+Body:
+
+```json
+{
+  "fecha": "2026-04-30"
+}
+```
+
+### Regla usada para el recalculo
+
+Para cada insumo asociado al item, la API busca el ultimo `log_insumo` disponible hasta la fecha enviada.
+
+No suma todos los logs historicos del mismo insumo.
+
+La regla aplicada es:
+
+- tomar un solo precio historico por insumo
+- elegir el ultimo log valido `<= fecha`
+- recalcular materiales, mano de obra y herramientas con ese precio historico
+- volver a aplicar los porcentajes activos FNDR
+
+### Cuando usar esta API
+
+Usala cuando frontend necesite reproducir el comportamiento legacy de recalculo por fecha de impresion o corte historico.
+
+### 16.6 Listar Subgrupos por Grupo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups?group_id=7`
+- Autenticacion: `Bearer token`
+
+### Para que sirve esta API si ya existe `subgroups_by_group` en el contexto
+
+Hay dos formas de poblar el combo dependiente:
+
+1. cargar todo de una vez con `context` y usar `subgroups_by_group`
+2. pedir subgrupos solo cuando el usuario cambia el grupo usando `GET /api/v1/subgroups?group_id=...`
+
+Ambas son validas.
+
+Recomendacion practica:
+
+- si la pantalla ya carga bastante metadata, usa `subgroups_by_group`
+- si prefieres bajar menos datos al inicio, usa este endpoint bajo demanda
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Subgrupos obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id": 10,
+        "group_id": 7,
+        "description": "ESTRUCTURAS",
+        "code": "EST",
+        "status": "AC"
+      }
+    ]
+  }
+}
+```
+
+## 17. Items UPRE
+
+Estas APIs reemplazan la logica de la pantalla legacy `items/upre`.
+
+La estructura general es la misma que FNDR, pero el modo `upre` cambia la fuente de porcentajes y por tanto el resultado del `calculated_price` y del analisis/recalculo.
+
+### Diferencia respecto a FNDR
+
+La diferencia principal esta en la tabla de porcentajes usada por backend:
+
+- FNDR usa `porcentaje_calculo_fndr`
+- UPRE usa `porcentaje_calculo_upre`
+
+La formula base del analisis es la misma familia de calculo, pero los porcentajes activos del modo UPRE son distintos y eso cambia el total final.
+
+### 17.1 Contexto UPRE
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/upre/context`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Sirve para cargar toda la pantalla UPRE con una sola llamada inicial.
+
+Devuelve:
+
+- grupos activos
+- subgrupos activos
+- `subgroups_by_group`
+- estados disponibles
+- unidades de medida activas
+- permisos funcionales del usuario autenticado
+- metadata de la pantalla y endpoints relacionados
+
+### Como usarla desde frontend
+
+1. Llamar a `GET /api/v1/items/upre/context` al entrar a la pantalla.
+2. Usar `groups` para el combo principal.
+3. Usar `subgroups_by_group[groupId]` para poblar subgrupos localmente, o usar `GET /api/v1/subgroups?group_id=...` bajo demanda.
+4. Leer `permissions` para habilitar botones y acciones.
+5. Consumir el listado con `GET /api/v1/items/upre`.
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Contexto UPRE obtenido correctamente.",
+  "data": {
+    "groups": [],
+    "subgroups": [],
+    "subgroups_by_group": {},
+    "statuses": [
+      { "code": "AC", "label": "ACTIVO" },
+      { "code": "DC", "label": "INACTIVO" }
+    ],
+    "unit_measures": [],
+    "permissions": {
+      "can_view": true,
+      "can_create": true,
+      "can_view_price_analysis": true,
+      "can_recalculate": true
+    },
+    "meta": {
+      "screen": "items/upre",
+      "mode": "upre",
+      "price_formula": "UPRE"
+    }
+  }
+}
+```
+
+### 17.2 Listar Items UPRE
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/upre`
+- Autenticacion: `Bearer token`
+
+### Filtros soportados
+
+- `search`
+- `group_id`
+- `subgroup_id`
+- `status`
+- `page`
+- `per_page`
+
+Ejemplo:
+
+```text
+GET /api/v1/items/upre?search=ACERO&group_id=7&subgroup_id=10&status=AC&page=1&per_page=20
+```
+
+### Paginacion
+
+- usa `page` y `per_page`
+- `per_page` maximo actual: `100`
+- responde con `meta.current_page`, `meta.per_page` y `meta.total`
+
+### Precio calculado del listado UPRE
+
+`calculated_price` no sale directamente de `item.precio`.
+
+Se calcula en backend usando los insumos activos del item y los porcentajes de `porcentaje_calculo_upre`.
+
+La secuencia aplicada es:
+
+1. materiales = suma de insumos tipo `1`
+2. mano de obra base = suma de insumos tipo `2`
+3. cargas sociales = porcentaje UPRE sobre mano de obra base
+4. IVA = porcentaje UPRE sobre mano de obra base + cargas sociales
+5. herramientas base = suma de insumos tipo `3`
+6. herramientas menores = porcentaje UPRE sobre mano de obra ajustada
+7. costo directo = materiales + mano de obra ajustada + herramientas ajustadas
+8. gastos generales = porcentaje UPRE sobre costo directo
+9. utilidad = porcentaje UPRE sobre costo directo + gastos generales
+10. subtotal = costo directo + gastos generales + utilidad
+11. IT = porcentaje UPRE sobre subtotal
+12. total final = subtotal + IT
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Items UPRE obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_item": 3,
+        "name": "ACERO ESTRUCTURAL S/D",
+        "calculated_price": 56.1033,
+        "status": "AC",
+        "group": {
+          "id": 7,
+          "name": "2.- OBRA GRUESA",
+          "code": "002-OGR"
+        },
+        "subgroup": {
+          "id": 10,
+          "description": "ESTRUCTURAS",
+          "code": "EST"
+        },
+        "unit_measure": {
+          "id": 58,
+          "description": "kilogramo",
+          "abbreviation": "kg"
+        }
+      }
+    ],
+    "meta": {
+      "current_page": 1,
+      "per_page": 20,
+      "total": 2486
+    }
+  }
+}
+```
+
+### 17.3 Crear Item
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/items`
+- Autenticacion: `Bearer token`
+
+Se reutiliza exactamente la misma API de creacion de items usada por FNDR.
+
+Reglas importantes:
+
+- `group_id` obligatorio
+- `subgroup_id` obligatorio
+- `item` obligatorio
+- `unit_measure_id` obligatorio
+- `status` obligatorio
+- el subgrupo debe pertenecer al grupo seleccionado
+- se asocia `id_usuario` del autenticado
+- `fecha_item` se guarda en formato PostgreSQL
+
+### Regla de duplicados
+
+Se aplica la misma regla endurecida:
+
+- no se permite repetir `group_id + subgroup_id + item`
+
+### 17.4 Ver Analisis de Precio UPRE
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/price-analysis?mode=upre`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Devuelve el analisis actual del item usando precios actuales de `insumo` y porcentajes de `porcentaje_calculo_upre`.
+
+Incluye:
+
+- datos base del item
+- materiales
+- mano de obra
+- herramientas
+- porcentajes activos UPRE
+- subtotales y total final
+
+### 17.5 Recalcular Analisis UPRE por Fecha
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/items/{id}/price-recalculation?mode=upre`
+- Autenticacion: `Bearer token`
+
+Body:
+
+```json
+{
+  "fecha": "2026-04-30"
+}
+```
+
+### Regla usada para el recalculo
+
+Para cada insumo del item, backend busca el ultimo `log_insumo` valido hasta la fecha indicada y usa ese precio historico para recalcular el analisis completo.
+
+No suma todos los logs del mismo insumo.
+
+La regla es:
+
+- un solo precio historico por insumo
+- el ultimo `log_insumo` con `fecha <= fecha enviada`
+- recalculo completo con porcentajes de `porcentaje_calculo_upre`
+
+### 17.6 Listar Subgrupos por Grupo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups?group_id=7`
+- Autenticacion: `Bearer token`
+
+Esta API es compartida por FNDR y UPRE.
+
+Sirve para el combo dependiente cuando no quieras cargar todos los subgrupos en memoria desde el contexto.
 7. Si el usuario desea actualizar su contrasena, llamar a `PUT /api/v1/profile/password` o `POST /api/v1/auth/change-password` con el mismo token.
 8. Cuando el usuario termine, llamar a `POST /api/v1/auth/logout` con el mismo token.
 
