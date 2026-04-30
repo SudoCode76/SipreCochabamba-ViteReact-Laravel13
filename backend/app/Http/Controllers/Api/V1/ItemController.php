@@ -43,6 +43,21 @@ class ItemController extends Controller
         ]);
     }
 
+    public function context(Request $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para acceder a la pantalla de items.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Contexto de items obtenido correctamente.',
+            'data' => $this->buildFndrItemContextService->execute($request->user(), 'general'),
+        ]);
+    }
+
     public function upreContext(Request $request): JsonResponse
     {
         $permissions = $this->fndrPermissionService->resolve($request->user(), 'upre');
@@ -55,6 +70,51 @@ class ItemController extends Controller
             'success' => true,
             'message' => 'Contexto UPRE obtenido correctamente.',
             'data' => $this->buildFndrItemContextService->execute($request->user(), 'upre'),
+        ]);
+    }
+
+    public function fpsContext(Request $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'fps');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para acceder a la pantalla FPS.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Contexto FPS obtenido correctamente.',
+            'data' => $this->buildFndrItemContextService->execute($request->user(), 'fps'),
+        ]);
+    }
+
+    public function obrasContext(Request $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'obras');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para acceder a la pantalla OBRAS.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Contexto OBRAS obtenido correctamente.',
+            'data' => $this->buildFndrItemContextService->execute($request->user(), 'obras'),
+        ]);
+    }
+
+    public function promanContext(Request $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'proman');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para acceder a la pantalla PROMAN.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Contexto PROMAN obtenido correctamente.',
+            'data' => $this->buildFndrItemContextService->execute($request->user(), 'proman'),
         ]);
     }
 
@@ -75,6 +135,34 @@ class ItemController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Items FNDR obtenidos correctamente.',
+            'data' => [
+                'items' => ItemFndrListResource::collection($items->getCollection())->resolve(),
+                'meta' => [
+                    'current_page' => $items->currentPage(),
+                    'per_page' => $items->perPage(),
+                    'total' => $items->total(),
+                ],
+            ],
+        ]);
+    }
+
+    public function index(IndexFndrItemRequest $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para listar items.');
+        }
+
+        try {
+            $items = $this->listFndrItemsService->execute($request->validated(), 'general');
+        } catch (InvalidArgumentException $exception) {
+            return $this->validationFailureResponse($exception->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Items obtenidos correctamente.',
             'data' => [
                 'items' => ItemFndrListResource::collection($items->getCollection())->resolve(),
                 'meta' => [
@@ -114,12 +202,96 @@ class ItemController extends Controller
         ]);
     }
 
+    public function fpsIndex(IndexFndrItemRequest $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'fps');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para listar items FPS.');
+        }
+
+        try {
+            $items = $this->listFndrItemsService->execute($request->validated(), 'fps');
+        } catch (InvalidArgumentException $exception) {
+            return $this->validationFailureResponse($exception->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Items FPS obtenidos correctamente.',
+            'data' => [
+                'items' => ItemFndrListResource::collection($items->getCollection())->resolve(),
+                'meta' => [
+                    'current_page' => $items->currentPage(),
+                    'per_page' => $items->perPage(),
+                    'total' => $items->total(),
+                ],
+            ],
+        ]);
+    }
+
+    public function obrasIndex(IndexFndrItemRequest $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'obras');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para listar items OBRAS.');
+        }
+
+        try {
+            $items = $this->listFndrItemsService->execute($request->validated(), 'obras');
+        } catch (InvalidArgumentException $exception) {
+            return $this->validationFailureResponse($exception->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Items OBRAS obtenidos correctamente.',
+            'data' => [
+                'items' => ItemFndrListResource::collection($items->getCollection())->resolve(),
+                'meta' => [
+                    'current_page' => $items->currentPage(),
+                    'per_page' => $items->perPage(),
+                    'total' => $items->total(),
+                ],
+            ],
+        ]);
+    }
+
+    public function promanIndex(IndexFndrItemRequest $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'proman');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para listar items PROMAN.');
+        }
+
+        try {
+            $items = $this->listFndrItemsService->execute($request->validated(), 'proman');
+        } catch (InvalidArgumentException $exception) {
+            return $this->validationFailureResponse($exception->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Items PROMAN obtenidos correctamente.',
+            'data' => [
+                'items' => ItemFndrListResource::collection($items->getCollection())->resolve(),
+                'meta' => [
+                    'current_page' => $items->currentPage(),
+                    'per_page' => $items->perPage(),
+                    'total' => $items->total(),
+                ],
+            ],
+        ]);
+    }
+
     public function store(StoreItemRequest $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user());
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_create']) {
-            return $this->forbiddenResponse('No tiene permisos para crear items en FNDR.');
+            return $this->forbiddenResponse('No tiene permisos para crear items.');
         }
 
         $item = $this->createItemService->execute($request, $request->user());
