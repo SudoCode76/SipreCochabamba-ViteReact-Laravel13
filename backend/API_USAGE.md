@@ -2187,6 +2187,392 @@ La regla es:
 Esta API es compartida por FNDR y UPRE.
 
 Sirve para el combo dependiente cuando no quieras cargar todos los subgrupos en memoria desde el contexto.
+
+## 18. Items FPS
+
+Estas APIs reemplazan la logica de la pantalla legacy `items/fps`.
+
+El comportamiento general es el mismo que en FNDR y UPRE, pero el modo `fps` usa su propia tabla de porcentajes y por eso cambia el resultado de `calculated_price` y del analisis/recalculo.
+
+### Diferencia respecto a otros modos
+
+La diferencia principal es la fuente de porcentajes:
+
+- FNDR usa `porcentaje_calculo_fndr`
+- UPRE usa `porcentaje_calculo_upre`
+- FPS usa `porcentaje_calculo_fps`
+
+### 18.1 Contexto FPS
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/fps/context`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Sirve para cargar toda la pantalla FPS con una sola llamada inicial.
+
+Devuelve:
+
+- grupos activos
+- subgrupos activos
+- `subgroups_by_group`
+- estados disponibles
+- unidades de medida activas
+- permisos funcionales del usuario autenticado
+- metadata de la pantalla y endpoints relacionados
+
+### Como usarla desde frontend
+
+1. Llamar a `GET /api/v1/items/fps/context` al entrar a la pantalla.
+2. Usar `groups` para el combo principal.
+3. Usar `subgroups_by_group[groupId]` para resolver subgrupos localmente, o usar `GET /api/v1/subgroups?group_id=...` si quieres carga bajo demanda.
+4. Leer `permissions` para habilitar acciones.
+5. Consumir el listado con `GET /api/v1/items/fps`.
+
+### 18.2 Listar Items FPS
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/fps`
+- Autenticacion: `Bearer token`
+
+### Filtros soportados
+
+- `search`
+- `group_id`
+- `subgroup_id`
+- `status`
+- `page`
+- `per_page`
+
+Ejemplo:
+
+```text
+GET /api/v1/items/fps?search=ACERO&group_id=7&subgroup_id=10&status=AC&page=1&per_page=20
+```
+
+### Precio calculado del listado FPS
+
+`calculated_price` se calcula en backend usando los insumos activos del item y los porcentajes activos de `porcentaje_calculo_fps`.
+
+La secuencia aplicada es:
+
+1. materiales = suma de insumos tipo `1`
+2. mano de obra base = suma de insumos tipo `2`
+3. cargas sociales = porcentaje FPS sobre mano de obra base
+4. IVA = porcentaje FPS sobre mano de obra base + cargas sociales
+5. herramientas base = suma de insumos tipo `3`
+6. herramientas menores = porcentaje FPS sobre mano de obra ajustada
+7. costo directo = materiales + mano de obra ajustada + herramientas ajustadas
+8. gastos generales = porcentaje FPS sobre costo directo
+9. utilidad = porcentaje FPS sobre costo directo + gastos generales
+10. subtotal = costo directo + gastos generales + utilidad
+11. IT = porcentaje FPS sobre subtotal
+12. total final = subtotal + IT
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Items FPS obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_item": 3,
+        "name": "ACERO ESTRUCTURAL S/D",
+        "calculated_price": 61.9885,
+        "status": "AC",
+        "group": {
+          "id": 7,
+          "name": "2.- OBRA GRUESA",
+          "code": "002-OGR"
+        },
+        "subgroup": {
+          "id": 10,
+          "description": "ESTRUCTURAS",
+          "code": "EST"
+        },
+        "unit_measure": {
+          "id": 58,
+          "description": "kilogramo",
+          "abbreviation": "kg"
+        }
+      }
+    ],
+    "meta": {
+      "current_page": 1,
+      "per_page": 20,
+      "total": 2486
+    }
+  }
+}
+```
+
+### 18.3 Crear Item
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/items`
+- Autenticacion: `Bearer token`
+
+Se reutiliza exactamente la misma API de creacion de items usada por FNDR y UPRE.
+
+Reglas importantes:
+
+- `group_id` obligatorio
+- `subgroup_id` obligatorio
+- `item` obligatorio
+- `unit_measure_id` obligatorio
+- `status` obligatorio
+- el subgrupo debe pertenecer al grupo seleccionado
+- se asocia `id_usuario` del autenticado
+- `fecha_item` se guarda en formato PostgreSQL
+
+### Regla de duplicados
+
+Se aplica la misma regla endurecida:
+
+- no se permite repetir `group_id + subgroup_id + item`
+
+### 18.4 Ver Analisis de Precio FPS
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/price-analysis?mode=fps`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Devuelve el analisis actual del item usando precios actuales de `insumo` y porcentajes de `porcentaje_calculo_fps`.
+
+Incluye:
+
+- datos base del item
+- materiales
+- mano de obra
+- herramientas
+- porcentajes activos FPS
+- subtotales y total final
+
+### 18.5 Recalcular Analisis FPS por Fecha
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/items/{id}/price-recalculation?mode=fps`
+- Autenticacion: `Bearer token`
+
+Body:
+
+```json
+{
+  "fecha": "2026-04-30"
+}
+```
+
+### Regla usada para el recalculo
+
+Para cada insumo del item, backend busca el ultimo `log_insumo` valido hasta la fecha indicada y usa ese precio historico para recalcular el analisis completo.
+
+No suma todos los logs del mismo insumo.
+
+La regla es:
+
+- un solo precio historico por insumo
+- el ultimo `log_insumo` con `fecha <= fecha enviada`
+- recalculo completo con porcentajes de `porcentaje_calculo_fps`
+
+### 18.6 Listar Subgrupos por Grupo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups?group_id=7`
+- Autenticacion: `Bearer token`
+
+Esta API es compartida por FNDR, UPRE y FPS.
+
+Sirve para el combo dependiente cuando no quieras cargar todos los subgrupos en memoria desde el contexto.
+
+## 19. Items PROMAN
+
+Estas APIs reemplazan la logica de la pantalla legacy `items/proman`.
+
+La estructura funcional es la misma familia de `items/fndr`, `items/upre`, `items/fps` y `items/obras`, pero el modo `proman` usa su propia tabla de porcentajes.
+
+### Fuente de porcentajes
+
+PROMAN usa exclusivamente:
+
+- `porcentaje_calculo_proman`
+
+No mezcla:
+
+- `porcentaje_calculo`
+- `porcentaje_calculo_fndr`
+- `porcentaje_calculo_upre`
+- `porcentaje_calculo_fps`
+- `porcentaje_calculo_obras`
+
+### 19.1 Contexto PROMAN
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/proman/context`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Sirve para cargar toda la pantalla PROMAN con una sola llamada inicial.
+
+Devuelve:
+
+- grupos activos
+- subgrupos activos
+- `subgroups_by_group`
+- estados disponibles
+- unidades de medida activas
+- permisos funcionales del usuario autenticado
+- metadata de la pantalla y endpoints relacionados
+
+### Como usarla desde frontend
+
+1. Llamar a `GET /api/v1/items/proman/context` al entrar a la pantalla.
+2. Usar `groups` para el combo principal.
+3. Usar `subgroups_by_group[groupId]` para resolver subgrupos localmente, o `GET /api/v1/subgroups?group_id=...` si prefieres carga bajo demanda.
+4. Leer `permissions` para habilitar acciones.
+5. Consumir el listado con `GET /api/v1/items/proman`.
+
+### 19.2 Listar Items PROMAN
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/proman`
+- Autenticacion: `Bearer token`
+
+### Filtros soportados
+
+- `search`
+- `group_id`
+- `subgroup_id`
+- `status`
+- `page`
+- `per_page`
+
+Ejemplo:
+
+```text
+GET /api/v1/items/proman?search=ACERO&group_id=7&subgroup_id=10&status=AC&page=1&per_page=20
+```
+
+### Orden exacto aplicado en el listado
+
+Se respeta exactamente el orden legacy:
+
+1. `grupo.nombre_grupo ASC`
+2. `sub_grupo.descripcion ASC`
+3. `item.item ASC`
+4. `item.id_item ASC`
+
+### Precio calculado del listado PROMAN
+
+`calculated_price` se calcula en backend usando los insumos activos del item y los porcentajes activos de `porcentaje_calculo_proman`.
+
+La secuencia aplicada es:
+
+1. materiales = suma de insumos tipo `1`
+2. mano de obra base = suma de insumos tipo `2`
+3. cargas sociales = porcentaje PROMAN sobre mano de obra base
+4. IVA = porcentaje PROMAN sobre mano de obra base + cargas sociales
+5. herramientas base = suma de insumos tipo `3`
+6. herramientas menores = porcentaje PROMAN sobre mano de obra ajustada
+7. costo directo = materiales + mano de obra ajustada + herramientas ajustadas
+8. gastos generales = porcentaje PROMAN sobre costo directo
+9. utilidad = porcentaje PROMAN sobre costo directo + gastos generales
+10. subtotal = costo directo + gastos generales + utilidad
+11. IT = porcentaje PROMAN sobre subtotal
+12. total final = subtotal + IT
+
+### 19.3 Crear Item
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/items`
+- Autenticacion: `Bearer token`
+
+Se reutiliza exactamente la misma API de creación de items usada por los demás modos.
+
+Reglas importantes:
+
+- `group_id` obligatorio
+- `subgroup_id` obligatorio
+- `item` obligatorio
+- `unit_measure_id` obligatorio
+- `status` obligatorio
+- el subgrupo debe pertenecer al grupo seleccionado
+- se asocia `id_usuario` del autenticado
+- `fecha_item` se guarda en formato PostgreSQL `Y-m-d`
+
+### Duplicados
+
+Se mantiene la regla endurecida aplicada al nuevo backend:
+
+- no se permite repetir `group_id + subgroup_id + item`
+
+### 19.4 Ver Analisis de Precio PROMAN
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/price-analysis?mode=proman`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Devuelve el análisis actual del item usando precios actuales de `insumo` y porcentajes de `porcentaje_calculo_proman`.
+
+Incluye:
+
+- datos base del item
+- materiales
+- mano de obra
+- herramientas
+- porcentajes activos PROMAN
+- subtotales y total final
+
+### Orden exacto aplicado en el análisis
+
+Cada bloque de materiales, mano de obra y herramientas se devuelve respetando el orden legacy efectivo:
+
+1. `nombre_grupo ASC`
+2. `subgrupo ASC`
+
+### 19.5 Recalcular Analisis PROMAN por Fecha
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/items/{id}/price-recalculation?mode=proman`
+- Autenticacion: `Bearer token`
+
+Body:
+
+```json
+{
+  "fecha": "2026-04-30"
+}
+```
+
+### Regla usada para el recálculo
+
+Para cada insumo del item, backend busca el último `log_insumo` válido hasta la fecha indicada y usa ese precio histórico para recalcular el análisis completo.
+
+No suma todos los logs del mismo insumo.
+
+### Orden exacto aplicado en el recálculo
+
+Se respeta exactamente el orden legacy:
+
+1. `id_insumo DESC`
+2. `id_log DESC`
+
+### 19.6 Listar Subgrupos por Grupo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups?group_id=7`
+- Autenticacion: `Bearer token`
+
+Esta API es compartida por `general`, `fndr`, `upre`, `fps`, `obras` y `proman`.
+
+Sirve para el combo dependiente cuando no quieras cargar todos los subgrupos desde el contexto.
 7. Si el usuario desea actualizar su contrasena, llamar a `PUT /api/v1/profile/password` o `POST /api/v1/auth/change-password` con el mismo token.
 8. Cuando el usuario termine, llamar a `POST /api/v1/auth/logout` con el mismo token.
 
