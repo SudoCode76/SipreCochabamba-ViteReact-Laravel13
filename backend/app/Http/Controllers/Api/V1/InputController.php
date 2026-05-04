@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Input\DeleteInputRequest;
 use App\Http\Requests\Input\IndexInputRequest;
+use App\Http\Requests\Input\StoreInputDeleteAuthorizationRequest;
 use App\Http\Requests\Input\StoreInputQuoteRequest;
 use App\Http\Requests\Input\StoreInputRequest;
 use App\Http\Requests\Input\UpdateInputRequest;
@@ -13,53 +15,28 @@ use App\Http\Resources\Input\InputLogResource;
 use App\Http\Resources\Input\InputQuoteResource;
 use App\Http\Resources\Input\InputResource;
 use App\Models\Input;
-use App\Models\InputHistory;
 use App\Models\InputLog;
-use App\Models\InputType;
-use App\Models\UnitMeasure;
-use App\Models\User;
+use App\Services\Inputs\InputContextService;
+use App\Services\Inputs\InputCrudService;
+use App\Services\Inputs\InputDeletionService;
+use App\Services\Inputs\InputListService;
+use App\Services\Inputs\InputQuoteService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
+use Illuminate\Http\Request;
 
 class InputController extends Controller
 {
+    public function __construct(
+        private readonly InputListService $inputListService,
+        private readonly InputContextService $inputContextService,
+        private readonly InputCrudService $inputCrudService,
+        private readonly InputDeletionService $inputDeletionService,
+        private readonly InputQuoteService $inputQuoteService,
+    ) {}
+
     public function index(IndexInputRequest $request): JsonResponse
     {
-        $query = Input::query()
-            ->with(['type', 'unitMeasure', 'creator'])
-            ->orderByDesc('id_insumo');
-
-        $search = null;
-
-        if ($request->filled('search')) {
-            $search = $request->string('search')->toString();
-        } elseif ($request->filled('description')) {
-            $search = $request->string('description')->toString();
-        }
-
-        if ($search !== null) {
-            $normalizedSearch = Str::lower(trim($search));
-            $query->whereRaw('LOWER(TRIM(descripcion)) LIKE ?', ["%{$normalizedSearch}%"]);
-        }
-
-        if ($request->filled('type_id')) {
-            $query->where('tipo', (int) $request->integer('type_id'));
-        }
-
-        if ($request->filled('unit_measure_id')) {
-            $query->where('unidad_medida', (int) $request->integer('unit_measure_id'));
-        }
-
-        if ($request->filled('status')) {
-            $query->where('estado', strtoupper($request->string('status')->toString()));
-        }
-
-        if ($request->filled('quote_date')) {
-            $query->whereDate('fecha_cotiz', $request->date('quote_date'));
-        }
-
-        $inputs = $query->paginate($request->integer('per_page', 15))->withQueryString();
+        $inputs = $this->inputListService->execute($request->validated());
 
         return response()->json([
             'success' => true,
@@ -75,67 +52,18 @@ class InputController extends Controller
         ]);
     }
 
-    public function context(): JsonResponse
+    public function context(Request $request): JsonResponse
     {
-        $types = InputType::query()
-            ->active()
-            ->orderBy('descripcion')
-            ->get()
-            ->map(fn (InputType $type): array => [
-                'id_tipo' => $type->id_tipo,
-                'descripcion' => $type->descripcion,
-                'estado' => $type->estado,
-            ])
-            ->values()
-            ->all();
-
-        $unitMeasures = UnitMeasure::query()
-            ->active()
-            ->orderBy('descripcion')
-            ->get()
-            ->map(fn (UnitMeasure $unitMeasure): array => [
-                'id_unidad_medida' => $unitMeasure->id_unidad_medida,
-                'descripcion' => $unitMeasure->descripcion,
-                'abreviatura' => $unitMeasure->abreviatura,
-                'estado' => $unitMeasure->estado,
-            ])
-            ->values()
-            ->all();
-
         return response()->json([
             'success' => true,
             'message' => 'Contexto de insumos obtenido correctamente.',
-            'data' => [
-                'types' => $types,
-                'unit_measures' => $unitMeasures,
-                'statuses' => [
-                    ['code' => 'AC', 'label' => 'Activo'],
-                    ['code' => 'DC', 'label' => 'Descontinuado'],
-                    ['code' => 'DP', 'label' => 'Deshabilitado temporalmente'],
-                ],
-                'permissions' => [
-                    'can_view' => true,
-                    'can_create' => true,
-                    'can_update' => true,
-                    'can_change_status' => true,
-                    'can_view_history' => true,
-                    'can_view_logs' => true,
-                    'can_manage_quotes' => true,
-                ],
-            ],
+            'data' => $this->inputContextService->execute($request->user()),
         ]);
     }
 
     public function store(StoreInputRequest $request): JsonResponse
     {
-        $input = DB::transaction(function () use ($request): Input {
-            $input = Input::query()->create($this->inputPayload($request, $request->user()));
-
-            $this->registerLog($input, $request->user(), 'RG');
-
-            return $input;
-        });
-
+        $input = $this->inputCrudService->create($request, $request->user());
         $input->load(['type', 'unitMeasure', 'creator']);
 
         return response()->json([
@@ -160,16 +88,22 @@ class InputController extends Controller
         ]);
     }
 
+    public function name(Input $input): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'Nombre del insumo obtenido correctamente.',
+            'data' => [
+                'id_insumo' => $input->id_insumo,
+                'descripcion' => $input->descripcion,
+            ],
+        ]);
+    }
+
     public function update(UpdateInputRequest $request, Input $input): JsonResponse
     {
-        DB::transaction(function () use ($request, $input): void {
-            $input->update($this->inputPayload($request, $request->user(), true));
-
-            $this->registerLog($input, $request->user(), 'MD');
-            $this->registerHistory($input, $request->user(), $request->ip(), 'MODIFICADO');
-        });
-
-        $input->refresh()->load(['type', 'unitMeasure', 'creator']);
+        $input = $this->inputCrudService->update($request, $input, $request->user());
+        $input->load(['type', 'unitMeasure', 'creator']);
 
         return response()->json([
             'success' => true,
@@ -182,16 +116,14 @@ class InputController extends Controller
 
     public function updateStatus(UpdateInputStatusRequest $request, Input $input): JsonResponse
     {
-        DB::transaction(function () use ($request, $input): void {
-            $input->update([
-                'estado' => strtoupper($request->string('status')->toString()),
-            ]);
+        $input = $this->inputCrudService->updateStatus(
+            $input,
+            $request->user(),
+            $request->string('status')->toString(),
+            $request->ip(),
+        );
 
-            $this->registerLog($input, $request->user(), 'MD');
-            $this->registerHistory($input, $request->user(), $request->ip(), 'MODIFICADO');
-        });
-
-        $input->refresh()->load(['type', 'unitMeasure', 'creator']);
+        $input->load(['type', 'unitMeasure', 'creator']);
 
         return response()->json([
             'success' => true,
@@ -202,10 +134,57 @@ class InputController extends Controller
         ]);
     }
 
+    public function destroy(DeleteInputRequest $request, Input $input): JsonResponse
+    {
+        $input = $this->inputDeletionService->delete($input, $request, $request->user());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Insumo eliminado logicamente correctamente.',
+            'data' => [
+                'input' => [
+                    'id_insumo' => $input->id_insumo,
+                    'estado' => $input->estado,
+                ],
+            ],
+        ]);
+    }
+
+    public function requestDeleteAuthorization(StoreInputDeleteAuthorizationRequest $request, Input $input): JsonResponse
+    {
+        $authorization = $this->inputDeletionService->requestAuthorization($input, $request, $request->user());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Solicitud de autorizacion creada correctamente.',
+            'data' => [
+                'authorization' => [
+                    'id_autorizacion' => $authorization->id_autorizacion,
+                    'id_elemento' => $authorization->id_elemento,
+                    'elemento' => $authorization->elemento,
+                    'tipo_elemento' => $authorization->tipo_elemento,
+                    'tabla' => $authorization->tabla,
+                    'solicitante' => $authorization->solicitante,
+                    'estado' => $authorization->estado,
+                    'nro_autorizacion' => $authorization->nro_autorizacion,
+                ],
+            ],
+        ], 201);
+    }
+
+    public function deleteAuthorizationStatus(Input $input): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'Estado de autorizacion obtenido correctamente.',
+            'data' => $this->inputDeletionService->authorizationStatus($input),
+        ]);
+    }
+
     public function history(Input $input): JsonResponse
     {
         $history = $input->histories()
-            ->with('user')
+            ->with(['user', 'type', 'unitMeasure'])
             ->orderByDesc('id')
             ->get();
 
@@ -222,7 +201,7 @@ class InputController extends Controller
     public function logs(Input $input): JsonResponse
     {
         $logs = $input->logs()
-            ->with('user')
+            ->with(['user', 'type', 'unitMeasure'])
             ->orderByDesc('id_log')
             ->get();
 
@@ -238,9 +217,7 @@ class InputController extends Controller
 
     public function quotes(Input $input): JsonResponse
     {
-        $quotes = $input->quotes()
-            ->orderByDesc('id_cotizacion')
-            ->get();
+        $quotes = $this->inputQuoteService->history($input);
 
         return response()->json([
             'success' => true,
@@ -254,18 +231,8 @@ class InputController extends Controller
 
     public function storeQuote(StoreInputQuoteRequest $request, Input $input): JsonResponse
     {
-        $quote = $input->quotes()->create([
-            'condicion' => $request->filled('condition') ? trim($request->string('condition')->toString()) : null,
-            'estado' => $request->filled('status') ? strtoupper($request->string('status')->toString()) : 'AC',
-            'id_log_insumo' => $request->filled('log_id')
-                ? (int) $request->integer('log_id')
-                : $input->logs()->latest('id_log')->value('id_log'),
-            'archivo' => $request->filled('file') ? trim($request->string('file')->toString()) : null,
-            'fecha' => $request->filled('date') ? $request->date('date')->toDateString() : now()->toDateString(),
-            'archivo1' => $request->filled('file_1') ? trim($request->string('file_1')->toString()) : null,
-            'archivo2' => $request->filled('file_2') ? trim($request->string('file_2')->toString()) : null,
-            'id_solicitud' => $request->filled('request_id') ? (int) $request->integer('request_id') : null,
-        ]);
+        $quote = $this->inputQuoteService->create($input, $request);
+        $quote->load(['input', 'log']);
 
         return response()->json([
             'success' => true,
@@ -276,56 +243,56 @@ class InputController extends Controller
         ], 201);
     }
 
-    private function inputPayload(StoreInputRequest|UpdateInputRequest $request, ?User $user, bool $includeRequiredStatus = false): array
+    public function currentQuote(Input $input): JsonResponse
     {
-        $status = $request->filled('status')
-            ? strtoupper($request->string('status')->toString())
-            : 'AC';
+        $quote = $this->inputQuoteService->current($input);
 
-        return [
-            'descripcion' => trim($request->string('description')->toString()),
-            'unidad_medida' => (int) $request->integer('unit_measure_id'),
-            'precio' => $request->input('price'),
-            'tipo' => (int) $request->integer('type_id'),
-            'estado' => $includeRequiredStatus ? strtoupper($request->string('status')->toString()) : $status,
-            'usuario' => $user?->id_usuario,
-            'fecha' => now()->toDateString(),
-            'solicitud' => $request->filled('request_id') ? (int) $request->integer('request_id') : null,
-            'cod' => $request->filled('code') ? trim($request->string('code')->toString()) : null,
-            'fecha_cotiz' => $request->filled('quote_date') ? $request->date('quote_date')->toDateString() : null,
-            'observacion' => $request->filled('observation') ? trim($request->string('observation')->toString()) : null,
-        ];
-    }
-
-    private function registerLog(Input $input, ?User $user, string $action): void
-    {
-        InputLog::query()->create([
-            'descripcion' => $input->descripcion,
-            'id_insumo' => $input->id_insumo,
-            'precio' => $input->precio,
-            'tipo' => $input->tipo,
-            'unidad_medida' => $input->unidad_medida,
-            'accion' => $action,
-            'usuario' => $user?->id_usuario,
-            'fecha' => now()->toDateString(),
-            'estado' => $input->estado,
+        return response()->json([
+            'success' => true,
+            'message' => 'Cotizacion vigente del insumo obtenida correctamente.',
+            'data' => [
+                'quote' => $quote ? InputQuoteResource::make($quote)->resolve() : null,
+            ],
         ]);
     }
 
-    private function registerHistory(Input $input, ?User $user, ?string $ip, string $action): void
+    public function quoteHistory(Input $input): JsonResponse
     {
-        InputHistory::query()->create([
-            'descripcion' => $input->descripcion,
-            'id_insumo' => $input->id_insumo,
-            'precio' => $input->precio,
-            'tipo' => $input->tipo,
-            'unidad_medida' => $input->unidad_medida,
-            'accion' => $action,
-            'usuario' => $user?->id_usuario,
-            'fecha' => now(),
-            'estado' => $input->estado,
-            'ip' => $ip,
-            'nombre_usuario' => $user?->funcionario,
+        $quotes = $this->inputQuoteService->history($input);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Historico completo de cotizaciones obtenido correctamente.',
+            'data' => [
+                'items' => InputQuoteResource::collection($quotes)->resolve(),
+            ],
+        ]);
+    }
+
+    public function quoteLogHistory(Input $input): JsonResponse
+    {
+        $quotes = $this->inputQuoteService->logHistory($input);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Historico de cotizaciones por log obtenido correctamente.',
+            'data' => [
+                'items' => InputQuoteResource::collection($quotes)->resolve(),
+            ],
+        ]);
+    }
+
+    public function logFiles(InputLog $log): JsonResponse
+    {
+        $quotes = $this->inputQuoteService->filesByLog($log->id_log);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Archivos de cotizacion obtenidos correctamente.',
+            'data' => [
+                'id_log' => $log->id_log,
+                'items' => InputQuoteResource::collection($quotes)->resolve(),
+            ],
         ]);
     }
 }
