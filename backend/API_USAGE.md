@@ -1580,6 +1580,517 @@ Devuelve:
 - `id`
 - `text`
 
+## 13.20 Tipos de Insumo
+
+Estas APIs soportan la pantalla React `tipo-insumo`.
+
+Es un modulo simple de parametrizacion sobre la tabla `tipo_insumo`.
+
+### 13.20.1 Listar Tipos de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/input-types`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Campos principales por registro:
+
+- `id_tipo`
+- `descripcion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Orden legacy respetado:
+
+- `id_tipo DESC`
+
+Conversion de estado para frontend:
+
+- `AC` -> `ACTIVO`
+- `DC` -> `INACTIVO`
+
+Acciones disponibles:
+
+```json
+{
+  "available_actions": {
+    "edit": true
+  }
+}
+```
+
+### 13.20.2 Contexto de Tipos de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/input-types/context`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- estados disponibles `AC` y `DC`
+- permisos del usuario autenticado
+
+### 13.20.3 Crear Tipo de Insumo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/input-types`
+- Autenticacion: `Bearer token`
+
+Campos esperados:
+
+- `descripcion`
+- `estado`
+
+Validaciones minimas:
+
+- `descripcion` requerida
+- `estado` requerido
+
+Reglas funcionales mantenidas:
+
+- `descripcion` se limpia con `trim()`
+- si ya existe otro registro con la misma descripcion, no se inserta
+- en duplicado responde error funcional claro
+- si no es duplicado, inserta en `tipo_insumo`
+- registra auditoria
+
+### 13.20.4 Obtener Detalle de Tipo de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/input-types/{id}`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- `id_tipo`
+- `descripcion`
+- `estado`
+
+### 13.20.5 Editar Tipo de Insumo
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/input-types/{id}`
+- Autenticacion: `Bearer token`
+
+Campos esperados:
+
+- `descripcion`
+- `estado`
+
+Reglas funcionales mantenidas:
+
+- la nueva descripcion se limpia con `trim()`
+- si la descripcion cambia, valida duplicado contra `tipo_insumo.descripcion`
+- si la descripcion no cambia, actualiza directamente
+- registra auditoria
+
+### Ejemplo de error por duplicado
+
+```json
+{
+  "success": false,
+  "message": "Error de validacion.",
+  "errors": {
+    "descripcion": [
+      "Ya existe un tipo de insumo con la misma descripcion."
+    ]
+  }
+}
+```
+
+## 13.21 Unidades de Medida
+
+Estas APIs soportan la pantalla React `unidad-de-medida`.
+
+Es un modulo de parametrizacion sobre la tabla `unidad_medida`.
+
+### 13.21.1 Listar Unidades de Medida
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/unit-measures`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Campos principales por registro:
+
+- `id_unidad_medida`
+- `descripcion`
+- `abreviatura`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Regla legacy respetada:
+
+- el listado no devuelve registros con `estado = DP`
+- orden exacto: `id_unidad_medida DESC`
+
+Conversion de estado para frontend:
+
+- `AC` -> `ACTIVO`
+- `DC` -> `INACTIVO`
+
+Acciones disponibles:
+
+```json
+{
+  "available_actions": {
+    "edit": true,
+    "delete": true
+  }
+}
+```
+
+### 13.21.2 Contexto de Unidades de Medida
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/unit-measures/context`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- estados disponibles `AC` y `DC`
+- permisos del usuario autenticado
+
+### 13.21.3 Crear Unidad de Medida
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/unit-measures`
+- Autenticacion: `Bearer token`
+
+Campos esperados:
+
+- `descripcion`
+- `abreviatura`
+- `estado`
+
+Validaciones minimas:
+
+- `descripcion` requerida
+- `abreviatura` requerida
+- `estado` requerido
+
+Reglas funcionales mantenidas:
+
+- `descripcion` se limpia con `trim()`
+- `abreviatura` se limpia con `trim()`
+- `estado` se guarda en mayusculas
+- valida duplicado por `descripcion` con `estado != DP`
+- valida duplicado por `abreviatura` con `estado != DP`
+- si cualquiera existe, rechaza el alta
+- si no existe, inserta en `unidad_medida`
+- registra auditoria
+
+### 13.21.4 Obtener Detalle de Unidad de Medida
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/unit-measures/{id}`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- `id_unidad_medida`
+- `descripcion`
+- `abreviatura`
+- `estado`
+
+### 13.21.5 Editar Unidad de Medida
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/unit-measures/{id}`
+- Autenticacion: `Bearer token`
+
+Campos esperados:
+
+- `descripcion`
+- `abreviatura`
+- `estado`
+
+Reglas funcionales mantenidas:
+
+- si cambia `descripcion`, valida duplicado contra `unidad_medida.descripcion` con `estado != DP`
+- si cambia `abreviatura`, valida duplicado contra `unidad_medida.abreviatura` con `estado != DP`
+- si no hay conflicto, actualiza registro
+- registra auditoria
+
+### 13.21.6 Eliminar Unidad de Medida con Autorizacion
+
+- Metodo: `DELETE`
+- URL: `http://localhost:8000/api/v1/unit-measures/{id}`
+- Autenticacion: `Bearer token`
+
+Body:
+
+```json
+{
+  "autorizacion": "AUTH-UM-1"
+}
+```
+
+Regla funcional mantenida:
+
+- no elimina directamente sin autorizacion aprobada
+- exige codigo de autorizacion valido
+- al eliminar, cambia a `estado = DP`
+- registra auditoria
+
+### 13.21.7 Solicitar Autorizacion de Eliminacion
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/unit-measures/{id}/delete-authorization-request`
+- Autenticacion: `Bearer token`
+
+La solicitud creada usa el flujo funcional de autorizaciones con:
+
+- `id_elemento`
+- `elemento`
+- `tipo_elemento = unidad_medida`
+- `tabla = unidad_medida`
+- `solicitante`
+- `estado = PE`
+
+### 13.21.8 Consultar Estado de Autorizacion
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/unit-measures/{id}/delete-authorization-status`
+- Autenticacion: `Bearer token`
+
+Responde si:
+
+- no existe autorizacion
+- existe autorizacion pendiente
+- existe autorizacion aprobada y usable
+
+### Ejemplo de error por duplicado
+
+```json
+{
+  "success": false,
+  "message": "Error de validacion.",
+  "errors": {
+    "abreviatura": [
+      "Ya existe una unidad de medida con la misma abreviatura."
+    ]
+  }
+}
+```
+
+## 14. Solicitudes de Insumo
+
+Estas APIs soportan la pantalla React `solicitud-insumo`.
+
+Trabajan sobre solicitudes previas al insumo aprobado final.
+
+### 14.1 Listar Solicitudes de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/input-requests`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+La respuesta sale enriquecida con joins sobre:
+
+- `tipo_insumo`
+- `unidad_medida`
+- `usuario`
+
+Campos principales por registro:
+
+- `id_solicitud`
+- `descripcion`
+- `precio`
+- `nombre_unidad_medida`
+- `abreviatura`
+- `nombre_tipo`
+- `fecha`
+- `nombre_completo`
+- `ubicacion`
+- `justificacion`
+- `estado_aprobacion`
+- `approval_status_label`
+- `notificacion`
+- `archivo`
+- `archivo1`
+- `archivo2`
+- `usuario_solicitante`
+- `available_actions`
+
+Orden legacy respetado:
+
+- `descripcion ASC`
+
+Filtros soportados:
+
+- `search`
+- `approval_status`
+- `type_id`
+- `unit_measure_id`
+- `requester_id`
+- `page`
+- `per_page`
+
+### Acciones disponibles por solicitud
+
+La API devuelve `available_actions` para que frontend no tenga que inferir reglas desde el estado.
+
+- si `estado_aprobacion = PD`
+  - `edit = true`
+  - `view_quotes = true`
+- si `estado_aprobacion = AP` o `RC`
+  - `edit = false`
+  - `view_quotes = true`
+
+### 14.2 Contexto de Solicitudes de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/input-requests/context`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- tipos de insumo activos
+- unidades de medida activas
+- estados de aprobacion disponibles `PD`, `AP`, `RC`
+- permisos del usuario autenticado
+
+### 14.3 Crear Solicitud de Insumo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/input-requests`
+- Autenticacion: `Bearer token`
+
+Campos aceptados:
+
+- `descripcion`
+- `precio`
+- `unidad_medida`
+- `tipo`
+- `ubicacion`
+- `justificacion`
+- `usuario_solicitante`
+- `estado_aprobacion`
+- `notificacion`
+- `fecha`
+- `valido`
+- `propuesto_1`
+- `propuesto_2`
+
+Validaciones minimas:
+
+- `descripcion` requerida
+- `precio` requerido
+- `unidad_medida` requerido
+- `tipo` requerido
+- `ubicacion` requerida
+- `justificacion` requerida
+- `usuario_solicitante` requerido
+
+Reglas heredadas mantenidas:
+
+- `descripcion`, `ubicacion` y `justificacion` se convierten a mayusculas
+- soporta hasta 3 archivos:
+  - `valido`
+  - `propuesto_1`
+  - `propuesto_2`
+- si el upload falla, falla toda la operacion
+- se inserta en `solicitud_insumo`
+- se registra una entrada en `cotizaciones` con `condicion = VALIDO`
+- se registra auditoria funcional
+
+Los archivos se guardan bajo el disk `public` en:
+
+- `archivos/cotizaciones/valido/`
+- `archivos/cotizaciones/propuesto_1/`
+- `archivos/cotizaciones/propuesto_2/`
+
+### 14.4 Editar Solicitud de Insumo
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/input-requests/{id}`
+- Autenticacion: `Bearer token`
+
+Permite editar contenido y, si corresponde, reemplazar archivos actuales.
+
+Si se envia `adj = SI` o nuevos archivos:
+
+- reprocesa `valido`, `propuesto_1`, `propuesto_2`
+- actualiza `solicitud_insumo`
+- registra una nueva entrada historica en `cotizaciones`
+- actualiza `fecha_modificacion`
+- registra auditoria
+
+### 14.5 Obtener Detalle de Solicitud
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/input-requests/{id}`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- datos base de la solicitud
+- `nombre_tipo`
+- `nombre_unidad_medida`
+- `abreviatura`
+- `nombre_completo`
+- archivos asociados
+- `estado_aprobacion`
+- `approval_status_label`
+- `ubicacion`
+- `justificacion`
+- `available_actions`
+
+### 14.6 Historico de Cotizaciones / Adjuntos de Solicitud
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/input-requests/{id}/quotes/history`
+- Autenticacion: `Bearer token`
+
+Orden legacy respetado:
+
+1. `fecha DESC`
+2. `condicion DESC`
+3. `id_cotizacion DESC`
+4. `id_log_insumo ASC`
+
+Devuelve por registro:
+
+- `fecha`
+- `archivo`
+- `archivo1`
+- `archivo2`
+- `estado`
+- `condicion`
+- `id_cotizacion`
+- `id_log_insumo`
+
+### 14.7 Resumen de Cotizacion para Modal
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/input-requests/{id}/quote-summary`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- `id_solicitud`
+- `descripcion`
+- `archivo`
+- `archivo1`
+- `archivo2`
+- `id_log`
+- `fecha`
+
+### 14.8 Buscar Tipos de Insumo para Select
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/search/input-types`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- `id`
+- `text`
+
 ## 15. Gestion de Usuarios
 
 Estos endpoints son administrativos y permiten listar, crear y actualizar usuarios del sistema legacy.
