@@ -1937,6 +1937,231 @@ Replica el comportamiento del legacy cuando frontend selecciona responsable o so
 
 ## Flujo Recomendado de Uso
 
+Estas APIs soportan la pantalla React de `nuevo-proyecto`.
+
+Importante:
+
+- el mapa se resuelve en frontend
+- el backend no dibuja capas ni interactua con OpenLayers
+- el backend solo recibe, valida y guarda los datos territoriales capturados por frontend
+
+### 15.1 Contexto de Creacion de Proyecto
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/projects/create-context`
+- Autenticacion: `Bearer token`
+
+Tambien existe por compatibilidad:
+
+- `GET /api/v1/projects/context`
+
+### Para que sirve
+
+Devuelve todo lo necesario para cargar la pagina `nuevo-proyecto`:
+
+- personas activas para `responsable`
+- personas activas para `solicitante`
+- estados disponibles `AC` y `DC`
+- condiciones disponibles `PD`, `RV`, `AP`
+- permisos funcionales del usuario autenticado
+- metadata de apoyo para el formulario
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Contexto de proyectos obtenido correctamente.",
+  "data": {
+    "responsible_options": [
+      {
+        "id_usuario": 1,
+        "funcionario": "Usuario Demo",
+        "username": "demo",
+        "estado": "AC"
+      }
+    ],
+    "requester_options": [
+      {
+        "id_usuario": 1,
+        "funcionario": "Usuario Demo",
+        "username": "demo",
+        "estado": "AC"
+      }
+    ],
+    "statuses": [
+      { "code": "AC", "label": "ACTIVO" },
+      { "code": "DC", "label": "INACTIVO" }
+    ],
+    "conditions": [
+      { "code": "PD", "label": "PENDIENTE" },
+      { "code": "RV", "label": "REVISADO" },
+      { "code": "AP", "label": "APROBADO" }
+    ],
+    "permissions": {
+      "can_create": true
+    },
+    "metadata": {
+      "creator_user_id": 1,
+      "location_fields": ["latitud", "longitud", "distrito", "zona", "otb", "ubicacion"],
+      "defaults": {
+        "estado": "AC",
+        "aprobado": "PD"
+      }
+    }
+  }
+}
+```
+
+### 15.2 Crear Proyecto
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/projects`
+- Autenticacion: `Bearer token`
+
+### Campos que acepta
+
+- `nombre_proyecto`
+- `fecha`
+- `latitud`
+- `longitud`
+- `distrito`
+- `zona`
+- `otb`
+- `ubicacion`
+- `responsable`
+- `solicitante`
+- `observaciones`
+- `estado`
+- `aprobado`
+
+Nota:
+
+- `id_usuario` se toma del usuario autenticado
+- no es necesario enviarlo desde frontend
+
+### Body ejemplo
+
+```json
+{
+  "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
+  "fecha": "2026-05-04",
+  "latitud": "-17.3935",
+  "longitud": "-66.1570",
+  "distrito": "2",
+  "zona": "Zona Sur",
+  "otb": "OTB Central",
+  "ubicacion": "Av. Principal esquina Calle 5",
+  "responsable": 1,
+  "solicitante": 1,
+  "observaciones": "Proyecto registrado desde la nueva pantalla React.",
+  "estado": "AC",
+  "aprobado": "PD"
+}
+```
+
+### Validaciones aplicadas
+
+- `nombre_proyecto`: requerido
+- `fecha`: requerida
+- `latitud`: requerida
+- `longitud`: requerida
+- `responsable`: requerido
+- `solicitante`: requerido
+- `observaciones`: requerida
+- `estado`: requerido y debe ser `AC` o `DC`
+- `aprobado`: requerido y debe ser `PD`, `RV` o `AP`
+- `ubicacion`: requerida
+- `distrito`: nullable
+- `zona`: nullable
+- `otb`: nullable
+
+### Regla legacy mantenida
+
+- los campos textuales del proyecto se convierten a mayusculas antes de guardar
+- se valida duplicado por `nombre_proyecto`
+- la comparacion de duplicado se hace de forma normalizada con `UPPER(TRIM(nombre_proyecto))`
+- si ya existe un proyecto con el mismo nombre, no se inserta
+
+### Campos de ubicacion que guarda el backend
+
+- `latitud`
+- `longitud`
+- `distrito`
+- `zona`
+- `otb`
+- `ubicacion`
+
+### Ejemplo de respuesta exitosa
+
+```json
+{
+  "success": true,
+  "message": "Proyecto creado correctamente.",
+  "data": {
+    "project": {
+      "id_proyecto": 15,
+      "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
+      "ubicacion": "AV. PRINCIPAL ESQUINA CALLE 5",
+      "fecha": "2026-05-04",
+      "responsable": "1",
+      "solicitante": 1,
+      "observaciones": "PROYECTO REGISTRADO DESDE LA NUEVA PANTALLA REACT.",
+      "aprobado": "PD",
+      "estado": "AC",
+      "id_usuario": 1,
+      "nombre_responsable": "Usuario Demo",
+      "latitud": "-17.3935",
+      "longitud": "-66.1570",
+      "distrito": "2",
+      "zona": "ZONA SUR",
+      "otb": "OTB CENTRAL"
+    }
+  }
+}
+```
+
+### Ejemplo de error por duplicado
+
+```json
+{
+  "success": false,
+  "message": "Error de validacion.",
+  "errors": {
+    "nombre_proyecto": [
+      "Ya existe un proyecto con el mismo nombre."
+    ]
+  }
+}
+```
+
+### 15.3 Nombre Visible de Usuario
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/users/{id}/display-name`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Replica el comportamiento del legacy cuando frontend selecciona responsable o solicitante y necesita recuperar el nombre visible del usuario.
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Nombre visible del usuario obtenido correctamente.",
+  "data": {
+    "id_usuario": 1,
+    "funcionario": "Usuario Demo",
+    "username": "demo",
+    "estado": "AC"
+  }
+}
+```
+
+## Flujo Recomendado de Uso
+
 1. Verificar que el backend esta disponible con `GET /api/health`.
 2. Iniciar sesion con `POST /api/v1/auth/login`.
 3. Guardar el valor de `data.token`.
@@ -2401,6 +2626,157 @@ Recomendacion practica:
   }
 }
 ```
+
+### 16.7 Composicion Operativa del Item
+
+Estas APIs permiten replicar los modales y pantallas operativas de composicion del item por bloque.
+
+#### Contexto del item
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/composition/context`
+
+Devuelve:
+
+- datos base del item
+- unidad
+- grupo
+- subgrupo
+- estado
+- precio actual
+- permisos funcionales
+- `available_actions`
+- metadata operativa como `can_edit`, `can_add_inputs`, `can_recalculate`
+
+#### Composicion completa
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/composition`
+
+Devuelve:
+
+- `materials`
+- `labor`
+- `machinery`
+- `totals.materials`
+- `totals.labor`
+- `totals.machinery`
+- `totals.global`
+
+#### Materiales
+
+- `GET /api/v1/items/{id}/materials`
+- `POST /api/v1/items/{id}/materials`
+- `PUT /api/v1/items/{id}/materials/{itemInputId}`
+- `DELETE /api/v1/items/{id}/materials/{itemInputId}`
+- `GET /api/v1/items/{id}/materials/total`
+
+Body minimo para agregar:
+
+```json
+{
+  "id_insumo": 1,
+  "cantidad": 2
+}
+```
+
+#### Mano de obra
+
+- `GET /api/v1/items/{id}/labor`
+- `POST /api/v1/items/{id}/labor`
+- `PUT /api/v1/items/{id}/labor/{itemInputId}`
+- `DELETE /api/v1/items/{id}/labor/{itemInputId}`
+- `GET /api/v1/items/{id}/labor/total`
+
+#### Maquinaria / herramienta
+
+- `GET /api/v1/items/{id}/machinery`
+- `POST /api/v1/items/{id}/machinery`
+- `PUT /api/v1/items/{id}/machinery/{itemInputId}`
+- `DELETE /api/v1/items/{id}/machinery/{itemInputId}`
+- `GET /api/v1/items/{id}/machinery/total`
+
+#### Total global del item
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/total`
+
+#### Regla aplicada al agregar duplicados
+
+Si el mismo insumo ya existe relacionado al item:
+
+- no se crea una fila duplicada nueva
+- se actualiza la relacion existente con la nueva `cantidad`
+- se mantiene una sola relacion activa por item + insumo
+
+#### Precio unitario y parcial
+
+- el precio unitario usado por defecto sale del `insumo` actual
+- `parcial = cantidad * precio_unitario`
+- en la implementacion actual la API permite editar `cantidad`
+- no se persiste un precio unitario manual por separado en `item_insumo`
+
+#### Restriccion por estado del item
+
+Si el item esta `DC`:
+
+- no permite agregar materiales
+- no permite agregar mano de obra
+- no permite agregar maquinaria
+- no permite recalcular
+- si permite consulta del contexto y composicion
+
+#### Busqueda de insumos para selects por tipo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/search/inputs?type=1`
+
+Tipos esperados:
+
+- `1` material
+- `2` mano de obra
+- `3` maquinaria / herramienta
+
+La respuesta devuelve:
+
+- `id`
+- `text`
+- `precio`
+- `tipo`
+- `unidad_medida`
+
+#### Analisis general del item sin modo explicito
+
+- `GET /api/v1/items/{id}/price-analysis`
+- `POST /api/v1/items/{id}/price-recalculation`
+- `POST /api/v1/items/{id}/breakdowns/recalculate`
+
+Para compatibilidad, si no se envia `mode`, backend usa `general` por defecto.
+
+### 16.8 Acciones disponibles por item
+
+Cada item listado y el contexto de composicion devuelven acciones explicitas.
+
+- si `status = AC`
+  - `edit = true`
+  - `materials = true`
+  - `labor = true`
+  - `machinery = true`
+  - `files = true`
+  - `price_analysis = true`
+  - `price_recalculation = true`
+  - `material_breakdown = true`
+  - `labor_breakdown = true`
+  - `tools_breakdown = true`
+  - `breakdown_recalculation = true`
+- si `status = DC`
+  - `edit = true`
+  - todas las demas acciones en `false`
+
+Tambien se devuelve `status_label`:
+
+- `AC` -> `HABILITADO`
+- `DC` -> `INHABILITADO`
 
 ## 17. Items UPRE
 
