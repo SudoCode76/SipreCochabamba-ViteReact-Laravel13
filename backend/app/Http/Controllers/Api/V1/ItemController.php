@@ -6,14 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Item\IndexFndrItemRequest;
 use App\Http\Requests\Item\RecalculateItemPriceRequest;
 use App\Http\Requests\Item\ShowItemPriceAnalysisRequest;
+use App\Http\Requests\Item\StoreItemCompositionInputRequest;
 use App\Http\Requests\Item\StoreItemRequest;
+use App\Http\Requests\Item\UpdateItemCompositionInputRequest;
 use App\Http\Resources\Item\ItemFndrListResource;
 use App\Models\Item;
+use App\Models\ItemInput;
 use App\Services\Items\Fndr\BuildFndrItemContextService;
 use App\Services\Items\Fndr\CreateItemService;
 use App\Services\Items\Fndr\FndrPermissionService;
 use App\Services\Items\Fndr\FndrPriceAnalysisService;
 use App\Services\Items\Fndr\ListFndrItemsService;
+use App\Services\Items\ItemCompositionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -26,6 +30,7 @@ class ItemController extends Controller
         private readonly CreateItemService $createItemService,
         private readonly FndrPriceAnalysisService $fndrPriceAnalysisService,
         private readonly FndrPermissionService $fndrPermissionService,
+        private readonly ItemCompositionService $itemCompositionService,
     ) {}
 
     public function fndrContext(Request $request): JsonResponse
@@ -333,7 +338,7 @@ class ItemController extends Controller
 
     public function priceAnalysis(ShowItemPriceAnalysisRequest $request, Item $item): JsonResponse
     {
-        $mode = strtolower($request->string('mode')->toString());
+        $mode = strtolower((string) $request->input('mode', 'general'));
         $permissions = $this->fndrPermissionService->resolve($request->user(), $mode);
 
         if (! $permissions['can_view_price_analysis']) {
@@ -355,7 +360,7 @@ class ItemController extends Controller
 
     public function priceRecalculation(RecalculateItemPriceRequest $request, Item $item): JsonResponse
     {
-        $mode = strtolower($request->string('mode')->toString());
+        $mode = strtolower((string) $request->input('mode', 'general'));
         $permissions = $this->fndrPermissionService->resolve($request->user(), $mode);
 
         if (! $permissions['can_recalculate']) {
@@ -372,6 +377,274 @@ class ItemController extends Controller
             'success' => true,
             'message' => 'Analisis de precio '.strtoupper($mode).' recalculado correctamente.',
             'data' => $analysis,
+        ]);
+    }
+
+    public function compositionContext(Item $item, Request $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para acceder a la composicion del item.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Contexto de composicion del item obtenido correctamente.',
+            'data' => $this->itemCompositionService->context($item, $permissions),
+        ]);
+    }
+
+    public function composition(Item $item, Request $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para consultar la composicion del item.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Composicion del item obtenida correctamente.',
+            'data' => $this->itemCompositionService->composition($item),
+        ]);
+    }
+
+    public function materials(Item $item, Request $request): JsonResponse
+    {
+        return $this->compositionListResponse($item, 1, $request, 'Materiales del item obtenidos correctamente.');
+    }
+
+    public function storeMaterial(Item $item, StoreItemCompositionInputRequest $request): JsonResponse
+    {
+        return $this->compositionStoreResponse($item, 1, $request, 'Material agregado correctamente al item.');
+    }
+
+    public function updateMaterial(Item $item, ItemInput $itemInput, UpdateItemCompositionInputRequest $request): JsonResponse
+    {
+        return $this->compositionUpdateResponse($item, $itemInput, 1, $request, 'Material actualizado correctamente.');
+    }
+
+    public function deleteMaterial(Item $item, ItemInput $itemInput, Request $request): JsonResponse
+    {
+        return $this->compositionDeleteResponse($item, $itemInput, 1, $request, 'Material retirado correctamente del item.');
+    }
+
+    public function materialsTotal(Item $item, Request $request): JsonResponse
+    {
+        return $this->compositionTotalResponse($item, 1, $request, 'Total de materiales obtenido correctamente.');
+    }
+
+    public function labor(Item $item, Request $request): JsonResponse
+    {
+        return $this->compositionListResponse($item, 2, $request, 'Mano de obra del item obtenida correctamente.');
+    }
+
+    public function storeLabor(Item $item, StoreItemCompositionInputRequest $request): JsonResponse
+    {
+        return $this->compositionStoreResponse($item, 2, $request, 'Mano de obra agregada correctamente al item.');
+    }
+
+    public function updateLabor(Item $item, ItemInput $itemInput, UpdateItemCompositionInputRequest $request): JsonResponse
+    {
+        return $this->compositionUpdateResponse($item, $itemInput, 2, $request, 'Mano de obra actualizada correctamente.');
+    }
+
+    public function deleteLabor(Item $item, ItemInput $itemInput, Request $request): JsonResponse
+    {
+        return $this->compositionDeleteResponse($item, $itemInput, 2, $request, 'Mano de obra retirada correctamente del item.');
+    }
+
+    public function laborTotal(Item $item, Request $request): JsonResponse
+    {
+        return $this->compositionTotalResponse($item, 2, $request, 'Total de mano de obra obtenido correctamente.');
+    }
+
+    public function machinery(Item $item, Request $request): JsonResponse
+    {
+        return $this->compositionListResponse($item, 3, $request, 'Maquinaria del item obtenida correctamente.');
+    }
+
+    public function storeMachinery(Item $item, StoreItemCompositionInputRequest $request): JsonResponse
+    {
+        return $this->compositionStoreResponse($item, 3, $request, 'Maquinaria agregada correctamente al item.');
+    }
+
+    public function updateMachinery(Item $item, ItemInput $itemInput, UpdateItemCompositionInputRequest $request): JsonResponse
+    {
+        return $this->compositionUpdateResponse($item, $itemInput, 3, $request, 'Maquinaria actualizada correctamente.');
+    }
+
+    public function deleteMachinery(Item $item, ItemInput $itemInput, Request $request): JsonResponse
+    {
+        return $this->compositionDeleteResponse($item, $itemInput, 3, $request, 'Maquinaria retirada correctamente del item.');
+    }
+
+    public function machineryTotal(Item $item, Request $request): JsonResponse
+    {
+        return $this->compositionTotalResponse($item, 3, $request, 'Total de maquinaria obtenido correctamente.');
+    }
+
+    public function globalTotal(Item $item, Request $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para consultar el total global del item.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Total global del item obtenido correctamente.',
+            'data' => [
+                'global' => $this->itemCompositionService->globalTotal($item),
+            ],
+        ]);
+    }
+
+    public function breakdownRecalculation(Item $item, Request $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_recalculate']) {
+            return $this->forbiddenResponse('No tiene permisos para recalcular desgloses del item.');
+        }
+
+        try {
+            $analysis = $this->fndrPriceAnalysisService->buildCurrent($item, 'general');
+        } catch (InvalidArgumentException $exception) {
+            return $this->validationFailureResponse($exception->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Desgloses del item recalculados correctamente.',
+            'data' => $analysis,
+        ]);
+    }
+
+    private function compositionListResponse(Item $item, int $type, Request $request, string $message): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para consultar la composicion del item.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => [
+                'items' => $this->itemCompositionService->listByType($item, $type),
+            ],
+        ]);
+    }
+
+    private function compositionStoreResponse(Item $item, int $type, StoreItemCompositionInputRequest $request, string $message): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_create']) {
+            return $this->forbiddenResponse('No tiene permisos para modificar la composicion del item.');
+        }
+
+        try {
+            $record = $this->itemCompositionService->create(
+                $item,
+                $type,
+                (int) $request->integer('id_insumo'),
+                (float) $request->input('cantidad'),
+                $request->user(),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $this->validationFailureResponse($exception->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => [
+                'item_input' => $record,
+                'totals' => [
+                    'block' => $this->itemCompositionService->totalByType($item, $type),
+                    'global' => $this->itemCompositionService->globalTotal($item),
+                ],
+            ],
+        ], 201);
+    }
+
+    private function compositionUpdateResponse(Item $item, ItemInput $itemInput, int $type, UpdateItemCompositionInputRequest $request, string $message): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_create']) {
+            return $this->forbiddenResponse('No tiene permisos para modificar la composicion del item.');
+        }
+
+        try {
+            $record = $this->itemCompositionService->update(
+                $item,
+                $type,
+                $itemInput,
+                (float) $request->input('cantidad'),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $this->validationFailureResponse($exception->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => [
+                'item_input' => $record,
+                'totals' => [
+                    'block' => $this->itemCompositionService->totalByType($item, $type),
+                    'global' => $this->itemCompositionService->globalTotal($item),
+                ],
+            ],
+        ]);
+    }
+
+    private function compositionDeleteResponse(Item $item, ItemInput $itemInput, int $type, Request $request, string $message): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_create']) {
+            return $this->forbiddenResponse('No tiene permisos para modificar la composicion del item.');
+        }
+
+        try {
+            $this->itemCompositionService->delete($item, $type, $itemInput);
+        } catch (InvalidArgumentException $exception) {
+            return $this->validationFailureResponse($exception->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => [
+                'totals' => [
+                    'block' => $this->itemCompositionService->totalByType($item, $type),
+                    'global' => $this->itemCompositionService->globalTotal($item),
+                ],
+            ],
+        ]);
+    }
+
+    private function compositionTotalResponse(Item $item, int $type, Request $request, string $message): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para consultar la composicion del item.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => [
+                'total' => $this->itemCompositionService->totalByType($item, $type),
+            ],
         ]);
     }
 

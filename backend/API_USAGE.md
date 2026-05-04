@@ -1963,6 +1963,482 @@ El objetivo de este modulo es soportar completamente la pantalla React de analis
 
 Este modulo no usa solamente el criterio de administrador.
 
+Estas APIs soportan la pantalla React de `nuevo-proyecto`.
+
+Importante:
+
+- el mapa se resuelve en frontend
+- el backend no dibuja capas ni interactua con OpenLayers
+- el backend solo recibe, valida y guarda los datos territoriales capturados por frontend
+
+### 15.1 Contexto de Creacion de Proyecto
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/projects/create-context`
+- Autenticacion: `Bearer token`
+
+Tambien existe por compatibilidad:
+
+- `GET /api/v1/projects/context`
+
+### Para que sirve
+
+Devuelve todo lo necesario para cargar la pagina `nuevo-proyecto`:
+
+- personas activas para `responsable`
+- personas activas para `solicitante`
+- estados disponibles `AC` y `DC`
+- condiciones disponibles `PD`, `RV`, `AP`
+- permisos funcionales del usuario autenticado
+- metadata de apoyo para el formulario
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Contexto de proyectos obtenido correctamente.",
+  "data": {
+    "responsible_options": [
+      {
+        "id_usuario": 1,
+        "funcionario": "Usuario Demo",
+        "username": "demo",
+        "estado": "AC"
+      }
+    ],
+    "requester_options": [
+      {
+        "id_usuario": 1,
+        "funcionario": "Usuario Demo",
+        "username": "demo",
+        "estado": "AC"
+      }
+    ],
+    "statuses": [
+      { "code": "AC", "label": "ACTIVO" },
+      { "code": "DC", "label": "INACTIVO" }
+    ],
+    "conditions": [
+      { "code": "PD", "label": "PENDIENTE" },
+      { "code": "RV", "label": "REVISADO" },
+      { "code": "AP", "label": "APROBADO" }
+    ],
+    "permissions": {
+      "can_create": true
+    },
+    "metadata": {
+      "creator_user_id": 1,
+      "location_fields": ["latitud", "longitud", "distrito", "zona", "otb", "ubicacion"],
+      "defaults": {
+        "estado": "AC",
+        "aprobado": "PD"
+      }
+    }
+  }
+}
+```
+
+### 15.2 Crear Proyecto
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/projects`
+- Autenticacion: `Bearer token`
+
+### Campos que acepta
+
+- `nombre_proyecto`
+- `fecha`
+- `latitud`
+- `longitud`
+- `distrito`
+- `zona`
+- `otb`
+- `ubicacion`
+- `responsable`
+- `solicitante`
+- `observaciones`
+- `estado`
+- `aprobado`
+
+Nota:
+
+- `id_usuario` se toma del usuario autenticado
+- no es necesario enviarlo desde frontend
+
+### Body ejemplo
+
+```json
+{
+  "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
+  "fecha": "2026-05-04",
+  "latitud": "-17.3935",
+  "longitud": "-66.1570",
+  "distrito": "2",
+  "zona": "Zona Sur",
+  "otb": "OTB Central",
+  "ubicacion": "Av. Principal esquina Calle 5",
+  "responsable": 1,
+  "solicitante": 1,
+  "observaciones": "Proyecto registrado desde la nueva pantalla React.",
+  "estado": "AC",
+  "aprobado": "PD"
+}
+```
+
+### Validaciones aplicadas
+
+- `nombre_proyecto`: requerido
+- `fecha`: requerida
+- `latitud`: requerida
+- `longitud`: requerida
+- `responsable`: requerido
+- `solicitante`: requerido
+- `observaciones`: requerida
+- `estado`: requerido y debe ser `AC` o `DC`
+- `aprobado`: requerido y debe ser `PD`, `RV` o `AP`
+- `ubicacion`: requerida
+- `distrito`: nullable
+- `zona`: nullable
+- `otb`: nullable
+
+### Regla legacy mantenida
+
+- los campos textuales del proyecto se convierten a mayusculas antes de guardar
+- se valida duplicado por `nombre_proyecto`
+- la comparacion de duplicado se hace de forma normalizada con `UPPER(TRIM(nombre_proyecto))`
+- si ya existe un proyecto con el mismo nombre, no se inserta
+
+### Campos de ubicacion que guarda el backend
+
+- `latitud`
+- `longitud`
+- `distrito`
+- `zona`
+- `otb`
+- `ubicacion`
+
+### Ejemplo de respuesta exitosa
+
+```json
+{
+  "success": true,
+  "message": "Proyecto creado correctamente.",
+  "data": {
+    "project": {
+      "id_proyecto": 15,
+      "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
+      "ubicacion": "AV. PRINCIPAL ESQUINA CALLE 5",
+      "fecha": "2026-05-04",
+      "responsable": "1",
+      "solicitante": 1,
+      "observaciones": "PROYECTO REGISTRADO DESDE LA NUEVA PANTALLA REACT.",
+      "aprobado": "PD",
+      "estado": "AC",
+      "id_usuario": 1,
+      "nombre_responsable": "Usuario Demo",
+      "latitud": "-17.3935",
+      "longitud": "-66.1570",
+      "distrito": "2",
+      "zona": "ZONA SUR",
+      "otb": "OTB CENTRAL"
+    }
+  }
+}
+```
+
+### Ejemplo de error por duplicado
+
+```json
+{
+  "success": false,
+  "message": "Error de validacion.",
+  "errors": {
+    "nombre_proyecto": [
+      "Ya existe un proyecto con el mismo nombre."
+    ]
+  }
+}
+```
+
+### 15.3 Nombre Visible de Usuario
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/users/{id}/display-name`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Replica el comportamiento del legacy cuando frontend selecciona responsable o solicitante y necesita recuperar el nombre visible del usuario.
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Nombre visible del usuario obtenido correctamente.",
+  "data": {
+    "id_usuario": 1,
+    "funcionario": "Usuario Demo",
+    "username": "demo",
+    "estado": "AC"
+  }
+}
+```
+
+## Flujo Recomendado de Uso
+
+Estas APIs soportan la pantalla React de `nuevo-proyecto`.
+
+Importante:
+
+- el mapa se resuelve en frontend
+- el backend no dibuja capas ni interactua con OpenLayers
+- el backend solo recibe, valida y guarda los datos territoriales capturados por frontend
+
+### 15.1 Contexto de Creacion de Proyecto
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/projects/create-context`
+- Autenticacion: `Bearer token`
+
+Tambien existe por compatibilidad:
+
+- `GET /api/v1/projects/context`
+
+### Para que sirve
+
+Devuelve todo lo necesario para cargar la pagina `nuevo-proyecto`:
+
+- personas activas para `responsable`
+- personas activas para `solicitante`
+- estados disponibles `AC` y `DC`
+- condiciones disponibles `PD`, `RV`, `AP`
+- permisos funcionales del usuario autenticado
+- metadata de apoyo para el formulario
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Contexto de proyectos obtenido correctamente.",
+  "data": {
+    "responsible_options": [
+      {
+        "id_usuario": 1,
+        "funcionario": "Usuario Demo",
+        "username": "demo",
+        "estado": "AC"
+      }
+    ],
+    "requester_options": [
+      {
+        "id_usuario": 1,
+        "funcionario": "Usuario Demo",
+        "username": "demo",
+        "estado": "AC"
+      }
+    ],
+    "statuses": [
+      { "code": "AC", "label": "ACTIVO" },
+      { "code": "DC", "label": "INACTIVO" }
+    ],
+    "conditions": [
+      { "code": "PD", "label": "PENDIENTE" },
+      { "code": "RV", "label": "REVISADO" },
+      { "code": "AP", "label": "APROBADO" }
+    ],
+    "permissions": {
+      "can_create": true
+    },
+    "metadata": {
+      "creator_user_id": 1,
+      "location_fields": ["latitud", "longitud", "distrito", "zona", "otb", "ubicacion"],
+      "defaults": {
+        "estado": "AC",
+        "aprobado": "PD"
+      }
+    }
+  }
+}
+```
+
+### 15.2 Crear Proyecto
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/projects`
+- Autenticacion: `Bearer token`
+
+### Campos que acepta
+
+- `nombre_proyecto`
+- `fecha`
+- `latitud`
+- `longitud`
+- `distrito`
+- `zona`
+- `otb`
+- `ubicacion`
+- `responsable`
+- `solicitante`
+- `observaciones`
+- `estado`
+- `aprobado`
+
+Nota:
+
+- `id_usuario` se toma del usuario autenticado
+- no es necesario enviarlo desde frontend
+
+### Body ejemplo
+
+```json
+{
+  "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
+  "fecha": "2026-05-04",
+  "latitud": "-17.3935",
+  "longitud": "-66.1570",
+  "distrito": "2",
+  "zona": "Zona Sur",
+  "otb": "OTB Central",
+  "ubicacion": "Av. Principal esquina Calle 5",
+  "responsable": 1,
+  "solicitante": 1,
+  "observaciones": "Proyecto registrado desde la nueva pantalla React.",
+  "estado": "AC",
+  "aprobado": "PD"
+}
+```
+
+### Validaciones aplicadas
+
+- `nombre_proyecto`: requerido
+- `fecha`: requerida
+- `latitud`: requerida
+- `longitud`: requerida
+- `responsable`: requerido
+- `solicitante`: requerido
+- `observaciones`: requerida
+- `estado`: requerido y debe ser `AC` o `DC`
+- `aprobado`: requerido y debe ser `PD`, `RV` o `AP`
+- `ubicacion`: requerida
+- `distrito`: nullable
+- `zona`: nullable
+- `otb`: nullable
+
+### Regla legacy mantenida
+
+- los campos textuales del proyecto se convierten a mayusculas antes de guardar
+- se valida duplicado por `nombre_proyecto`
+- la comparacion de duplicado se hace de forma normalizada con `UPPER(TRIM(nombre_proyecto))`
+- si ya existe un proyecto con el mismo nombre, no se inserta
+
+### Campos de ubicacion que guarda el backend
+
+- `latitud`
+- `longitud`
+- `distrito`
+- `zona`
+- `otb`
+- `ubicacion`
+
+### Ejemplo de respuesta exitosa
+
+```json
+{
+  "success": true,
+  "message": "Proyecto creado correctamente.",
+  "data": {
+    "project": {
+      "id_proyecto": 15,
+      "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
+      "ubicacion": "AV. PRINCIPAL ESQUINA CALLE 5",
+      "fecha": "2026-05-04",
+      "responsable": "1",
+      "solicitante": 1,
+      "observaciones": "PROYECTO REGISTRADO DESDE LA NUEVA PANTALLA REACT.",
+      "aprobado": "PD",
+      "estado": "AC",
+      "id_usuario": 1,
+      "nombre_responsable": "Usuario Demo",
+      "latitud": "-17.3935",
+      "longitud": "-66.1570",
+      "distrito": "2",
+      "zona": "ZONA SUR",
+      "otb": "OTB CENTRAL"
+    }
+  }
+}
+```
+
+### Ejemplo de error por duplicado
+
+```json
+{
+  "success": false,
+  "message": "Error de validacion.",
+  "errors": {
+    "nombre_proyecto": [
+      "Ya existe un proyecto con el mismo nombre."
+    ]
+  }
+}
+```
+
+### 15.3 Nombre Visible de Usuario
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/users/{id}/display-name`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Replica el comportamiento del legacy cuando frontend selecciona responsable o solicitante y necesita recuperar el nombre visible del usuario.
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Nombre visible del usuario obtenido correctamente.",
+  "data": {
+    "id_usuario": 1,
+    "funcionario": "Usuario Demo",
+    "username": "demo",
+    "estado": "AC"
+  }
+}
+```
+
+## Flujo Recomendado de Uso
+
+1. Verificar que el backend esta disponible con `GET /api/health`.
+2. Iniciar sesion con `POST /api/v1/auth/login`.
+3. Guardar el valor de `data.token`.
+4. Enviar ese token como `Bearer` para consumir `GET /api/v1/auth/me` o `GET /api/v1/profile`.
+5. Si necesitas inspeccionar la matriz completa de permisos, consumir `GET /api/v1/permissions/matrix`.
+6. Si necesitas ver o actualizar permisos de un rol, usar `GET` o `PUT /api/v1/roles/{role}/permissions`.
+
+## 16. Items FNDR
+
+Estas APIs reemplazan la logica de la pantalla legacy `items/fndr`.
+
+El objetivo de este modulo es soportar completamente la pantalla React de analisis FNDR sin usar vistas server-side.
+
+### Diferencia entre estas APIs
+
+- `GET /api/v1/items/fndr/context`: carga el contexto inicial completo de la pantalla
+- `GET /api/v1/items/fndr`: lista paginada y filtrable de items FNDR
+- `POST /api/v1/items`: crea un item nuevo
+- `GET /api/v1/items/{id}/price-analysis?mode=fndr`: devuelve el analisis FNDR actual del item
+- `POST /api/v1/items/{id}/price-recalculation?mode=fndr`: recalcula el analisis usando `log_insumo` hasta una fecha dada
+- `GET /api/v1/subgroups?group_id=...`: llena el combo dependiente de subgrupos
+
+### Autorizacion funcional
+
+Este modulo no usa solamente el criterio de administrador.
+
 Internamente se resuelven permisos funcionales basados en la tabla `funcion` y las asignaciones en `permiso`.
 
 Los booleanos que devuelve el contexto son:
@@ -2402,6 +2878,157 @@ Recomendacion practica:
 }
 ```
 
+### 16.7 Composicion Operativa del Item
+
+Estas APIs permiten replicar los modales y pantallas operativas de composicion del item por bloque.
+
+#### Contexto del item
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/composition/context`
+
+Devuelve:
+
+- datos base del item
+- unidad
+- grupo
+- subgrupo
+- estado
+- precio actual
+- permisos funcionales
+- `available_actions`
+- metadata operativa como `can_edit`, `can_add_inputs`, `can_recalculate`
+
+#### Composicion completa
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/composition`
+
+Devuelve:
+
+- `materials`
+- `labor`
+- `machinery`
+- `totals.materials`
+- `totals.labor`
+- `totals.machinery`
+- `totals.global`
+
+#### Materiales
+
+- `GET /api/v1/items/{id}/materials`
+- `POST /api/v1/items/{id}/materials`
+- `PUT /api/v1/items/{id}/materials/{itemInputId}`
+- `DELETE /api/v1/items/{id}/materials/{itemInputId}`
+- `GET /api/v1/items/{id}/materials/total`
+
+Body minimo para agregar:
+
+```json
+{
+  "id_insumo": 1,
+  "cantidad": 2
+}
+```
+
+#### Mano de obra
+
+- `GET /api/v1/items/{id}/labor`
+- `POST /api/v1/items/{id}/labor`
+- `PUT /api/v1/items/{id}/labor/{itemInputId}`
+- `DELETE /api/v1/items/{id}/labor/{itemInputId}`
+- `GET /api/v1/items/{id}/labor/total`
+
+#### Maquinaria / herramienta
+
+- `GET /api/v1/items/{id}/machinery`
+- `POST /api/v1/items/{id}/machinery`
+- `PUT /api/v1/items/{id}/machinery/{itemInputId}`
+- `DELETE /api/v1/items/{id}/machinery/{itemInputId}`
+- `GET /api/v1/items/{id}/machinery/total`
+
+#### Total global del item
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/total`
+
+#### Regla aplicada al agregar duplicados
+
+Si el mismo insumo ya existe relacionado al item:
+
+- no se crea una fila duplicada nueva
+- se actualiza la relacion existente con la nueva `cantidad`
+- se mantiene una sola relacion activa por item + insumo
+
+#### Precio unitario y parcial
+
+- el precio unitario usado por defecto sale del `insumo` actual
+- `parcial = cantidad * precio_unitario`
+- en la implementacion actual la API permite editar `cantidad`
+- no se persiste un precio unitario manual por separado en `item_insumo`
+
+#### Restriccion por estado del item
+
+Si el item esta `DC`:
+
+- no permite agregar materiales
+- no permite agregar mano de obra
+- no permite agregar maquinaria
+- no permite recalcular
+- si permite consulta del contexto y composicion
+
+#### Busqueda de insumos para selects por tipo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/search/inputs?type=1`
+
+Tipos esperados:
+
+- `1` material
+- `2` mano de obra
+- `3` maquinaria / herramienta
+
+La respuesta devuelve:
+
+- `id`
+- `text`
+- `precio`
+- `tipo`
+- `unidad_medida`
+
+#### Analisis general del item sin modo explicito
+
+- `GET /api/v1/items/{id}/price-analysis`
+- `POST /api/v1/items/{id}/price-recalculation`
+- `POST /api/v1/items/{id}/breakdowns/recalculate`
+
+Para compatibilidad, si no se envia `mode`, backend usa `general` por defecto.
+
+### 16.8 Acciones disponibles por item
+
+Cada item listado y el contexto de composicion devuelven acciones explicitas.
+
+- si `status = AC`
+  - `edit = true`
+  - `materials = true`
+  - `labor = true`
+  - `machinery = true`
+  - `files = true`
+  - `price_analysis = true`
+  - `price_recalculation = true`
+  - `material_breakdown = true`
+  - `labor_breakdown = true`
+  - `tools_breakdown = true`
+  - `breakdown_recalculation = true`
+- si `status = DC`
+  - `edit = true`
+  - todas las demas acciones en `false`
+
+Tambien se devuelve `status_label`:
+
+- `AC` -> `HABILITADO`
+- `DC` -> `INHABILITADO`
+
 ## 17. Items UPRE
 
 Estas APIs reemplazan la logica de la pantalla legacy `items/upre`.
@@ -2639,6 +3266,459 @@ La regla es:
 - Autenticacion: `Bearer token`
 
 Esta API es compartida por FNDR y UPRE.
+
+Sirve para el combo dependiente cuando no quieras cargar todos los subgrupos en memoria desde el contexto.
+
+## 18. Items FPS
+
+Estas APIs reemplazan la logica de la pantalla legacy `items/fps`.
+
+El comportamiento general es el mismo que en FNDR y UPRE, pero el modo `fps` usa su propia tabla de porcentajes y por eso cambia el resultado de `calculated_price` y del analisis/recalculo.
+
+### Diferencia respecto a otros modos
+
+La diferencia principal es la fuente de porcentajes:
+
+- FNDR usa `porcentaje_calculo_fndr`
+- UPRE usa `porcentaje_calculo_upre`
+- FPS usa `porcentaje_calculo_fps`
+
+### 18.1 Contexto FPS
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/fps/context`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Sirve para cargar toda la pantalla FPS con una sola llamada inicial.
+
+Devuelve:
+
+- grupos activos
+- subgrupos activos
+- `subgroups_by_group`
+- estados disponibles
+- unidades de medida activas
+- permisos funcionales del usuario autenticado
+- metadata de la pantalla y endpoints relacionados
+
+### Como usarla desde frontend
+
+1. Llamar a `GET /api/v1/items/fps/context` al entrar a la pantalla.
+2. Usar `groups` para el combo principal.
+3. Usar `subgroups_by_group[groupId]` para resolver subgrupos localmente, o usar `GET /api/v1/subgroups?group_id=...` si quieres carga bajo demanda.
+4. Leer `permissions` para habilitar acciones.
+5. Consumir el listado con `GET /api/v1/items/fps`.
+
+### 18.2 Listar Items FPS
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/fps`
+- Autenticacion: `Bearer token`
+
+### Filtros soportados
+
+- `search`
+- `group_id`
+- `subgroup_id`
+- `status`
+- `page`
+- `per_page`
+
+Ejemplo:
+
+```text
+GET /api/v1/items/fps?search=ACERO&group_id=7&subgroup_id=10&status=AC&page=1&per_page=20
+```
+
+### Precio calculado del listado FPS
+
+`calculated_price` se calcula en backend usando los insumos activos del item y los porcentajes activos de `porcentaje_calculo_fps`.
+
+La secuencia aplicada es:
+
+1. materiales = suma de insumos tipo `1`
+2. mano de obra base = suma de insumos tipo `2`
+3. cargas sociales = porcentaje FPS sobre mano de obra base
+4. IVA = porcentaje FPS sobre mano de obra base + cargas sociales
+5. herramientas base = suma de insumos tipo `3`
+6. herramientas menores = porcentaje FPS sobre mano de obra ajustada
+7. costo directo = materiales + mano de obra ajustada + herramientas ajustadas
+8. gastos generales = porcentaje FPS sobre costo directo
+9. utilidad = porcentaje FPS sobre costo directo + gastos generales
+10. subtotal = costo directo + gastos generales + utilidad
+11. IT = porcentaje FPS sobre subtotal
+12. total final = subtotal + IT
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Items FPS obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_item": 3,
+        "name": "ACERO ESTRUCTURAL S/D",
+        "calculated_price": 61.9885,
+        "status": "AC",
+        "status_label": "HABILITADO",
+        "group": {
+          "id": 7,
+          "name": "2.- OBRA GRUESA",
+          "code": "002-OGR"
+        },
+        "subgroup": {
+          "id": 10,
+          "description": "ESTRUCTURAS",
+          "code": "EST"
+        },
+        "unit_measure": {
+          "id": 58,
+          "description": "kilogramo",
+          "abbreviation": "kg"
+        },
+        "available_actions": {
+          "edit": true,
+          "materials": true,
+          "labor": true,
+          "machinery": true,
+          "files": true,
+          "price_analysis": true,
+          "price_recalculation": true,
+          "material_breakdown": true,
+          "labor_breakdown": true,
+          "tools_breakdown": true,
+          "breakdown_recalculation": true
+        }
+      }
+    ],
+    "meta": {
+      "current_page": 1,
+      "per_page": 20,
+      "total": 2486
+    }
+  }
+}
+```
+
+### Acciones disponibles por item
+
+El frontend no debe inferir manualmente las operaciones desde `status`.
+
+Cada item del listado ahora devuelve tambien:
+
+- `status_label`
+- `available_actions`
+
+Regla funcional aplicada:
+
+- si `status = AC`
+  - `status_label = HABILITADO`
+  - todas las acciones operativas salen en `true`
+- si `status = DC`
+  - `status_label = INHABILITADO`
+  - solo `edit = true`
+  - todas las demas acciones salen en `false`
+
+Esto aplica al menos a:
+
+- `GET /api/v1/items`
+- `GET /api/v1/items/fndr`
+- `GET /api/v1/items/upre`
+- `GET /api/v1/items/fps`
+- `GET /api/v1/items/obras`
+- `GET /api/v1/items/proman`
+
+### Ejemplo de item inhabilitado
+
+```json
+{
+  "id_item": 2720,
+  "name": "CINTA DE ALUMINIO",
+  "calculated_price": 6.7303,
+  "status": "DC",
+  "status_label": "INHABILITADO",
+  "available_actions": {
+    "edit": true,
+    "materials": false,
+    "labor": false,
+    "machinery": false,
+    "files": false,
+    "price_analysis": false,
+    "price_recalculation": false,
+    "material_breakdown": false,
+    "labor_breakdown": false,
+    "tools_breakdown": false,
+    "breakdown_recalculation": false
+  }
+}
+```
+
+### 16.3 Crear Item
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/items`
+- Autenticacion: `Bearer token`
+
+Se reutiliza exactamente la misma API de creacion de items usada por FNDR y UPRE.
+
+Reglas importantes:
+
+- `group_id` obligatorio
+- `subgroup_id` obligatorio
+- `item` obligatorio
+- `unit_measure_id` obligatorio
+- `status` obligatorio
+- el subgrupo debe pertenecer al grupo seleccionado
+- se asocia `id_usuario` del autenticado
+- `fecha_item` se guarda en formato PostgreSQL
+
+### Regla de duplicados
+
+Se aplica la misma regla endurecida:
+
+- no se permite repetir `group_id + subgroup_id + item`
+
+### 18.4 Ver Analisis de Precio FPS
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/price-analysis?mode=fps`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Devuelve el analisis actual del item usando precios actuales de `insumo` y porcentajes de `porcentaje_calculo_fps`.
+
+Incluye:
+
+- datos base del item
+- materiales
+- mano de obra
+- herramientas
+- porcentajes activos FPS
+- subtotales y total final
+
+### 18.5 Recalcular Analisis FPS por Fecha
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/items/{id}/price-recalculation?mode=fps`
+- Autenticacion: `Bearer token`
+
+Body:
+
+```json
+{
+  "fecha": "2026-04-30"
+}
+```
+
+### Regla usada para el recalculo
+
+Para cada insumo del item, backend busca el ultimo `log_insumo` valido hasta la fecha indicada y usa ese precio historico para recalcular el analisis completo.
+
+No suma todos los logs del mismo insumo.
+
+La regla es:
+
+- un solo precio historico por insumo
+- el ultimo `log_insumo` con `fecha <= fecha enviada`
+- recalculo completo con porcentajes de `porcentaje_calculo_fps`
+
+### 18.6 Listar Subgrupos por Grupo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups?group_id=7`
+- Autenticacion: `Bearer token`
+
+Esta API es compartida por FNDR, UPRE y FPS.
+
+Sirve para el combo dependiente cuando no quieras cargar todos los subgrupos en memoria desde el contexto.
+
+## 19. Items PROMAN
+
+Estas APIs reemplazan la logica de la pantalla legacy `items/proman`.
+
+La estructura funcional es la misma familia de `items/fndr`, `items/upre`, `items/fps` y `items/obras`, pero el modo `proman` usa su propia tabla de porcentajes.
+
+### Fuente de porcentajes
+
+PROMAN usa exclusivamente:
+
+- `porcentaje_calculo_proman`
+
+No mezcla:
+
+- `porcentaje_calculo`
+- `porcentaje_calculo_fndr`
+- `porcentaje_calculo_upre`
+- `porcentaje_calculo_fps`
+- `porcentaje_calculo_obras`
+
+### 19.1 Contexto PROMAN
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/proman/context`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Sirve para cargar toda la pantalla PROMAN con una sola llamada inicial.
+
+Devuelve:
+
+- grupos activos
+- subgrupos activos
+- `subgroups_by_group`
+- estados disponibles
+- unidades de medida activas
+- permisos funcionales del usuario autenticado
+- metadata de la pantalla y endpoints relacionados
+
+### Como usarla desde frontend
+
+1. Llamar a `GET /api/v1/items/proman/context` al entrar a la pantalla.
+2. Usar `groups` para el combo principal.
+3. Usar `subgroups_by_group[groupId]` para resolver subgrupos localmente, o `GET /api/v1/subgroups?group_id=...` si prefieres carga bajo demanda.
+4. Leer `permissions` para habilitar acciones.
+5. Consumir el listado con `GET /api/v1/items/proman`.
+
+### 19.2 Listar Items PROMAN
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/proman`
+- Autenticacion: `Bearer token`
+
+### Filtros soportados
+
+- `search`
+- `group_id`
+- `subgroup_id`
+- `status`
+- `page`
+- `per_page`
+
+Ejemplo:
+
+```text
+GET /api/v1/items/proman?search=ACERO&group_id=7&subgroup_id=10&status=AC&page=1&per_page=20
+```
+
+### Orden exacto aplicado en el listado
+
+Se respeta exactamente el orden legacy:
+
+1. `grupo.nombre_grupo ASC`
+2. `sub_grupo.descripcion ASC`
+3. `item.item ASC`
+4. `item.id_item ASC`
+
+### Precio calculado del listado PROMAN
+
+`calculated_price` se calcula en backend usando los insumos activos del item y los porcentajes activos de `porcentaje_calculo_proman`.
+
+La secuencia aplicada es:
+
+1. materiales = suma de insumos tipo `1`
+2. mano de obra base = suma de insumos tipo `2`
+3. cargas sociales = porcentaje PROMAN sobre mano de obra base
+4. IVA = porcentaje PROMAN sobre mano de obra base + cargas sociales
+5. herramientas base = suma de insumos tipo `3`
+6. herramientas menores = porcentaje PROMAN sobre mano de obra ajustada
+7. costo directo = materiales + mano de obra ajustada + herramientas ajustadas
+8. gastos generales = porcentaje PROMAN sobre costo directo
+9. utilidad = porcentaje PROMAN sobre costo directo + gastos generales
+10. subtotal = costo directo + gastos generales + utilidad
+11. IT = porcentaje PROMAN sobre subtotal
+12. total final = subtotal + IT
+
+### 19.3 Crear Item
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/items`
+- Autenticacion: `Bearer token`
+
+Se reutiliza exactamente la misma API de creación de items usada por los demás modos.
+
+Reglas importantes:
+
+- `group_id` obligatorio
+- `subgroup_id` obligatorio
+- `item` obligatorio
+- `unit_measure_id` obligatorio
+- `status` obligatorio
+- el subgrupo debe pertenecer al grupo seleccionado
+- se asocia `id_usuario` del autenticado
+- `fecha_item` se guarda en formato PostgreSQL `Y-m-d`
+
+### Duplicados
+
+Se mantiene la regla endurecida aplicada al nuevo backend:
+
+- no se permite repetir `group_id + subgroup_id + item`
+
+### 19.4 Ver Analisis de Precio PROMAN
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/price-analysis?mode=proman`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Devuelve el análisis actual del item usando precios actuales de `insumo` y porcentajes de `porcentaje_calculo_proman`.
+
+Incluye:
+
+- datos base del item
+- materiales
+- mano de obra
+- herramientas
+- porcentajes activos PROMAN
+- subtotales y total final
+
+### Orden exacto aplicado en el análisis
+
+Cada bloque de materiales, mano de obra y herramientas se devuelve respetando el orden legacy efectivo:
+
+1. `nombre_grupo ASC`
+2. `subgrupo ASC`
+
+### 19.5 Recalcular Analisis PROMAN por Fecha
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/items/{id}/price-recalculation?mode=proman`
+- Autenticacion: `Bearer token`
+
+Body:
+
+```json
+{
+  "fecha": "2026-04-30"
+}
+```
+
+### Regla usada para el recálculo
+
+Para cada insumo del item, backend busca el último `log_insumo` válido hasta la fecha indicada y usa ese precio histórico para recalcular el análisis completo.
+
+No suma todos los logs del mismo insumo.
+
+### Orden exacto aplicado en el recálculo
+
+Se respeta exactamente el orden legacy:
+
+1. `id_insumo DESC`
+2. `id_log DESC`
+
+### 19.6 Listar Subgrupos por Grupo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups?group_id=7`
+- Autenticacion: `Bearer token`
+
+Esta API es compartida por `general`, `fndr`, `upre`, `fps`, `obras` y `proman`.
 
 Sirve para el combo dependiente cuando no quieras cargar todos los subgrupos en memoria desde el contexto.
 
