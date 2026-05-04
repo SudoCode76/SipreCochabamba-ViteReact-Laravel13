@@ -1242,11 +1242,27 @@ Estos endpoints permiten administrar la tabla legacy `insumo`, su historico, tra
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/inputs`
 - Autenticacion: `Bearer token`
-- Uso principal: listado administrativo enriquecido para la tabla legacy de insumos
+- Restriccion: solo `ADMINISTRADOR`
 
-Este endpoint devuelve cada insumo con datos listos para tabla, incluyendo joins con `tipo_insumo` y `unidad_medida`.
+Sirve para cargar el listado administrativo principal de la pantalla `insumo`.
 
-Campos principales por registro:
+### Enriquecimiento aplicado
+
+Cada registro sale enriquecido con joins equivalentes a:
+
+- `insumo.*`
+- `tipo_insumo.descripcion as nombre_tipo`
+- `unidad_medida.descripcion as nombre_unidad_medida`
+- `unidad_medida.abreviatura`
+
+### Orden legacy respetado
+
+La API lista exactamente con:
+
+1. `tipo ASC`
+2. `descripcion ASC`
+
+### Campos principales por registro
 
 - `id_insumo`
 - `descripcion`
@@ -1256,40 +1272,27 @@ Campos principales por registro:
 - `nombre_tipo`
 - `fecha_cotiz`
 - `estado`
-- `id_tipo`
-- `id_unidad_medida`
+- `observacion`
+- `tipo`
+- `unidad_medida`
 
-Filtros soportados:
+### Filtros soportados
 
 - `search`
+- `description` como alias de `search`
 - `status`
 - `type_id`
 - `unit_measure_id`
 - `page`
 - `per_page`
 
-Compatibilidad:
-
-- `description` sigue siendo aceptado como alias de `search`
-- Restriccion: solo `ADMINISTRADOR`
-
-### Paginacion
-
-Este endpoint no devuelve todos los insumos en una sola respuesta.
-
-- Por defecto devuelve `15` registros por pagina.
-- Puedes cambiar la cantidad con `per_page`.
-- El maximo actual permitido es `100` por pagina.
-- Para recorrer todo el listado debes avanzar por `page=1`, `page=2`, `page=3`, etc.
-
 Ejemplo:
 
 ```text
 GET /api/v1/inputs?search=acero&status=AC&type_id=1&unit_measure_id=1&page=1&per_page=100
+```
 
-### 13.1.1 Contexto de Insumos
-
-Sirve para cargar metadata de la pantalla administrativa de insumos.
+### 13.2 Contexto de Insumos
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/inputs/context`
@@ -1299,72 +1302,154 @@ Devuelve:
 
 - tipos de insumo activos
 - unidades de medida activas
-- estados posibles
+- estados disponibles `AC` y `DC`
 - permisos de la pantalla
-```
 
-La respuesta incluye metadatos para seguir paginando:
-
-```json
-{
-  "success": true,
-  "data": {
-    "items": [],
-    "meta": {
-      "current_page": 1,
-      "per_page": 100,
-      "total": 3821
-    }
-  }
-}
-```
-
-Si necesitas ver todos los insumos desde frontend, debes consumir todas las paginas usando esos metadatos.
-
-Filtros disponibles:
-
-- `description`
-- `type_id`
-- `unit_measure_id`
-- `status`
-- `quote_date`
-- `per_page`
-
-### 13.2 Crear Insumo
+### 13.3 Crear Insumo
 
 - Metodo: `POST`
 - URL: `http://localhost:8000/api/v1/inputs`
 - Autenticacion: `Bearer token`
-- Restriccion: solo `ADMINISTRADOR`
 
-Body ejemplo:
+### Campos aceptados
 
-```json
-{
-  "description": "Cemento Portland",
-  "unit_measure_id": 54,
-  "price": 65.5,
-  "type_id": 1,
-  "status": "AC",
-  "code": "INS-100",
-  "quote_date": "2026-04-29",
-  "observation": "Cotizacion base"
-}
-```
+La API acepta tanto nombres legacy como aliases actuales:
 
-### 13.3 Ver Detalle de Insumo
+- `descripcion` o `description`
+- `precio` o `price`
+- `unidad_medida` o `unit_measure_id`
+- `tipo` o `type_id`
+- `fecha_cotiz` o `quote_date`
+- `observacion` o `observation`
+- `estado` o `status`
+- `cod` o `code`
+- `solicitud` o `request_id`
+- `fecha` o `date`
+
+### Validaciones minimas
+
+- `descripcion` requerida
+- `precio` requerido
+- `unidad_medida` requerida
+- `tipo` requerido
+- `fecha_cotiz` requerida
+
+### Regla legacy mantenida
+
+No se crea si ya existe otro insumo con la misma `descripcion` y estado distinto de `DP`.
+
+Si el alta es valida:
+
+1. se inserta en `insumo`
+2. se inserta en `log_insumo` con `accion = RG`
+3. se inserta en `historial_insumo` con `accion = REGISTRADOR`
+
+### 13.4 Ver Detalle de Insumo
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/inputs/{input}`
 
-### 13.4 Editar Insumo
+Devuelve detalle enriquecido con:
+
+- datos base del insumo
+- `nombre_tipo`
+- `nombre_unidad_medida`
+- `id_tipo`
+- `id_unidad_medida`
+- `abreviatura`
+- `fecha_cotiz`
+- `observacion`
+- `estado`
+
+### 13.5 Obtener Nombre Simple de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/name`
+
+Devuelve una respuesta liviana con:
+
+- `id_insumo`
+- `descripcion`
+
+### 13.6 Editar Insumo
 
 - Metodo: `PUT`
 - URL: `http://localhost:8000/api/v1/inputs/{input}`
 
-Usa el mismo body de creacion, con `status` obligatorio.
+Validaciones minimas:
 
-### 13.5 Cambiar Estado de Insumo
+- `descripcion` requerida
+- `precio` requerido
+- `unidad_medida` requerida
+- `tipo` requerido
+- `fecha_cotiz` requerida
+- `estado` requerido
+
+### Regla legacy mantenida al editar
+
+- si cambia la descripcion, se valida duplicado contra otros insumos con estado distinto de `DP`
+- se inserta en `log_insumo` con `accion = MD`
+- se inserta en `historial_insumo` con `accion = MODIFICADO`
+
+Nota:
+
+- la logica `actualizar_precios(id_insumo)` no fue reintroducida porque no existe en el backend actual como dependencia activa del modulo
+
+### 13.7 Eliminar Insumo con Autorizacion
+
+- Metodo: `DELETE`
+- URL: `http://localhost:8000/api/v1/inputs/{input}`
+
+Body:
+
+```json
+{
+  "autorizacion": "AUTH-001"
+}
+```
+
+### Reglas legacy mantenidas
+
+Solo elimina logicamente si:
+
+1. no existe en `item_insumo` con `estado = AC`
+2. existe autorizacion aprobada en `autorizaciones` con:
+   - `id_elemento = id_insumo`
+   - `nro_autorizacion = codigo enviado`
+   - `tabla = insumo`
+   - `estado = AP`
+
+Si cumple:
+
+- `insumo.estado = DP`
+- se inserta un `log_insumo` con `estado = DP`
+
+### 13.8 Solicitar Autorizacion de Eliminacion
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/delete-authorization-request`
+
+La API crea una solicitud con:
+
+- `id_elemento`
+- `elemento`
+- `tipo_elemento = insumo`
+- `tabla = insumo`
+- `solicitante`
+- `estado = PE`
+
+### 13.9 Consultar Estado de Autorizacion de Eliminacion
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/delete-authorization-status`
+
+Responde si:
+
+- no existe autorizacion
+- existe autorizacion pendiente
+- existe autorizacion aprobada y usable
+
+### 13.10 Cambiar Estado de Insumo
 
 - Metodo: `PATCH`
 - URL: `http://localhost:8000/api/v1/inputs/{input}/status`
@@ -1377,46 +1462,123 @@ Body ejemplo:
 }
 ```
 
-Estados soportados segun datos legacy observados:
+Estados soportados:
 
 - `AC`
 - `DC`
 - `DP`
 
-### 13.6 Ver Historico de Insumo
+### 13.11 Ver Historico de Insumo
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/inputs/{input}/history`
 
-### 13.7 Ver Logs de Insumo
+Devuelve:
+
+- accion
+- fecha
+- usuario
+- nombre_usuario
+- ip
+- estado
+- precio
+- unidad de medida
+- tipo
+
+### 13.12 Ver Logs de Insumo
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/inputs/{input}/logs`
 
-### 13.8 Ver Cotizaciones de Insumo
+Orden legacy respetado:
+
+- `id_log DESC`
+
+### 13.13 Ver Cotizaciones de Insumo
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/inputs/{input}/quotes`
 
-### 13.9 Registrar Cotizacion de Insumo
+Devuelve el historico total de cotizaciones usando el mismo orden del historico completo.
+
+### 13.14 Registrar Cotizacion de Insumo
 
 - Metodo: `POST`
 - URL: `http://localhost:8000/api/v1/inputs/{input}/quotes`
 
-Body ejemplo:
+Soporta archivos:
 
-```json
-{
-  "condition": "CONTADO",
-  "status": "AC",
-  "log_id": 10,
-  "file": "public/cotizaciones/cotizacion.pdf",
-  "date": "2026-04-29",
-  "file_1": "public/cotizaciones/anexo1.pdf",
-  "file_2": "public/cotizaciones/anexo2.pdf",
-  "request_id": 8
-}
-```
+- `valido`
+- `propuesto_1`
+- `propuesto_2`
+
+Tambien sigue aceptando aliases legacy/string:
+
+- `file`
+- `file_1`
+- `file_2`
+
+### 13.15 Obtener Cotizacion Vigente
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/quotes/current`
+
+Devuelve:
+
+- descripcion del insumo
+- archivos vigentes
+- `id_cotizacion`
+- `id_log_insumo`
+
+### 13.16 Obtener Historico Completo de Cotizaciones
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/quotes/history`
+
+Orden legacy respetado:
+
+1. `fecha DESC`
+2. `condicion DESC`
+3. `id_cotizacion DESC`
+4. `id_log_insumo ASC`
+
+### 13.17 Obtener Historico de Cotizaciones por Log
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/inputs/{input}/quotes/log-history`
+
+Orden legacy respetado:
+
+1. `fecha DESC`
+2. `id_log_insumo ASC`
+3. `id_cotizacion ASC`
+
+### 13.18 Ver Archivos de Cotizacion por Log
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/input-logs/{log}/files`
+
+### 13.19 Busqueda para Selects
+
+#### 13.19.1 Buscar Unidades de Medida
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/search/unit-measures`
+
+Devuelve:
+
+- `id`
+- `text`
+
+#### 13.19.2 Buscar Insumos
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/search/inputs`
+
+Devuelve:
+
+- `id`
+- `text`
 
 ## 15. Gestion de Usuarios
 
@@ -1545,6 +1707,231 @@ GET /api/v1/users/143
 ```json
 {
   "unit_id": 2
+}
+```
+
+## 15. Proyectos
+
+Estas APIs soportan la pantalla React de `nuevo-proyecto`.
+
+Importante:
+
+- el mapa se resuelve en frontend
+- el backend no dibuja capas ni interactua con OpenLayers
+- el backend solo recibe, valida y guarda los datos territoriales capturados por frontend
+
+### 15.1 Contexto de Creacion de Proyecto
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/projects/create-context`
+- Autenticacion: `Bearer token`
+
+Tambien existe por compatibilidad:
+
+- `GET /api/v1/projects/context`
+
+### Para que sirve
+
+Devuelve todo lo necesario para cargar la pagina `nuevo-proyecto`:
+
+- personas activas para `responsable`
+- personas activas para `solicitante`
+- estados disponibles `AC` y `DC`
+- condiciones disponibles `PD`, `RV`, `AP`
+- permisos funcionales del usuario autenticado
+- metadata de apoyo para el formulario
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Contexto de proyectos obtenido correctamente.",
+  "data": {
+    "responsible_options": [
+      {
+        "id_usuario": 1,
+        "funcionario": "Usuario Demo",
+        "username": "demo",
+        "estado": "AC"
+      }
+    ],
+    "requester_options": [
+      {
+        "id_usuario": 1,
+        "funcionario": "Usuario Demo",
+        "username": "demo",
+        "estado": "AC"
+      }
+    ],
+    "statuses": [
+      { "code": "AC", "label": "ACTIVO" },
+      { "code": "DC", "label": "INACTIVO" }
+    ],
+    "conditions": [
+      { "code": "PD", "label": "PENDIENTE" },
+      { "code": "RV", "label": "REVISADO" },
+      { "code": "AP", "label": "APROBADO" }
+    ],
+    "permissions": {
+      "can_create": true
+    },
+    "metadata": {
+      "creator_user_id": 1,
+      "location_fields": ["latitud", "longitud", "distrito", "zona", "otb", "ubicacion"],
+      "defaults": {
+        "estado": "AC",
+        "aprobado": "PD"
+      }
+    }
+  }
+}
+```
+
+### 15.2 Crear Proyecto
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/projects`
+- Autenticacion: `Bearer token`
+
+### Campos que acepta
+
+- `nombre_proyecto`
+- `fecha`
+- `latitud`
+- `longitud`
+- `distrito`
+- `zona`
+- `otb`
+- `ubicacion`
+- `responsable`
+- `solicitante`
+- `observaciones`
+- `estado`
+- `aprobado`
+
+Nota:
+
+- `id_usuario` se toma del usuario autenticado
+- no es necesario enviarlo desde frontend
+
+### Body ejemplo
+
+```json
+{
+  "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
+  "fecha": "2026-05-04",
+  "latitud": "-17.3935",
+  "longitud": "-66.1570",
+  "distrito": "2",
+  "zona": "Zona Sur",
+  "otb": "OTB Central",
+  "ubicacion": "Av. Principal esquina Calle 5",
+  "responsable": 1,
+  "solicitante": 1,
+  "observaciones": "Proyecto registrado desde la nueva pantalla React.",
+  "estado": "AC",
+  "aprobado": "PD"
+}
+```
+
+### Validaciones aplicadas
+
+- `nombre_proyecto`: requerido
+- `fecha`: requerida
+- `latitud`: requerida
+- `longitud`: requerida
+- `responsable`: requerido
+- `solicitante`: requerido
+- `observaciones`: requerida
+- `estado`: requerido y debe ser `AC` o `DC`
+- `aprobado`: requerido y debe ser `PD`, `RV` o `AP`
+- `ubicacion`: requerida
+- `distrito`: nullable
+- `zona`: nullable
+- `otb`: nullable
+
+### Regla legacy mantenida
+
+- los campos textuales del proyecto se convierten a mayusculas antes de guardar
+- se valida duplicado por `nombre_proyecto`
+- la comparacion de duplicado se hace de forma normalizada con `UPPER(TRIM(nombre_proyecto))`
+- si ya existe un proyecto con el mismo nombre, no se inserta
+
+### Campos de ubicacion que guarda el backend
+
+- `latitud`
+- `longitud`
+- `distrito`
+- `zona`
+- `otb`
+- `ubicacion`
+
+### Ejemplo de respuesta exitosa
+
+```json
+{
+  "success": true,
+  "message": "Proyecto creado correctamente.",
+  "data": {
+    "project": {
+      "id_proyecto": 15,
+      "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
+      "ubicacion": "AV. PRINCIPAL ESQUINA CALLE 5",
+      "fecha": "2026-05-04",
+      "responsable": "1",
+      "solicitante": 1,
+      "observaciones": "PROYECTO REGISTRADO DESDE LA NUEVA PANTALLA REACT.",
+      "aprobado": "PD",
+      "estado": "AC",
+      "id_usuario": 1,
+      "nombre_responsable": "Usuario Demo",
+      "latitud": "-17.3935",
+      "longitud": "-66.1570",
+      "distrito": "2",
+      "zona": "ZONA SUR",
+      "otb": "OTB CENTRAL"
+    }
+  }
+}
+```
+
+### Ejemplo de error por duplicado
+
+```json
+{
+  "success": false,
+  "message": "Error de validacion.",
+  "errors": {
+    "nombre_proyecto": [
+      "Ya existe un proyecto con el mismo nombre."
+    ]
+  }
+}
+```
+
+### 15.3 Nombre Visible de Usuario
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/users/{id}/display-name`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Replica el comportamiento del legacy cuando frontend selecciona responsable o solicitante y necesita recuperar el nombre visible del usuario.
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Nombre visible del usuario obtenido correctamente.",
+  "data": {
+    "id_usuario": 1,
+    "funcionario": "Usuario Demo",
+    "username": "demo",
+    "estado": "AC"
+  }
 }
 ```
 
@@ -1757,6 +2144,7 @@ La API devuelve ese valor ya calculado en `calculated_price`.
         "name": "ACERO ESTRUCTURAL S/D",
         "calculated_price": 62.2994,
         "status": "AC",
+        "status_label": "HABILITADO",
         "group": {
           "id": 7,
           "name": "2.- OBRA GRUESA",
@@ -1771,6 +2159,19 @@ La API devuelve ese valor ya calculado en `calculated_price`.
           "id": 58,
           "description": "kilogramo",
           "abbreviation": "kg"
+        },
+        "available_actions": {
+          "edit": true,
+          "materials": true,
+          "labor": true,
+          "machinery": true,
+          "files": true,
+          "price_analysis": true,
+          "price_recalculation": true,
+          "material_breakdown": true,
+          "labor_breakdown": true,
+          "tools_breakdown": true,
+          "breakdown_recalculation": true
         }
       }
     ],
@@ -1779,6 +2180,59 @@ La API devuelve ese valor ya calculado en `calculated_price`.
       "per_page": 20,
       "total": 2486
     }
+  }
+}
+```
+
+### Acciones disponibles por item
+
+El frontend no debe inferir manualmente las operaciones desde `status`.
+
+Cada item del listado ahora devuelve tambien:
+
+- `status_label`
+- `available_actions`
+
+Regla funcional aplicada:
+
+- si `status = AC`
+  - `status_label = HABILITADO`
+  - todas las acciones operativas salen en `true`
+- si `status = DC`
+  - `status_label = INHABILITADO`
+  - solo `edit = true`
+  - todas las demas acciones salen en `false`
+
+Esto aplica al menos a:
+
+- `GET /api/v1/items`
+- `GET /api/v1/items/fndr`
+- `GET /api/v1/items/upre`
+- `GET /api/v1/items/fps`
+- `GET /api/v1/items/obras`
+- `GET /api/v1/items/proman`
+
+### Ejemplo de item inhabilitado
+
+```json
+{
+  "id_item": 2720,
+  "name": "CINTA DE ALUMINIO",
+  "calculated_price": 6.7303,
+  "status": "DC",
+  "status_label": "INHABILITADO",
+  "available_actions": {
+    "edit": true,
+    "materials": false,
+    "labor": false,
+    "machinery": false,
+    "files": false,
+    "price_analysis": false,
+    "price_recalculation": false,
+    "material_breakdown": false,
+    "labor_breakdown": false,
+    "tools_breakdown": false,
+    "breakdown_recalculation": false
   }
 }
 ```

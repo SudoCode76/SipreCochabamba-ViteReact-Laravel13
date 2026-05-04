@@ -6,6 +6,17 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class StoreInputQuoteRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'condition' => $this->input('condition', $this->input('condicion')),
+            'status' => $this->input('status', $this->input('estado')),
+            'log_id' => $this->input('log_id', $this->input('id_log_insumo')),
+            'date' => $this->input('date', $this->input('fecha')),
+            'request_id' => $this->input('request_id', $this->input('id_solicitud')),
+        ]);
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -17,10 +28,13 @@ class StoreInputQuoteRequest extends FormRequest
             'condition' => ['nullable', 'string', 'max:10'],
             'status' => ['nullable', 'string', 'size:2', 'in:AC,DC,DP'],
             'log_id' => ['nullable', 'integer', 'exists:log_insumo,id_log'],
-            'file' => ['nullable', 'string', 'max:180'],
+            'file' => ['nullable'],
             'date' => ['nullable', 'date'],
-            'file_1' => ['nullable', 'string', 'max:180'],
-            'file_2' => ['nullable', 'string', 'max:180'],
+            'file_1' => ['nullable'],
+            'file_2' => ['nullable'],
+            'valido' => ['nullable', 'file', 'max:10240'],
+            'propuesto_1' => ['nullable', 'file', 'max:10240'],
+            'propuesto_2' => ['nullable', 'file', 'max:10240'],
             'request_id' => ['nullable', 'integer'],
         ];
     }
