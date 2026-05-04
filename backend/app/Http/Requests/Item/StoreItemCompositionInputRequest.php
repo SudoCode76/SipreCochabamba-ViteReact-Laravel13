@@ -4,7 +4,7 @@ namespace App\Http\Requests\Item;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class ShowItemPriceAnalysisRequest extends FormRequest
+class StoreItemCompositionInputRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -14,7 +14,8 @@ class ShowItemPriceAnalysisRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'mode' => ['nullable', 'string', 'in:general,fndr,upre,fps,obras,proman'],
+            'id_insumo' => ['required', 'integer', 'exists:insumo,id_insumo'],
+            'cantidad' => ['required', 'numeric', 'gt:0'],
         ];
     }
 }

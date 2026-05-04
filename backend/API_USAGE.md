@@ -2617,6 +2617,157 @@ Recomendacion practica:
 }
 ```
 
+### 16.7 Composicion Operativa del Item
+
+Estas APIs permiten replicar los modales y pantallas operativas de composicion del item por bloque.
+
+#### Contexto del item
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/composition/context`
+
+Devuelve:
+
+- datos base del item
+- unidad
+- grupo
+- subgrupo
+- estado
+- precio actual
+- permisos funcionales
+- `available_actions`
+- metadata operativa como `can_edit`, `can_add_inputs`, `can_recalculate`
+
+#### Composicion completa
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/composition`
+
+Devuelve:
+
+- `materials`
+- `labor`
+- `machinery`
+- `totals.materials`
+- `totals.labor`
+- `totals.machinery`
+- `totals.global`
+
+#### Materiales
+
+- `GET /api/v1/items/{id}/materials`
+- `POST /api/v1/items/{id}/materials`
+- `PUT /api/v1/items/{id}/materials/{itemInputId}`
+- `DELETE /api/v1/items/{id}/materials/{itemInputId}`
+- `GET /api/v1/items/{id}/materials/total`
+
+Body minimo para agregar:
+
+```json
+{
+  "id_insumo": 1,
+  "cantidad": 2
+}
+```
+
+#### Mano de obra
+
+- `GET /api/v1/items/{id}/labor`
+- `POST /api/v1/items/{id}/labor`
+- `PUT /api/v1/items/{id}/labor/{itemInputId}`
+- `DELETE /api/v1/items/{id}/labor/{itemInputId}`
+- `GET /api/v1/items/{id}/labor/total`
+
+#### Maquinaria / herramienta
+
+- `GET /api/v1/items/{id}/machinery`
+- `POST /api/v1/items/{id}/machinery`
+- `PUT /api/v1/items/{id}/machinery/{itemInputId}`
+- `DELETE /api/v1/items/{id}/machinery/{itemInputId}`
+- `GET /api/v1/items/{id}/machinery/total`
+
+#### Total global del item
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/total`
+
+#### Regla aplicada al agregar duplicados
+
+Si el mismo insumo ya existe relacionado al item:
+
+- no se crea una fila duplicada nueva
+- se actualiza la relacion existente con la nueva `cantidad`
+- se mantiene una sola relacion activa por item + insumo
+
+#### Precio unitario y parcial
+
+- el precio unitario usado por defecto sale del `insumo` actual
+- `parcial = cantidad * precio_unitario`
+- en la implementacion actual la API permite editar `cantidad`
+- no se persiste un precio unitario manual por separado en `item_insumo`
+
+#### Restriccion por estado del item
+
+Si el item esta `DC`:
+
+- no permite agregar materiales
+- no permite agregar mano de obra
+- no permite agregar maquinaria
+- no permite recalcular
+- si permite consulta del contexto y composicion
+
+#### Busqueda de insumos para selects por tipo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/search/inputs?type=1`
+
+Tipos esperados:
+
+- `1` material
+- `2` mano de obra
+- `3` maquinaria / herramienta
+
+La respuesta devuelve:
+
+- `id`
+- `text`
+- `precio`
+- `tipo`
+- `unidad_medida`
+
+#### Analisis general del item sin modo explicito
+
+- `GET /api/v1/items/{id}/price-analysis`
+- `POST /api/v1/items/{id}/price-recalculation`
+- `POST /api/v1/items/{id}/breakdowns/recalculate`
+
+Para compatibilidad, si no se envia `mode`, backend usa `general` por defecto.
+
+### 16.8 Acciones disponibles por item
+
+Cada item listado y el contexto de composicion devuelven acciones explicitas.
+
+- si `status = AC`
+  - `edit = true`
+  - `materials = true`
+  - `labor = true`
+  - `machinery = true`
+  - `files = true`
+  - `price_analysis = true`
+  - `price_recalculation = true`
+  - `material_breakdown = true`
+  - `labor_breakdown = true`
+  - `tools_breakdown = true`
+  - `breakdown_recalculation = true`
+- si `status = DC`
+  - `edit = true`
+  - todas las demas acciones en `false`
+
+Tambien se devuelve `status_label`:
+
+- `AC` -> `HABILITADO`
+- `DC` -> `INHABILITADO`
+
 ## 17. Items UPRE
 
 Estas APIs reemplazan la logica de la pantalla legacy `items/upre`.

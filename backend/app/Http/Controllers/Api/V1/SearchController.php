@@ -29,11 +29,13 @@ class SearchController extends Controller
 
     public function inputs(Request $request): JsonResponse
     {
+        $typeId = $request->filled('type') ? (int) $request->integer('type') : null;
+
         return response()->json([
             'success' => true,
             'message' => 'Insumos encontrados correctamente.',
             'data' => [
-                'items' => $this->inputSearchService->searchInputs((string) $request->query('search', '')),
+                'items' => $this->inputSearchService->searchInputs((string) $request->query('search', ''), $typeId),
             ],
         ]);
     }

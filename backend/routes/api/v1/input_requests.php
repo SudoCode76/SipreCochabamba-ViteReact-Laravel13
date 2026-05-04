@@ -12,5 +12,8 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function (): void {
     Route::put('/input-requests/{inputRequest}', [InputRequestController::class, 'update']);
     Route::get('/input-requests/{inputRequest}/quotes/history', [InputRequestController::class, 'quotesHistory']);
     Route::get('/input-requests/{inputRequest}/quote-summary', [InputRequestController::class, 'quoteSummary']);
+});
+
+Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/search/input-types', [SearchController::class, 'inputTypes']);
 });
