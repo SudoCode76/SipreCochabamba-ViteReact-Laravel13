@@ -8,16 +8,12 @@ use Illuminate\Support\Str;
 
 class InputSearchService
 {
-    public function searchInputs(string $search, ?int $typeId = null): array
+    public function searchInputs(string $search): array
     {
         $normalizedSearch = Str::lower(trim($search));
 
         $query = Input::query()
             ->where('estado', 'AC');
-
-        if ($typeId !== null) {
-            $query->where('tipo', $typeId);
-        }
 
         if ($normalizedSearch !== '') {
             $query->whereRaw('LOWER(TRIM(descripcion)) LIKE ?', ["%{$normalizedSearch}%"]);
@@ -26,13 +22,10 @@ class InputSearchService
         return $query
             ->orderBy('descripcion')
             ->limit(20)
-            ->get(['id_insumo', 'descripcion', 'precio', 'tipo', 'unidad_medida'])
+            ->get(['id_insumo', 'descripcion'])
             ->map(fn (Input $input): array => [
                 'id' => $input->id_insumo,
                 'text' => $input->descripcion,
-                'precio' => $input->precio !== null ? (float) $input->precio : null,
-                'tipo' => $input->tipo,
-                'unidad_medida' => $input->unidad_medida,
             ])
             ->values()
             ->all();

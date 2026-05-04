@@ -23,9 +23,6 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function (): void {
     Route::get('/inputs/{input}/quotes/history', [InputController::class, 'quoteHistory']);
     Route::get('/inputs/{input}/quotes/log-history', [InputController::class, 'quoteLogHistory']);
     Route::get('/input-logs/{log}/files', [InputController::class, 'logFiles']);
-});
-
-Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/search/inputs', [SearchController::class, 'inputs']);
     Route::get('/search/unit-measures', [SearchController::class, 'unitMeasures']);
 });

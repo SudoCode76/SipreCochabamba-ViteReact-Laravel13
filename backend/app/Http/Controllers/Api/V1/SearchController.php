@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\InputType;
 use App\Services\Inputs\InputSearchService;
 use App\Services\Projects\ProjectItemService;
 use Illuminate\Http\JsonResponse;
@@ -29,13 +28,11 @@ class SearchController extends Controller
 
     public function inputs(Request $request): JsonResponse
     {
-        $typeId = $request->filled('type') ? (int) $request->integer('type') : null;
-
         return response()->json([
             'success' => true,
             'message' => 'Insumos encontrados correctamente.',
             'data' => [
-                'items' => $this->inputSearchService->searchInputs((string) $request->query('search', ''), $typeId),
+                'items' => $this->inputSearchService->searchInputs((string) $request->query('search', '')),
             ],
         ]);
     }
@@ -47,32 +44,6 @@ class SearchController extends Controller
             'message' => 'Unidades de medida encontradas correctamente.',
             'data' => [
                 'items' => $this->inputSearchService->searchUnitMeasures((string) $request->query('search', '')),
-            ],
-        ]);
-    }
-
-    public function inputTypes(Request $request): JsonResponse
-    {
-        $search = strtolower(trim((string) $request->query('search', '')));
-
-        $items = InputType::query()
-            ->where('estado', 'AC')
-            ->when($search !== '', fn ($query) => $query->whereRaw('LOWER(TRIM(descripcion)) LIKE ?', ["%{$search}%"]))
-            ->orderBy('descripcion')
-            ->limit(20)
-            ->get(['id_tipo', 'descripcion'])
-            ->map(fn (InputType $type): array => [
-                'id' => $type->id_tipo,
-                'text' => $type->descripcion,
-            ])
-            ->values()
-            ->all();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Tipos de insumo encontrados correctamente.',
-            'data' => [
-                'items' => $items,
             ],
         ]);
     }

@@ -14,7 +14,7 @@ class RecalculateItemPriceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'mode' => ['nullable', 'string', 'in:general,fndr,upre,fps,obras,proman'],
+            'mode' => ['required', 'string', 'in:general,fndr,upre,fps,obras,proman'],
             'fecha' => ['required', 'date'],
         ];
     }

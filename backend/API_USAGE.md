@@ -1580,221 +1580,6 @@ Devuelve:
 - `id`
 - `text`
 
-## 14. Solicitudes de Insumo
-
-Estas APIs soportan la pantalla React `solicitud-insumo`.
-
-Trabajan sobre solicitudes previas al insumo aprobado final.
-
-### 14.1 Listar Solicitudes de Insumo
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/input-requests`
-- Autenticacion: `Bearer token`
-- Restriccion: solo `ADMINISTRADOR`
-
-La respuesta sale enriquecida con joins sobre:
-
-- `tipo_insumo`
-- `unidad_medida`
-- `usuario`
-
-Campos principales por registro:
-
-- `id_solicitud`
-- `descripcion`
-- `precio`
-- `nombre_unidad_medida`
-- `abreviatura`
-- `nombre_tipo`
-- `fecha`
-- `nombre_completo`
-- `ubicacion`
-- `justificacion`
-- `estado_aprobacion`
-- `approval_status_label`
-- `notificacion`
-- `archivo`
-- `archivo1`
-- `archivo2`
-- `usuario_solicitante`
-- `available_actions`
-
-Orden legacy respetado:
-
-- `descripcion ASC`
-
-Filtros soportados:
-
-- `search`
-- `approval_status`
-- `type_id`
-- `unit_measure_id`
-- `requester_id`
-- `page`
-- `per_page`
-
-### Acciones disponibles por solicitud
-
-La API devuelve `available_actions` para que frontend no tenga que inferir reglas desde el estado.
-
-- si `estado_aprobacion = PD`
-  - `edit = true`
-  - `view_quotes = true`
-- si `estado_aprobacion = AP` o `RC`
-  - `edit = false`
-  - `view_quotes = true`
-
-### 14.2 Contexto de Solicitudes de Insumo
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/input-requests/context`
-- Autenticacion: `Bearer token`
-
-Devuelve:
-
-- tipos de insumo activos
-- unidades de medida activas
-- estados de aprobacion disponibles `PD`, `AP`, `RC`
-- permisos del usuario autenticado
-
-### 14.3 Crear Solicitud de Insumo
-
-- Metodo: `POST`
-- URL: `http://localhost:8000/api/v1/input-requests`
-- Autenticacion: `Bearer token`
-
-Campos aceptados:
-
-- `descripcion`
-- `precio`
-- `unidad_medida`
-- `tipo`
-- `ubicacion`
-- `justificacion`
-- `usuario_solicitante`
-- `estado_aprobacion`
-- `notificacion`
-- `fecha`
-- `valido`
-- `propuesto_1`
-- `propuesto_2`
-
-Validaciones minimas:
-
-- `descripcion` requerida
-- `precio` requerido
-- `unidad_medida` requerido
-- `tipo` requerido
-- `ubicacion` requerida
-- `justificacion` requerida
-- `usuario_solicitante` requerido
-
-Reglas heredadas mantenidas:
-
-- `descripcion`, `ubicacion` y `justificacion` se convierten a mayusculas
-- soporta hasta 3 archivos:
-  - `valido`
-  - `propuesto_1`
-  - `propuesto_2`
-- si el upload falla, falla toda la operacion
-- se inserta en `solicitud_insumo`
-- se registra una entrada en `cotizaciones` con `condicion = VALIDO`
-- se registra auditoria funcional
-
-Los archivos se guardan bajo el disk `public` en:
-
-- `archivos/cotizaciones/valido/`
-- `archivos/cotizaciones/propuesto_1/`
-- `archivos/cotizaciones/propuesto_2/`
-
-### 14.4 Editar Solicitud de Insumo
-
-- Metodo: `PUT`
-- URL: `http://localhost:8000/api/v1/input-requests/{id}`
-- Autenticacion: `Bearer token`
-
-Permite editar contenido y, si corresponde, reemplazar archivos actuales.
-
-Si se envia `adj = SI` o nuevos archivos:
-
-- reprocesa `valido`, `propuesto_1`, `propuesto_2`
-- actualiza `solicitud_insumo`
-- registra una nueva entrada historica en `cotizaciones`
-- actualiza `fecha_modificacion`
-- registra auditoria
-
-### 14.5 Obtener Detalle de Solicitud
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/input-requests/{id}`
-- Autenticacion: `Bearer token`
-
-Devuelve:
-
-- datos base de la solicitud
-- `nombre_tipo`
-- `nombre_unidad_medida`
-- `abreviatura`
-- `nombre_completo`
-- archivos asociados
-- `estado_aprobacion`
-- `approval_status_label`
-- `ubicacion`
-- `justificacion`
-- `available_actions`
-
-### 14.6 Historico de Cotizaciones / Adjuntos de Solicitud
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/input-requests/{id}/quotes/history`
-- Autenticacion: `Bearer token`
-
-Orden legacy respetado:
-
-1. `fecha DESC`
-2. `condicion DESC`
-3. `id_cotizacion DESC`
-4. `id_log_insumo ASC`
-
-Devuelve por registro:
-
-- `fecha`
-- `archivo`
-- `archivo1`
-- `archivo2`
-- `estado`
-- `condicion`
-- `id_cotizacion`
-- `id_log_insumo`
-
-### 14.7 Resumen de Cotizacion para Modal
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/input-requests/{id}/quote-summary`
-- Autenticacion: `Bearer token`
-
-Devuelve:
-
-- `id_solicitud`
-- `descripcion`
-- `archivo`
-- `archivo1`
-- `archivo2`
-- `id_log`
-- `fecha`
-
-### 14.8 Buscar Tipos de Insumo para Select
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/search/input-types`
-- Autenticacion: `Bearer token`
-
-Devuelve:
-
-- `id`
-- `text`
-
 ## 15. Gestion de Usuarios
 
 Estos endpoints son administrativos y permiten listar, crear y actualizar usuarios del sistema legacy.
@@ -1926,6 +1711,231 @@ GET /api/v1/users/143
 ```
 
 ## 15. Proyectos
+
+Estas APIs soportan la pantalla React de `nuevo-proyecto`.
+
+Importante:
+
+- el mapa se resuelve en frontend
+- el backend no dibuja capas ni interactua con OpenLayers
+- el backend solo recibe, valida y guarda los datos territoriales capturados por frontend
+
+### 15.1 Contexto de Creacion de Proyecto
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/projects/create-context`
+- Autenticacion: `Bearer token`
+
+Tambien existe por compatibilidad:
+
+- `GET /api/v1/projects/context`
+
+### Para que sirve
+
+Devuelve todo lo necesario para cargar la pagina `nuevo-proyecto`:
+
+- personas activas para `responsable`
+- personas activas para `solicitante`
+- estados disponibles `AC` y `DC`
+- condiciones disponibles `PD`, `RV`, `AP`
+- permisos funcionales del usuario autenticado
+- metadata de apoyo para el formulario
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Contexto de proyectos obtenido correctamente.",
+  "data": {
+    "responsible_options": [
+      {
+        "id_usuario": 1,
+        "funcionario": "Usuario Demo",
+        "username": "demo",
+        "estado": "AC"
+      }
+    ],
+    "requester_options": [
+      {
+        "id_usuario": 1,
+        "funcionario": "Usuario Demo",
+        "username": "demo",
+        "estado": "AC"
+      }
+    ],
+    "statuses": [
+      { "code": "AC", "label": "ACTIVO" },
+      { "code": "DC", "label": "INACTIVO" }
+    ],
+    "conditions": [
+      { "code": "PD", "label": "PENDIENTE" },
+      { "code": "RV", "label": "REVISADO" },
+      { "code": "AP", "label": "APROBADO" }
+    ],
+    "permissions": {
+      "can_create": true
+    },
+    "metadata": {
+      "creator_user_id": 1,
+      "location_fields": ["latitud", "longitud", "distrito", "zona", "otb", "ubicacion"],
+      "defaults": {
+        "estado": "AC",
+        "aprobado": "PD"
+      }
+    }
+  }
+}
+```
+
+### 15.2 Crear Proyecto
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/projects`
+- Autenticacion: `Bearer token`
+
+### Campos que acepta
+
+- `nombre_proyecto`
+- `fecha`
+- `latitud`
+- `longitud`
+- `distrito`
+- `zona`
+- `otb`
+- `ubicacion`
+- `responsable`
+- `solicitante`
+- `observaciones`
+- `estado`
+- `aprobado`
+
+Nota:
+
+- `id_usuario` se toma del usuario autenticado
+- no es necesario enviarlo desde frontend
+
+### Body ejemplo
+
+```json
+{
+  "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
+  "fecha": "2026-05-04",
+  "latitud": "-17.3935",
+  "longitud": "-66.1570",
+  "distrito": "2",
+  "zona": "Zona Sur",
+  "otb": "OTB Central",
+  "ubicacion": "Av. Principal esquina Calle 5",
+  "responsable": 1,
+  "solicitante": 1,
+  "observaciones": "Proyecto registrado desde la nueva pantalla React.",
+  "estado": "AC",
+  "aprobado": "PD"
+}
+```
+
+### Validaciones aplicadas
+
+- `nombre_proyecto`: requerido
+- `fecha`: requerida
+- `latitud`: requerida
+- `longitud`: requerida
+- `responsable`: requerido
+- `solicitante`: requerido
+- `observaciones`: requerida
+- `estado`: requerido y debe ser `AC` o `DC`
+- `aprobado`: requerido y debe ser `PD`, `RV` o `AP`
+- `ubicacion`: requerida
+- `distrito`: nullable
+- `zona`: nullable
+- `otb`: nullable
+
+### Regla legacy mantenida
+
+- los campos textuales del proyecto se convierten a mayusculas antes de guardar
+- se valida duplicado por `nombre_proyecto`
+- la comparacion de duplicado se hace de forma normalizada con `UPPER(TRIM(nombre_proyecto))`
+- si ya existe un proyecto con el mismo nombre, no se inserta
+
+### Campos de ubicacion que guarda el backend
+
+- `latitud`
+- `longitud`
+- `distrito`
+- `zona`
+- `otb`
+- `ubicacion`
+
+### Ejemplo de respuesta exitosa
+
+```json
+{
+  "success": true,
+  "message": "Proyecto creado correctamente.",
+  "data": {
+    "project": {
+      "id_proyecto": 15,
+      "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
+      "ubicacion": "AV. PRINCIPAL ESQUINA CALLE 5",
+      "fecha": "2026-05-04",
+      "responsable": "1",
+      "solicitante": 1,
+      "observaciones": "PROYECTO REGISTRADO DESDE LA NUEVA PANTALLA REACT.",
+      "aprobado": "PD",
+      "estado": "AC",
+      "id_usuario": 1,
+      "nombre_responsable": "Usuario Demo",
+      "latitud": "-17.3935",
+      "longitud": "-66.1570",
+      "distrito": "2",
+      "zona": "ZONA SUR",
+      "otb": "OTB CENTRAL"
+    }
+  }
+}
+```
+
+### Ejemplo de error por duplicado
+
+```json
+{
+  "success": false,
+  "message": "Error de validacion.",
+  "errors": {
+    "nombre_proyecto": [
+      "Ya existe un proyecto con el mismo nombre."
+    ]
+  }
+}
+```
+
+### 15.3 Nombre Visible de Usuario
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/users/{id}/display-name`
+- Autenticacion: `Bearer token`
+
+### Para que sirve
+
+Replica el comportamiento del legacy cuando frontend selecciona responsable o solicitante y necesita recuperar el nombre visible del usuario.
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Nombre visible del usuario obtenido correctamente.",
+  "data": {
+    "id_usuario": 1,
+    "funcionario": "Usuario Demo",
+    "username": "demo",
+    "estado": "AC"
+  }
+}
+```
+
+## Flujo Recomendado de Uso
 
 Estas APIs soportan la pantalla React de `nuevo-proyecto`.
 
