@@ -103,6 +103,20 @@ class UserController extends Controller
         ]);
     }
 
+    public function displayName(User $user): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'Nombre visible del usuario obtenido correctamente.',
+            'data' => [
+                'id_usuario' => $user->id_usuario,
+                'funcionario' => $user->funcionario,
+                'username' => $user->username,
+                'estado' => $user->estado,
+            ],
+        ]);
+    }
+
     public function update(UpdateUserRequest $request, User $user): JsonResponse
     {
         $user->update([

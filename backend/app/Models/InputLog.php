@@ -46,4 +46,14 @@ class InputLog extends Model
     {
         return $this->belongsTo(User::class, 'usuario', 'id_usuario');
     }
+
+    public function type(): BelongsTo
+    {
+        return $this->belongsTo(InputType::class, 'tipo', 'id_tipo');
+    }
+
+    public function unitMeasure(): BelongsTo
+    {
+        return $this->belongsTo(UnitMeasure::class, 'unidad_medida', 'id_unidad_medida');
+    }
 }
