@@ -351,7 +351,25 @@ Administrar configuraciones de calculo base y variantes del sistema.
 - `POST /api/v1/calculation-percentages`
 - `GET /api/v1/calculation-percentages/{id}`
 - `PUT /api/v1/calculation-percentages/{id}`
-- `PATCH /api/v1/calculation-percentages/{id}/status`
+
+### Reglas implementadas para `parametros/porcentaje_calculo`
+
+- usa la tabla `porcentaje_calculo`
+- lista administrativa ordenada por `id_porcentaje DESC`
+- no expone API de eliminacion
+- estados validos: `AC`, `DC`
+- controla duplicados por `codigo` y `descripcion`
+- devuelve `status_label` y `available_actions`
+- `available_actions` expone solo `edit`
+- crear y editar registran auditoria
+
+### Endpoints implementados actualmente
+
+- `GET /api/v1/calculation-percentages`
+- `GET /api/v1/calculation-percentages/context`
+- `POST /api/v1/calculation-percentages`
+- `GET /api/v1/calculation-percentages/{id}`
+- `PUT /api/v1/calculation-percentages/{id}`
 
 ### Variante por categoria
 

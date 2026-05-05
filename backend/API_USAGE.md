@@ -3991,6 +3991,134 @@ Se soportan dos variantes equivalentes:
 
 Ambas devuelven subgrupos activos del grupo y ordenan por `descripcion ASC`.
 
+## 21. Parametros Porcentaje de Calculo
+
+Estas APIs replican la pantalla administrativa `parametros/porcentaje_calculo`.
+
+### 21.1 Listado Administrativo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_porcentaje`
+- `codigo`
+- `descripcion`
+- `porcentaje`
+- `observacion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- usa `porcentaje_calculo`
+- ordena por `id_porcentaje DESC`
+- no expone eliminacion en esta pantalla
+- `available_actions` solo incluye `edit`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Porcentajes de calculo obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_porcentaje": 2,
+        "codigo": "PC-002",
+        "descripcion": "IVA",
+        "porcentaje": 14.94,
+        "observacion": "Obs 2",
+        "estado": "DC",
+        "status_label": "INACTIVO",
+        "available_actions": {
+          "edit": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 21.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 21.3 Crear Porcentaje de Calculo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/calculation-percentages`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "PC-003",
+  "descripcion": "HERRAMIENTAS MENORES",
+  "porcentaje": 5,
+  "observacion": "Observacion opcional",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `porcentaje` y `estado` son obligatorios
+- `codigo` debe ser unico
+- `descripcion` no puede duplicarse
+- registra auditoria al crear
+
+### 21.4 Obtener Detalle
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle del porcentaje para cargar el formulario de edicion.
+
+### 21.5 Editar Porcentaje de Calculo
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "PC-002A",
+  "descripcion": "IVA ACTUALIZADO",
+  "porcentaje": 15.5,
+  "observacion": "Obs editada",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- si cambia `codigo`, revalida unicidad por `codigo`
+- si cambia `descripcion`, valida duplicado por `descripcion`
+- `porcentaje` sigue siendo requerido funcionalmente
+- registra auditoria al actualizar
+
 ### 16.7 Composicion Operativa del Item
 
 Estas APIs permiten replicar los modales y pantallas operativas de composicion del item por bloque.
