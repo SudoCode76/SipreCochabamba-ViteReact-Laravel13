@@ -11,6 +11,10 @@ class Unit extends Model
 
     protected $primaryKey = 'id_unidad';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

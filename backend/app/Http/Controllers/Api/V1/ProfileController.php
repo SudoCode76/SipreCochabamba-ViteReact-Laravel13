@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\ChangePasswordRequest;
 use App\Http\Resources\Auth\AuthenticatedUserResource;
-use App\Models\AuditLog;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\Auth\LegacyPasswordService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +16,7 @@ class ProfileController extends Controller
 {
     public function __construct(
         private readonly LegacyPasswordService $legacyPasswordService,
+        private readonly AuditService $auditService,
     ) {}
 
     public function show(Request $request): JsonResponse
@@ -76,15 +77,6 @@ class ProfileController extends Controller
 
     private function registerAudit(?User $user, Request $request, string $process): void
     {
-        try {
-            AuditLog::query()->create([
-                'nombre_completo' => $user?->funcionario,
-                'fecha_hora' => now(),
-                'ip' => $request->ip(),
-                'proceso' => $process,
-            ]);
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+        $this->auditService->record($user, $request->ip(), $process);
     }
 }

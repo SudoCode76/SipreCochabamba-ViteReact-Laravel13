@@ -12,6 +12,10 @@ class GroupCatalog extends Model
 
     protected $primaryKey = 'id_grupo';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

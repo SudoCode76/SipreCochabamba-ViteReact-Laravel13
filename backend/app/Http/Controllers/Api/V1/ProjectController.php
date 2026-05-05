@@ -13,6 +13,7 @@ use App\Http\Requests\Project\SyncProjectItemsRequest;
 use App\Http\Requests\Project\UpdateProjectRequest;
 use App\Models\Item;
 use App\Models\Project;
+use App\Models\User;
 use App\Services\Projects\ProjectBudgetService;
 use App\Services\Projects\ProjectContextService;
 use App\Services\Projects\ProjectCrudService;
@@ -35,6 +36,10 @@ class ProjectController extends Controller
 
     public function context(Request $request): JsonResponse
     {
+        if ($response = $this->denyIfMissingAnyPermission($request->user(), ['can_view', 'can_create'], 'No tiene permisos para acceder al contexto de proyectos.')) {
+            return $response;
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Contexto de proyectos obtenido correctamente.',
@@ -44,6 +49,10 @@ class ProjectController extends Controller
 
     public function index(IndexProjectRequest $request): JsonResponse
     {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view', 'No tiene permisos para listar proyectos.')) {
+            return $response;
+        }
+
         $projects = $this->projectListService->execute($request->validated());
 
         return response()->json([
@@ -62,6 +71,10 @@ class ProjectController extends Controller
 
     public function store(StoreProjectRequest $request): JsonResponse
     {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_create', 'No tiene permisos para crear proyectos.')) {
+            return $response;
+        }
+
         $project = $this->projectCrudService->create($request, $request->user());
         $project->load(['creator', 'requester']);
 
@@ -76,6 +89,10 @@ class ProjectController extends Controller
 
     public function show(Project $project): JsonResponse
     {
+        if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view', 'No tiene permisos para ver proyectos.')) {
+            return $response;
+        }
+
         $project->load(['creator', 'requester']);
 
         return response()->json([
@@ -89,6 +106,10 @@ class ProjectController extends Controller
 
     public function update(UpdateProjectRequest $request, Project $project): JsonResponse
     {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_edit', 'No tiene permisos para editar proyectos.')) {
+            return $response;
+        }
+
         $project = $this->projectCrudService->update($request, $project);
         $project->load(['creator', 'requester']);
 
@@ -103,6 +124,10 @@ class ProjectController extends Controller
 
     public function syncItems(SyncProjectItemsRequest $request, Project $project): JsonResponse
     {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_sync_items', 'No tiene permisos para sincronizar items del proyecto.')) {
+            return $response;
+        }
+
         $project = $this->projectItemService->sync($project, $request->validated('items'), $request->user());
 
         return response()->json([
@@ -116,6 +141,10 @@ class ProjectController extends Controller
 
     public function items(ShowProjectItemsRequest $request, Project $project): JsonResponse
     {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view', 'No tiene permisos para listar items del proyecto.')) {
+            return $response;
+        }
+
         $format = $request->validated('format', 'PCA');
 
         return response()->json([
@@ -129,6 +158,10 @@ class ProjectController extends Controller
 
     public function incidencePrice(IncidencePriceRequest $request, Item $item): JsonResponse
     {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar precios por incidencia.')) {
+            return $response;
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Precio por incidencia del item obtenido correctamente.',
@@ -140,6 +173,10 @@ class ProjectController extends Controller
 
     public function budgetRecalculation(BudgetRecalculationRequest $request, Project $project): JsonResponse
     {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_recalculate_budget', 'No tiene permisos para recalcular el presupuesto del proyecto.')) {
+            return $response;
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Presupuesto del proyecto recalculado correctamente.',
@@ -149,6 +186,10 @@ class ProjectController extends Controller
 
     public function budgetByGroup(Project $project): JsonResponse
     {
+        if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view_reports', 'No tiene permisos para consultar presupuesto por rubros.')) {
+            return $response;
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Presupuesto por rubros obtenido correctamente.',
@@ -158,6 +199,10 @@ class ProjectController extends Controller
 
     public function incidenceSummary(ProjectFormatRequest $request, Project $project): JsonResponse
     {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar el resumen de incidencia.')) {
+            return $response;
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Resumen de incidencia obtenido correctamente.',
@@ -167,6 +212,10 @@ class ProjectController extends Controller
 
     public function breakdownCalculation(ProjectFormatRequest $request, Project $project): JsonResponse
     {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para calcular el desglose del proyecto.')) {
+            return $response;
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Desglose del proyecto calculado correctamente.',
@@ -176,6 +225,10 @@ class ProjectController extends Controller
 
     public function unitPrices(ProjectFormatRequest $request, Project $project): JsonResponse
     {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar precios unitarios del proyecto.')) {
+            return $response;
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Precios unitarios del proyecto obtenidos correctamente.',
@@ -215,5 +268,57 @@ class ProjectController extends Controller
             'zona' => $project->zona,
             'otb' => $project->otb,
         ]);
+    }
+
+    private function denyIfMissingPermission(?User $user, string $permission, string $message): ?JsonResponse
+    {
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No autenticado.',
+                'errors' => null,
+            ], 401);
+        }
+
+        $permissions = $this->projectPermissionService->resolve($user);
+
+        if (($permissions[$permission] ?? false) !== true) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tiene permisos para acceder a este recurso.',
+                'errors' => [
+                    'authorization' => [$message],
+                ],
+            ], 403);
+        }
+
+        return null;
+    }
+
+    private function denyIfMissingAnyPermission(?User $user, array $permissionsToCheck, string $message): ?JsonResponse
+    {
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No autenticado.',
+                'errors' => null,
+            ], 401);
+        }
+
+        $permissions = $this->projectPermissionService->resolve($user);
+
+        foreach ($permissionsToCheck as $permission) {
+            if (($permissions[$permission] ?? false) === true) {
+                return null;
+            }
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'No tiene permisos para acceder a este recurso.',
+            'errors' => [
+                'authorization' => [$message],
+            ],
+        ], 403);
     }
 }

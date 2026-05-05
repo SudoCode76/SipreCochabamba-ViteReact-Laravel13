@@ -3,12 +3,12 @@
 use App\Http\Controllers\Api\V1\SubgroupController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('auth:sanctum')->group(function (): void {
+Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/subgroups', [SubgroupController::class, 'index']);
     Route::get('/subgroups/by-group/{group}', [SubgroupController::class, 'byGroup']);
 });
 
-Route::middleware(['auth:sanctum', 'admin'])->group(function (): void {
+Route::middleware(['auth:sanctum', 'active_user', 'admin'])->group(function (): void {
     Route::get('/subgroups/context', [SubgroupController::class, 'context']);
     Route::post('/subgroups', [SubgroupController::class, 'store']);
     Route::get('/subgroups/{subgroup}', [SubgroupController::class, 'show']);

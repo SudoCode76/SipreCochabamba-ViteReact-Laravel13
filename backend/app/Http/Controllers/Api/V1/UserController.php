@@ -10,14 +10,18 @@ use App\Http\Requests\User\UpdateUserRoleRequest;
 use App\Http\Requests\User\UpdateUserStatusRequest;
 use App\Http\Requests\User\UpdateUserUnitRequest;
 use App\Http\Resources\User\UserResource;
-use App\Models\AuditLog;
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
+    public function __construct(
+        private readonly AuditService $auditService,
+    ) {}
+
     public function index(IndexUserRequest $request): JsonResponse
     {
         $query = User::query()
@@ -198,15 +202,6 @@ class UserController extends Controller
 
     private function registerAudit(?User $actor, ?string $ip, string $process): void
     {
-        try {
-            AuditLog::query()->create([
-                'nombre_completo' => $actor?->funcionario,
-                'fecha_hora' => now(),
-                'ip' => $ip,
-                'proceso' => $process,
-            ]);
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+        $this->auditService->record($actor, $ip, $process);
     }
 }

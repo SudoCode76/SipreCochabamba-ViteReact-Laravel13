@@ -4,11 +4,11 @@ namespace App\Services\Inputs;
 
 use App\Http\Requests\Input\StoreInputRequest;
 use App\Http\Requests\Input\UpdateInputRequest;
-use App\Models\AuditLog;
 use App\Models\Input;
 use App\Models\InputHistory;
 use App\Models\InputLog;
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -132,15 +132,6 @@ class InputCrudService
 
     private function registerAudit(User $user, ?string $ip, string $process): void
     {
-        try {
-            AuditLog::query()->create([
-                'nombre_completo' => $user->funcionario,
-                'fecha_hora' => now(),
-                'ip' => $ip,
-                'proceso' => $process,
-            ]);
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+        app(AuditService::class)->record($user, $ip, $process);
     }
 }

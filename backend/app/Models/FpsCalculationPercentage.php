@@ -11,6 +11,10 @@ class FpsCalculationPercentage extends Model
 
     protected $primaryKey = 'id_porcentaje';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

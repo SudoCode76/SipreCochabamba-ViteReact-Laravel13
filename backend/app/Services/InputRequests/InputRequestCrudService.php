@@ -4,10 +4,10 @@ namespace App\Services\InputRequests;
 
 use App\Http\Requests\InputRequest\StoreInputSolicitationRequest;
 use App\Http\Requests\InputRequest\UpdateInputSolicitationRequest;
-use App\Models\AuditLog;
 use App\Models\InputQuote;
 use App\Models\InputRequest;
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Support\Facades\DB;
 
 class InputRequestCrudService
@@ -117,15 +117,6 @@ class InputRequestCrudService
 
     private function registerAudit(User $user, ?string $ip, string $process): void
     {
-        try {
-            AuditLog::query()->create([
-                'nombre_completo' => $user->funcionario,
-                'fecha_hora' => now(),
-                'ip' => $ip,
-                'proceso' => $process,
-            ]);
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+        app(AuditService::class)->record($user, $ip, $process);
     }
 }

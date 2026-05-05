@@ -4,9 +4,9 @@ namespace App\Services\Items;
 
 use App\Http\Requests\Item\StoreCalculationPercentageRequest;
 use App\Http\Requests\Item\UpdateCalculationPercentageRequest;
-use App\Models\AuditLog;
 use App\Models\UpreCalculationPercentage;
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -117,15 +117,6 @@ class UpreCalculationPercentageService
 
     private function registerAudit(User $user, ?string $ip, string $process): void
     {
-        try {
-            AuditLog::query()->create([
-                'nombre_completo' => $user->funcionario,
-                'fecha_hora' => now(),
-                'ip' => $ip,
-                'proceso' => $process,
-            ]);
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+        app(AuditService::class)->record($user, $ip, $process);
     }
 }

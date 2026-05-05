@@ -12,6 +12,10 @@ class SystemFunction extends Model
 
     protected $primaryKey = 'id_funcion';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

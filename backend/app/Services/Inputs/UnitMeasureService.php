@@ -6,10 +6,10 @@ use App\Http\Requests\Input\DeleteUnitMeasureRequest;
 use App\Http\Requests\Input\StoreUnitMeasureDeleteAuthorizationRequest;
 use App\Http\Requests\Input\StoreUnitMeasureRequest;
 use App\Http\Requests\Input\UpdateUnitMeasureRequest;
-use App\Models\AuditLog;
 use App\Models\Authorization;
 use App\Models\UnitMeasure;
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -187,15 +187,6 @@ class UnitMeasureService
 
     private function registerAudit(User $user, ?string $ip, string $process): void
     {
-        try {
-            AuditLog::query()->create([
-                'nombre_completo' => $user->funcionario,
-                'fecha_hora' => now(),
-                'ip' => $ip,
-                'proceso' => $process,
-            ]);
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+        app(AuditService::class)->record($user, $ip, $process);
     }
 }
