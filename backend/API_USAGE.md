@@ -2221,6 +2221,186 @@ GET /api/v1/users/143
 }
 ```
 
+## 14. Grupos
+
+Estas APIs soportan la pantalla React `parametros/grupos`.
+
+Es un modulo de parametrizacion sobre la tabla `grupo`.
+
+### 14.1 Listar Grupos
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/groups`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Campos principales por registro:
+
+- `id_grupo`
+- `codigo_grupo`
+- `nombre_grupo`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas legacy respetadas:
+
+- el listado no devuelve registros con `estado = DP`
+- orden exacto: `id_grupo ASC`
+
+Conversion de estado para frontend:
+
+- `AC` -> `ACTIVO`
+- `DC` -> `INACTIVO`
+
+Acciones disponibles:
+
+```json
+{
+  "available_actions": {
+    "edit": true,
+    "delete": true
+  }
+}
+```
+
+### 14.2 Contexto de Grupos
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/groups/context`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- estados disponibles `AC` y `DC`
+- permisos del usuario autenticado
+
+### 14.3 Crear Grupo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/groups`
+- Autenticacion: `Bearer token`
+
+Campos esperados:
+
+- `codigo_grupo`
+- `nombre_grupo`
+- `estado`
+
+Validaciones minimas:
+
+- `codigo_grupo` requerido
+- `nombre_grupo` requerido
+- `estado` requerido
+
+Reglas funcionales mantenidas:
+
+- valida duplicado por `codigo_grupo` con `estado != DP`
+- valida duplicado por `nombre_grupo` con `estado != DP`
+- si cualquiera existe, rechaza el alta
+- si no existe, inserta en `grupo`
+- registra auditoria
+
+### 14.4 Obtener Detalle de Grupo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/groups/{id}`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- `id_grupo`
+- `codigo_grupo`
+- `nombre_grupo`
+- `estado`
+
+### 14.5 Editar Grupo
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/groups/{id}`
+- Autenticacion: `Bearer token`
+
+Campos esperados:
+
+- `codigo_grupo`
+- `nombre_grupo`
+- `estado`
+
+Reglas funcionales mantenidas:
+
+- si cambia `nombre_grupo`, valida duplicado contra `grupo.nombre_grupo` con `estado != DP`
+- si cambia `codigo_grupo`, valida duplicado contra `grupo.codigo_grupo` con `estado != DP`
+- si no hay conflicto, actualiza registro
+- registra auditoria
+
+### 14.6 Eliminar Grupo con Autorizacion
+
+- Metodo: `DELETE`
+- URL: `http://localhost:8000/api/v1/groups/{id}`
+- Autenticacion: `Bearer token`
+
+Body:
+
+```json
+{
+  "autorizacion": "AUTH-GR-1"
+}
+```
+
+Reglas funcionales mantenidas:
+
+- no elimina si existe algun item activo usando ese grupo
+  - `item.grupo = id_grupo`
+  - `item.estado = AC`
+- exige autorizacion aprobada valida con:
+  - `id_elemento = id_grupo`
+  - `nro_autorizacion = codigo enviado`
+  - `tabla = grupo`
+  - `estado = AP`
+- si cumple, cambia `grupo.estado = DP`
+- registra auditoria
+
+### 14.7 Solicitar Autorizacion de Eliminacion
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/groups/{id}/delete-authorization-request`
+- Autenticacion: `Bearer token`
+
+La solicitud creada usa el flujo funcional de autorizaciones con:
+
+- `id_elemento`
+- `elemento`
+- `tipo_elemento = grupo`
+- `tabla = grupo`
+- `solicitante`
+- `estado = PE`
+
+### 14.8 Consultar Estado de Autorizacion
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/groups/{id}/delete-authorization-status`
+- Autenticacion: `Bearer token`
+
+Responde si:
+
+- no existe autorizacion
+- existe autorizacion pendiente
+- existe autorizacion aprobada y usable
+
+### Ejemplo de error funcional por items activos
+
+```json
+{
+  "success": false,
+  "message": "Error de validacion.",
+  "errors": {
+    "group": [
+      "El grupo no puede eliminarse porque tiene items activos asociados."
+    ]
+  }
+}
+```
+
 ## 15. Proyectos
 
 Estas APIs soportan la pantalla React de `nuevo-proyecto`.
