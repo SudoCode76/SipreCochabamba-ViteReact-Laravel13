@@ -3760,6 +3760,8 @@ Usala cuando frontend necesite reproducir el comportamiento legacy de recalculo 
 - URL: `http://localhost:8000/api/v1/subgroups?group_id=7`
 - Autenticacion: `Bearer token`
 
+Este modo del endpoint devuelve solo subgrupos activos del grupo solicitado y ordena por `descripcion ASC`.
+
 ### Para que sirve esta API si ya existe `subgroups_by_group` en el contexto
 
 Hay dos formas de poblar el combo dependiente:
@@ -3793,6 +3795,201 @@ Recomendacion practica:
   }
 }
 ```
+
+## 20. Parametros Subgrupos
+
+Estas APIs replican la pantalla administrativa `parametros/subgrupos`.
+
+### 20.1 Listado Administrativo de Subgrupos
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_subgrupo`
+- `codigo`
+- `descripcion`
+- `id_grupo`
+- `nombre_grupo`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- hace join con `grupo`
+- excluye registros con `estado = 'DP'`
+- ordena por `id_subgrupo ASC`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Subgrupos obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_subgrupo": 1,
+        "codigo": "PRE",
+        "descripcion": "PRELIMINARES",
+        "id_grupo": 1,
+        "nombre_grupo": "OBRAS PRELIMINARES",
+        "estado": "AC",
+        "status_label": "ACTIVO",
+        "available_actions": {
+          "edit": true,
+          "delete": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 20.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- grupos activos para el combo
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 20.3 Crear Subgrupo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/subgroups`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "PRE",
+  "descripcion": "PRELIMINARES",
+  "id_grupo": 1,
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `id_grupo` y `estado` son obligatorios
+- si ya existe otro subgrupo no eliminado con el mismo `codigo`, responde error funcional
+- si ya existe otro subgrupo no eliminado con la misma `descripcion`, responde error funcional
+- registra auditoria al crear
+
+### 20.4 Obtener Detalle de Subgrupo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle para cargar el modal o formulario de edicion, incluyendo `nombre_grupo`.
+
+### 20.5 Editar Subgrupo
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/subgroups/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "PRE-01",
+  "descripcion": "PRELIMINARES AJUSTADO",
+  "id_grupo": 1,
+  "estado": "DC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- solo valida duplicado de `codigo` si `codigo` cambio
+- solo valida duplicado de `descripcion` si `descripcion` cambio
+- registra auditoria al actualizar
+
+### 20.6 Solicitar Autorizacion de Eliminacion
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/subgroups/{id}/delete-authorization-request`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body opcional:
+
+```json
+{
+  "nro_autorizacion": "AUTH-SG-001"
+}
+```
+
+Registra una solicitud en `autorizaciones` con:
+
+- `id_elemento = id_subgrupo`
+- `elemento = descripcion`
+- `tipo_elemento = subgrupo`
+- `tabla = sub_grupo`
+- `solicitante = usuario autenticado`
+- `estado = PE`
+
+### 20.7 Consultar Estado de Autorizacion
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups/{id}/delete-authorization-status`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Responde alguno de estos estados:
+
+- `not_found`
+- `pending`
+- `approved`
+- `not_usable`
+
+### 20.8 Eliminar Subgrupo
+
+- Metodo: `DELETE`
+- URL: `http://localhost:8000/api/v1/subgroups/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "autorizacion": "AUTH-SG-001"
+}
+```
+
+Reglas funcionales:
+
+- no permite eliminar si existe algun `item` activo con `item.subgrupo = id_subgrupo`
+- exige una autorizacion aprobada `AP` en `autorizaciones` con `tabla = 'sub_grupo'`
+- la eliminacion es logica y actualiza `sub_grupo.estado = 'DP'`
+- registra auditoria al eliminar
+
+### 20.9 Subgrupos para Combos Dependientes
+
+Se soportan dos variantes equivalentes:
+
+- `GET /api/v1/subgroups?group_id={groupId}`
+- `GET /api/v1/subgroups/by-group/{groupId}`
+
+Ambas devuelven subgrupos activos del grupo y ordenan por `descripcion ASC`.
 
 ### 16.7 Composicion Operativa del Item
 
