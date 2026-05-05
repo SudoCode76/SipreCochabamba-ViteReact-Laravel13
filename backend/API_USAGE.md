@@ -4395,6 +4395,282 @@ Reglas funcionales:
 - `porcentaje` sigue siendo requerido funcionalmente
 - registra auditoria al actualizar
 
+## 24. Parametros Porcentaje de Calculo FNDR
+
+Estas APIs replican la pantalla administrativa `parametros/porcentaje_calculo_fndr`.
+
+### 24.1 Listado Administrativo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fndr`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_porcentaje`
+- `codigo`
+- `descripcion`
+- `porcentaje`
+- `observacion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- usa `porcentaje_calculo_fndr`
+- ordena por `id_porcentaje DESC`
+- no expone eliminacion en esta pantalla
+- `available_actions` solo incluye `edit`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Porcentajes de calculo FNDR obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_porcentaje": 2,
+        "codigo": "FNDR-002",
+        "descripcion": "IVA",
+        "porcentaje": 10,
+        "observacion": "Obs 2",
+        "estado": "DC",
+        "status_label": "INACTIVO",
+        "available_actions": {
+          "edit": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 24.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fndr/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 24.3 Crear Porcentaje de Calculo FNDR
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fndr`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "FNDR-003",
+  "descripcion": "HERRAMIENTAS MENORES",
+  "porcentaje": 5,
+  "observacion": "Observacion opcional",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `porcentaje` y `estado` son obligatorios
+- `codigo` debe ser unico
+- `descripcion` no puede duplicarse
+- registra auditoria al crear
+
+### Decision de compatibilidad sobre unicidad de `codigo`
+
+En el legacy se observaba validacion de unicidad contra `porcentaje_calculo.codigo` incluso para el modulo FNDR.
+
+En esta API nueva se normalizo la regla para validar unicidad dentro de `porcentaje_calculo_fndr.codigo`, porque:
+
+- el alta y la edicion operan sobre `porcentaje_calculo_fndr`
+- evita rechazos cruzados entre modulos distintos
+- hace consistente la regla con la tabla realmente administrada por esta pantalla
+
+### 24.4 Obtener Detalle
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fndr/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle del porcentaje FNDR para cargar el formulario de edicion.
+
+### 24.5 Editar Porcentaje de Calculo FNDR
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fndr/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "FNDR-002A",
+  "descripcion": "IVA ACTUALIZADO",
+  "porcentaje": 15.5,
+  "observacion": "Obs editada",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- si cambia `codigo`, revalida unicidad por `codigo` dentro de `porcentaje_calculo_fndr`
+- si cambia `descripcion`, valida duplicado por `descripcion`
+- `porcentaje` sigue siendo requerido funcionalmente
+- registra auditoria al actualizar
+
+## 25. Parametros Porcentaje de Calculo Obras
+
+Estas APIs replican la pantalla administrativa `parametros/porcentaje_calculo_obras`.
+
+### 25.1 Listado Administrativo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/obras`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_porcentaje`
+- `codigo`
+- `descripcion`
+- `porcentaje`
+- `observacion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- usa `porcentaje_calculo_obras`
+- ordena por `id_porcentaje DESC`
+- no expone eliminacion en esta pantalla
+- `available_actions` solo incluye `edit`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Porcentajes de calculo Obras obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_porcentaje": 2,
+        "codigo": "OBR-002",
+        "descripcion": "IVA",
+        "porcentaje": 0,
+        "observacion": "Obs 2",
+        "estado": "DC",
+        "status_label": "INACTIVO",
+        "available_actions": {
+          "edit": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 25.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/obras/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 25.3 Crear Porcentaje de Calculo Obras
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/obras`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "OBR-003",
+  "descripcion": "HERRAMIENTAS MENORES",
+  "porcentaje": 5,
+  "observacion": "Observacion opcional",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `porcentaje` y `estado` son obligatorios
+- `codigo` debe ser unico
+- `descripcion` no puede duplicarse
+- registra auditoria al crear
+
+### Decision de compatibilidad sobre unicidad de `codigo`
+
+En el legacy se observaba validacion de unicidad contra `porcentaje_calculo.codigo` incluso para el modulo Obras.
+
+En esta API nueva se normalizo la regla para validar unicidad dentro de `porcentaje_calculo_obras.codigo`, porque:
+
+- el alta y la edicion operan sobre `porcentaje_calculo_obras`
+- evita rechazos cruzados entre modulos distintos
+- hace consistente la regla con la tabla realmente administrada por esta pantalla
+
+### 25.4 Obtener Detalle
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/obras/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle del porcentaje Obras para cargar el formulario de edicion.
+
+### 25.5 Editar Porcentaje de Calculo Obras
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/obras/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "OBR-002A",
+  "descripcion": "IVA ACTUALIZADO",
+  "porcentaje": 15.5,
+  "observacion": "Obs editada",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- si cambia `codigo`, revalida unicidad por `codigo` dentro de `porcentaje_calculo_obras`
+- si cambia `descripcion`, valida duplicado por `descripcion`
+- `porcentaje` sigue siendo requerido funcionalmente
+- registra auditoria al actualizar
+
 ### 16.7 Composicion Operativa del Item
 
 Estas APIs permiten replicar los modales y pantallas operativas de composicion del item por bloque.
