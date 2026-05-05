@@ -23,6 +23,7 @@ Route::prefix('v1')->group(function (): void {
     require __DIR__.'/api/v1/calculation_percentages_fndr.php';
     require __DIR__.'/api/v1/calculation_percentages_fps.php';
     require __DIR__.'/api/v1/calculation_percentages_obras.php';
+    require __DIR__.'/api/v1/calculation_percentages_proman.php';
     require __DIR__.'/api/v1/calculation_percentages_upre.php';
     require __DIR__.'/api/v1/calculation_percentages.php';
     require __DIR__.'/api/v1/items.php';

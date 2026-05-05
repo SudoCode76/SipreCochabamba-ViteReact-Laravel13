@@ -4671,6 +4671,144 @@ Reglas funcionales:
 - `porcentaje` sigue siendo requerido funcionalmente
 - registra auditoria al actualizar
 
+## 26. Parametros Porcentaje de Calculo PROMAN
+
+Estas APIs replican la pantalla administrativa `parametros/porcentaje_calculo_proman`.
+
+### 26.1 Listado Administrativo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/proman`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_porcentaje`
+- `codigo`
+- `descripcion`
+- `porcentaje`
+- `observacion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- usa `porcentaje_calculo_proman`
+- ordena por `id_porcentaje DESC`
+- no expone eliminacion en esta pantalla
+- `available_actions` solo incluye `edit`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Porcentajes de calculo PROMAN obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_porcentaje": 2,
+        "codigo": "PROM-002",
+        "descripcion": "IVA",
+        "porcentaje": 0,
+        "observacion": "Obs 2",
+        "estado": "DC",
+        "status_label": "INACTIVO",
+        "available_actions": {
+          "edit": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 26.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/proman/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 26.3 Crear Porcentaje de Calculo PROMAN
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/proman`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "PROM-003",
+  "descripcion": "CARGAS SOCIALES",
+  "porcentaje": 57,
+  "observacion": "Observacion opcional",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `porcentaje` y `estado` son obligatorios
+- `codigo` debe ser unico
+- `descripcion` no puede duplicarse
+- registra auditoria al crear
+
+### Decision de compatibilidad sobre unicidad de `codigo`
+
+En el legacy se observaba validacion de unicidad contra `porcentaje_calculo.codigo` incluso para el modulo PROMAN.
+
+En esta API nueva se normalizo la regla para validar unicidad dentro de `porcentaje_calculo_proman.codigo`, porque:
+
+- el alta y la edicion operan sobre `porcentaje_calculo_proman`
+- evita rechazos cruzados entre modulos distintos
+- hace consistente la regla con la tabla realmente administrada por esta pantalla
+
+### 26.4 Obtener Detalle
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/proman/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle del porcentaje PROMAN para cargar el formulario de edicion.
+
+### 26.5 Editar Porcentaje de Calculo PROMAN
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/proman/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "PROM-002A",
+  "descripcion": "IVA ACTUALIZADO",
+  "porcentaje": 1.5,
+  "observacion": "Obs editada",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- si cambia `codigo`, revalida unicidad por `codigo` dentro de `porcentaje_calculo_proman`
+- si cambia `descripcion`, valida duplicado por `descripcion`
+- `porcentaje` sigue siendo requerido funcionalmente
+- registra auditoria al actualizar
+
 ### 16.7 Composicion Operativa del Item
 
 Estas APIs permiten replicar los modales y pantallas operativas de composicion del item por bloque.
