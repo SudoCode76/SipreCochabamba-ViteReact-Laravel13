@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\Api\V1\ItemController;
-use App\Http\Controllers\Api\V1\SubgroupController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->group(function (): void {
@@ -39,5 +38,4 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/items/{item}/breakdowns/recalculate', [ItemController::class, 'breakdownRecalculation']);
     Route::get('/items/{item}/price-analysis', [ItemController::class, 'priceAnalysis']);
     Route::post('/items/{item}/price-recalculation', [ItemController::class, 'priceRecalculation']);
-    Route::get('/subgroups', [SubgroupController::class, 'index']);
 });

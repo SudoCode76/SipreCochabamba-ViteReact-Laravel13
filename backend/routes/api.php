@@ -18,8 +18,18 @@ Route::prefix('v1')->group(function (): void {
     require __DIR__.'/api/v1/users.php';
     require __DIR__.'/api/v1/roles.php';
     require __DIR__.'/api/v1/functions.php';
+    require __DIR__.'/api/v1/groups.php';
+    require __DIR__.'/api/v1/subgroups.php';
+    require __DIR__.'/api/v1/calculation_percentages_fndr.php';
+    require __DIR__.'/api/v1/calculation_percentages_fps.php';
+    require __DIR__.'/api/v1/calculation_percentages_obras.php';
+    require __DIR__.'/api/v1/calculation_percentages_proman.php';
+    require __DIR__.'/api/v1/calculation_percentages_upre.php';
+    require __DIR__.'/api/v1/calculation_percentages.php';
     require __DIR__.'/api/v1/items.php';
     require __DIR__.'/api/v1/projects.php';
     require __DIR__.'/api/v1/inputs.php';
+    require __DIR__.'/api/v1/input_types.php';
+    require __DIR__.'/api/v1/unit_measures.php';
     require __DIR__.'/api/v1/input_requests.php';
 });

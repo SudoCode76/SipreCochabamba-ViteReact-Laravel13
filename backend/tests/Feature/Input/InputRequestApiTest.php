@@ -1,0 +1,225 @@
+<?php
+
+namespace Tests\Feature\Input;
+
+use App\Models\Role;
+use App\Models\Unit;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Laravel\Sanctum\Sanctum;
+use Tests\Concerns\InteractsWithLegacyAuth;
+use Tests\Concerns\InteractsWithLegacyInputRequests;
+use Tests\Concerns\InteractsWithLegacyInputs;
+use Tests\TestCase;
+
+class InputRequestApiTest extends TestCase
+{
+    use InteractsWithLegacyAuth;
+    use InteractsWithLegacyInputRequests;
+    use InteractsWithLegacyInputs;
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->setUpLegacyAuthSchema();
+        $this->setUpLegacyInputSchema();
+        $this->setUpLegacyInputRequestSchema();
+        $this->createInputType();
+        $this->createUnitMeasure();
+    }
+
+    public function test_admin_can_list_input_requests_with_enriched_fields_and_actions(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInputRequestRecord([
+            'id_solicitud' => 1,
+            'descripcion' => 'B SOLICITUD',
+            'estado_aprobacion' => 'AP',
+        ]);
+
+        $this->createInputRequestRecord([
+            'id_solicitud' => 2,
+            'descripcion' => 'A SOLICITUD',
+            'estado_aprobacion' => 'PD',
+        ]);
+
+        $this->getJson('/api/v1/input-requests?per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_solicitud', 2)
+            ->assertJsonPath('data.items.0.nombre_tipo', 'MATERIAL')
+            ->assertJsonPath('data.items.0.nombre_unidad_medida', 'Pieza')
+            ->assertJsonPath('data.items.0.nombre_completo', 'Usuario Demo')
+            ->assertJsonPath('data.items.0.approval_status_label', 'PENDIENTE')
+            ->assertJsonPath('data.items.0.available_actions.edit', true)
+            ->assertJsonPath('data.items.0.available_actions.view_quotes', true)
+            ->assertJsonPath('data.items.1.approval_status_label', 'APROBADO')
+            ->assertJsonPath('data.items.1.available_actions.edit', false);
+    }
+
+    public function test_admin_can_get_context_and_search_input_types(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->getJson('/api/v1/input-requests/context')
+            ->assertOk()
+            ->assertJsonPath('data.approval_statuses.0.code', 'PD')
+            ->assertJsonPath('data.approval_statuses.1.code', 'AP')
+            ->assertJsonPath('data.approval_statuses.2.code', 'RC')
+            ->assertJsonPath('data.permissions.can_create', true);
+
+        $this->getJson('/api/v1/search/input-types?search=mat')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id', 1)
+            ->assertJsonPath('data.items.0.text', 'MATERIAL');
+    }
+
+    public function test_admin_can_create_show_and_update_input_request_with_files(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $response = $this->postJson('/api/v1/input-requests', [
+            'descripcion' => 'Solicitud de cemento',
+            'precio' => 45.20,
+            'unidad_medida' => 1,
+            'tipo' => 1,
+            'ubicacion' => 'Almacen norte',
+            'justificacion' => 'Reposicion inmediata',
+            'usuario_solicitante' => 1,
+            'estado_aprobacion' => 'PD',
+            'valido' => UploadedFile::fake()->create('valido.pdf', 100, 'application/pdf'),
+            'propuesto_1' => UploadedFile::fake()->create('prop1.pdf', 100, 'application/pdf'),
+            'propuesto_2' => UploadedFile::fake()->create('prop2.pdf', 100, 'application/pdf'),
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.request.descripcion', 'SOLICITUD DE CEMENTO')
+            ->assertJsonPath('data.request.approval_status_label', 'PENDIENTE');
+
+        $requestId = $response->json('data.request.id_solicitud');
+
+        $this->assertDatabaseHas('solicitud_insumo', [
+            'id_solicitud' => $requestId,
+            'estado_aprobacion' => 'PD',
+        ]);
+
+        $this->assertDatabaseHas('cotizaciones', [
+            'id_solicitud' => $requestId,
+            'condicion' => 'VALIDO',
+        ]);
+
+        $this->getJson('/api/v1/input-requests/'.$requestId)
+            ->assertOk()
+            ->assertJsonPath('data.request.nombre_tipo', 'MATERIAL')
+            ->assertJsonPath('data.request.nombre_completo', 'Usuario Demo');
+
+        $this->putJson('/api/v1/input-requests/'.$requestId, [
+            'descripcion' => 'Solicitud de cemento editada',
+            'precio' => 50.00,
+            'unidad_medida' => 1,
+            'tipo' => 1,
+            'ubicacion' => 'Almacen sur',
+            'justificacion' => 'Reposicion actualizada',
+            'usuario_solicitante' => 1,
+            'estado_aprobacion' => 'AP',
+            'adj' => 'NO',
+        ])->assertOk()
+            ->assertJsonPath('data.request.descripcion', 'SOLICITUD DE CEMENTO EDITADA')
+            ->assertJsonPath('data.request.approval_status_label', 'APROBADO')
+            ->assertJsonPath('data.request.available_actions.edit', false);
+    }
+
+    public function test_admin_can_get_quote_history_and_quote_summary(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInputRequestRecord();
+        $this->createInputRequestQuote([
+            'id_cotizacion' => 1,
+            'fecha' => '2026-05-01',
+            'condicion' => 'VALIDO',
+        ]);
+        $this->createInputRequestQuote([
+            'id_cotizacion' => 2,
+            'fecha' => '2026-06-01',
+            'condicion' => 'VALIDO',
+        ]);
+
+        $this->getJson('/api/v1/input-requests/1/quotes/history')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_cotizacion', 2)
+            ->assertJsonPath('data.items.1.id_cotizacion', 1);
+
+        $this->getJson('/api/v1/input-requests/1/quote-summary')
+            ->assertOk()
+            ->assertJsonPath('data.id_solicitud', 1)
+            ->assertJsonPath('data.descripcion', 'SOLICITUD DE ACERO')
+            ->assertJsonPath('data.archivo', 'archivos/cotizaciones/valido/solicitud.pdf');
+    }
+
+    public function test_input_request_endpoints_require_authentication(): void
+    {
+        $this->createInputRequestRecord();
+
+        $this->getJson('/api/v1/input-requests')->assertUnauthorized();
+        $this->getJson('/api/v1/input-requests/context')->assertUnauthorized();
+        $this->postJson('/api/v1/input-requests', [])->assertUnauthorized();
+        $this->getJson('/api/v1/input-requests/1')->assertUnauthorized();
+        $this->putJson('/api/v1/input-requests/1', [])->assertUnauthorized();
+        $this->getJson('/api/v1/input-requests/1/quotes/history')->assertUnauthorized();
+        $this->getJson('/api/v1/input-requests/1/quote-summary')->assertUnauthorized();
+        $this->getJson('/api/v1/search/input-types')->assertUnauthorized();
+    }
+
+    public function test_non_admin_cannot_manage_input_requests(): void
+    {
+        $this->createLegacyAuthUser();
+        $this->createInputRequestRecord();
+
+        $userRole = Role::query()->create([
+            'id_rol' => 2,
+            'nombre_rol' => 'Tecnico',
+            'estado' => 'AC',
+        ]);
+
+        $unit = Unit::query()->firstOrCreate([
+            'id_unidad' => 2,
+        ], [
+            'descripcion' => 'Unidad Tecnica',
+            'estado' => 'AC',
+        ]);
+
+        $user = User::query()->create([
+            'id_usuario' => 2,
+            'funcionario' => 'Usuario Tecnico',
+            'ci' => '87654321',
+            'username' => 'tecnico',
+            'clave' => Hash::make('secret123'),
+            'estado' => 'AC',
+            'id_unidad' => $unit->id_unidad,
+            'rol' => $userRole->id_rol,
+            'fecha' => now()->toDateString(),
+            'subalcaldia' => null,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v1/input-requests')->assertForbidden();
+        $this->getJson('/api/v1/input-requests/context')->assertForbidden();
+        $this->postJson('/api/v1/input-requests', [
+            'descripcion' => 'Solicitud',
+            'precio' => 10,
+            'unidad_medida' => 1,
+            'tipo' => 1,
+            'ubicacion' => 'ALMACEN',
+            'justificacion' => 'JUSTIFICACION',
+            'usuario_solicitante' => 1,
+        ])->assertForbidden();
+    }
+}
