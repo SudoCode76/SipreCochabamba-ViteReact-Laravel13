@@ -10,6 +10,10 @@ class Authorization extends Model
 
     protected $primaryKey = 'id_autorizacion';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

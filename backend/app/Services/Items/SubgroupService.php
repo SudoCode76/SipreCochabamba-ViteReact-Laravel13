@@ -6,12 +6,12 @@ use App\Http\Requests\Item\DeleteSubgroupRequest;
 use App\Http\Requests\Item\StoreSubgroupDeleteAuthorizationRequest;
 use App\Http\Requests\Item\StoreSubgroupRequest;
 use App\Http\Requests\Item\UpdateSubgroupRequest;
-use App\Models\AuditLog;
 use App\Models\Authorization;
 use App\Models\GroupCatalog;
 use App\Models\Item;
 use App\Models\SubgroupCatalog;
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -247,15 +247,6 @@ class SubgroupService
 
     private function registerAudit(User $user, ?string $ip, string $process): void
     {
-        try {
-            AuditLog::query()->create([
-                'nombre_completo' => $user->funcionario,
-                'fecha_hora' => now(),
-                'ip' => $ip,
-                'proceso' => $process,
-            ]);
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+        app(AuditService::class)->record($user, $ip, $process);
     }
 }

@@ -111,6 +111,7 @@ class ProjectBudgetService
             ->where('id_proyecto', $project->id_proyecto)
             ->where('estado', 'AC')
             ->whereNotNull('id_item')
+            ->whereHas('item')
             ->orderBy('prioridad')
             ->orderBy('id_item')
             ->get();
@@ -132,6 +133,7 @@ class ProjectBudgetService
             ->where('proyecto_item.id_proyecto', $project->id_proyecto)
             ->where('proyecto_item.estado', 'AC')
             ->whereNotNull('proyecto_item.id_item')
+            ->whereHas('item')
             ->get();
     }
 

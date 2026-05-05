@@ -12,6 +12,10 @@ class Permission extends Model
 
     protected $primaryKey = 'id_permiso';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

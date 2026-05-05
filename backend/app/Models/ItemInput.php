@@ -12,6 +12,10 @@ class ItemInput extends Model
 
     protected $primaryKey = 'id_item_insumo';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

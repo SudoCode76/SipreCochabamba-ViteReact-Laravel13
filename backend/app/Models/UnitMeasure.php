@@ -11,6 +11,10 @@ class UnitMeasure extends Model
 
     protected $primaryKey = 'id_unidad_medida';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

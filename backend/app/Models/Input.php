@@ -13,6 +13,10 @@ class Input extends Model
 
     protected $primaryKey = 'id_insumo';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

@@ -10,6 +10,10 @@ class AuditLog extends Model
 
     protected $primaryKey = 'id_auditoria';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

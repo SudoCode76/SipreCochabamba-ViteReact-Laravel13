@@ -13,8 +13,8 @@ use Tests\TestCase;
 
 class UserManagementTest extends TestCase
 {
-    use RefreshDatabase;
     use InteractsWithLegacyAuth;
+    use RefreshDatabase;
 
     protected function setUp(): void
     {

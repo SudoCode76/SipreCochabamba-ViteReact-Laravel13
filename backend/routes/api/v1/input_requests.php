@@ -4,7 +4,7 @@ use App\Http\Controllers\Api\V1\InputRequestController;
 use App\Http\Controllers\Api\V1\SearchController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum', 'admin'])->group(function (): void {
+Route::middleware(['auth:sanctum', 'active_user', 'admin'])->group(function (): void {
     Route::get('/input-requests', [InputRequestController::class, 'index']);
     Route::get('/input-requests/context', [InputRequestController::class, 'context']);
     Route::post('/input-requests', [InputRequestController::class, 'store']);
@@ -14,6 +14,6 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function (): void {
     Route::get('/input-requests/{inputRequest}/quote-summary', [InputRequestController::class, 'quoteSummary']);
 });
 
-Route::middleware('auth:sanctum')->group(function (): void {
+Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/search/input-types', [SearchController::class, 'inputTypes']);
 });

@@ -4,9 +4,9 @@ namespace App\Services\Inputs;
 
 use App\Http\Requests\Input\StoreInputTypeRequest;
 use App\Http\Requests\Input\UpdateInputTypeRequest;
-use App\Models\AuditLog;
 use App\Models\InputType;
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Validation\ValidationException;
 
 class InputTypeService
@@ -76,15 +76,6 @@ class InputTypeService
 
     private function registerAudit(User $user, ?string $ip, string $process): void
     {
-        try {
-            AuditLog::query()->create([
-                'nombre_completo' => $user->funcionario,
-                'fecha_hora' => now(),
-                'ip' => $ip,
-                'proceso' => $process,
-            ]);
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+        app(AuditService::class)->record($user, $ip, $process);
     }
 }

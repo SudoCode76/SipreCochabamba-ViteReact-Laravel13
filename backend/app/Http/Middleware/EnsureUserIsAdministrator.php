@@ -3,8 +3,8 @@
 namespace App\Http\Middleware;
 
 use App\Models\User;
+use App\Support\ApiResponse;
 use Closure;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -16,22 +16,14 @@ class EnsureUserIsAdministrator
         $user = $request->user();
 
         if (! $user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No autenticado.',
-                'errors' => null,
-            ], 401);
+            return ApiResponse::error('No autenticado.', null, 401);
         }
 
         $user->loadMissing('role');
 
         if (! $user->isAdministrator()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No tiene permisos para acceder a este recurso.',
-                'errors' => [
-                    'authorization' => ['Solo un administrador puede realizar esta accion.'],
-                ],
+            return ApiResponse::error('No tiene permisos para acceder a este recurso.', [
+                'authorization' => ['Solo un administrador puede realizar esta accion.'],
             ], 403);
         }
 

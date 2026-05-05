@@ -32,7 +32,21 @@ class SearchController extends Controller
             'success' => true,
             'message' => 'Insumos encontrados correctamente.',
             'data' => [
-                'items' => $this->inputSearchService->searchInputs((string) $request->query('search', '')),
+                'items' => $this->inputSearchService->searchInputs(
+                    (string) $request->query('search', ''),
+                    $request->filled('type') ? (int) $request->integer('type') : null,
+                ),
+            ],
+        ]);
+    }
+
+    public function inputTypes(Request $request): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'Tipos de insumo encontrados correctamente.',
+            'data' => [
+                'items' => $this->inputSearchService->searchInputTypes((string) $request->query('search', '')),
             ],
         ]);
     }
