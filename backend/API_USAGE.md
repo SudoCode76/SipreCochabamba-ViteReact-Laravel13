@@ -4119,6 +4119,144 @@ Reglas funcionales:
 - `porcentaje` sigue siendo requerido funcionalmente
 - registra auditoria al actualizar
 
+## 22. Parametros Porcentaje de Calculo UPRE
+
+Estas APIs replican la pantalla administrativa `parametros/porcentaje_calculo_upre`.
+
+### 22.1 Listado Administrativo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/upre`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_porcentaje`
+- `codigo`
+- `descripcion`
+- `porcentaje`
+- `observacion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- usa `porcentaje_calculo_upre`
+- ordena por `id_porcentaje DESC`
+- no expone eliminacion en esta pantalla
+- `available_actions` solo incluye `edit`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Porcentajes de calculo UPRE obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_porcentaje": 2,
+        "codigo": "UPRE-002",
+        "descripcion": "IVA",
+        "porcentaje": 14.94,
+        "observacion": "Obs 2",
+        "estado": "DC",
+        "status_label": "INACTIVO",
+        "available_actions": {
+          "edit": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 22.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/upre/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 22.3 Crear Porcentaje de Calculo UPRE
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/upre`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "UPRE-003",
+  "descripcion": "HERRAMIENTAS MENORES",
+  "porcentaje": 5,
+  "observacion": "Observacion opcional",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `porcentaje` y `estado` son obligatorios
+- `codigo` debe ser unico
+- `descripcion` no puede duplicarse
+- registra auditoria al crear
+
+### Decision de compatibilidad sobre unicidad de `codigo`
+
+En el legacy se observaba validacion de unicidad contra `porcentaje_calculo.codigo` incluso para el modulo UPRE.
+
+En esta API nueva se normalizo la regla para validar unicidad dentro de `porcentaje_calculo_upre.codigo`, porque:
+
+- el alta y la edicion operan sobre `porcentaje_calculo_upre`
+- evita rechazos cruzados entre modulos distintos
+- hace consistente la regla con la tabla realmente administrada por esta pantalla
+
+### 22.4 Obtener Detalle
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/upre/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle del porcentaje UPRE para cargar el formulario de edicion.
+
+### 22.5 Editar Porcentaje de Calculo UPRE
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/upre/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "UPRE-002A",
+  "descripcion": "IVA ACTUALIZADO",
+  "porcentaje": 15.5,
+  "observacion": "Obs editada",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- si cambia `codigo`, revalida unicidad por `codigo` dentro de `porcentaje_calculo_upre`
+- si cambia `descripcion`, valida duplicado por `descripcion`
+- `porcentaje` sigue siendo requerido funcionalmente
+- registra auditoria al actualizar
+
 ### 16.7 Composicion Operativa del Item
 
 Estas APIs permiten replicar los modales y pantallas operativas de composicion del item por bloque.
