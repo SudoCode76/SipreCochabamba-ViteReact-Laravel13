@@ -12,6 +12,10 @@ class SubgroupCatalog extends Model
 
     protected $primaryKey = 'id_subgrupo';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

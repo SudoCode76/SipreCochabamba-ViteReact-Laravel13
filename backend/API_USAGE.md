@@ -38,6 +38,12 @@ Formato general de respuesta con error:
 }
 ```
 
+Nota general de autenticacion:
+
+- todos los endpoints protegidos con `Bearer token` requieren tambien que el usuario y su rol sigan activos
+- si el usuario o el rol fueron deshabilitados despues del login, la API responde `403`
+- en ese caso el token actual deja de ser util para seguir operando
+
 ## Endpoints Disponibles
 
 ## 1. Health Check
@@ -52,12 +58,21 @@ Ejemplo de respuesta:
 
 ```json
 {
-  "name": "SipreCochabamba",
-  "status": "ok",
-  "database": "sipre",
-  "timestamp": "2026-04-27T13:23:08+00:00"
+  "success": true,
+  "message": null,
+  "data": {
+    "name": "SipreCochabamba",
+    "status": "ok",
+    "database": "ok",
+    "timestamp": "2026-04-27T13:23:08+00:00"
+  }
 }
 ```
+
+Observacion:
+
+- esta API ya no expone el nombre real de la base de datos
+- `database` solo devuelve `ok` cuando la conexion responde correctamente
 
 ## 2. Login
 
@@ -1574,11 +1589,19 @@ Devuelve:
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/search/inputs`
+- Autenticacion: `Bearer token`
 
 Devuelve:
 
 - `id`
 - `text`
+- `tipo`
+- `precio`
+
+Filtros soportados:
+
+- `search`: texto libre
+- `type`: id numerico de `tipo_insumo`
 
 ## 13.20 Tipos de Insumo
 
@@ -2086,6 +2109,10 @@ Devuelve:
 - URL: `http://localhost:8000/api/v1/search/input-types`
 - Autenticacion: `Bearer token`
 
+Filtros soportados:
+
+- `search`: texto libre
+
 Devuelve:
 
 - `id`
@@ -2411,11 +2438,23 @@ Importante:
 - el backend no dibuja capas ni interactua con OpenLayers
 - el backend solo recibe, valida y guarda los datos territoriales capturados por frontend
 
+Autorizacion del modulo:
+
+- no basta con tener `Bearer token`
+- el backend aplica permisos funcionales del modulo `PROYECTO`
+- ejemplos: `can_view`, `can_create`, `can_edit`, `can_sync_items`, `can_recalculate_budget`, `can_view_reports`
+- el listado y el detalle requieren permisos de visualizacion
+- crear requiere permiso de creacion
+- editar requiere permiso de edicion
+- sincronizacion de items requiere permiso especifico de sincronizacion
+- reportes y recalculos requieren permisos de reportes o recalculo segun la operacion
+
 ### 15.1 Contexto de Creacion de Proyecto
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/projects/create-context`
 - Autenticacion: `Bearer token`
+- Restriccion funcional: requiere al menos permiso para ver o crear proyectos
 
 Tambien existe por compatibilidad:
 
@@ -2484,6 +2523,7 @@ Devuelve todo lo necesario para cargar la pagina `nuevo-proyecto`:
 - Metodo: `POST`
 - URL: `http://localhost:8000/api/v1/projects`
 - Autenticacion: `Bearer token`
+- Restriccion funcional: requiere permiso para crear proyectos
 
 ### Campos que acepta
 
@@ -4925,7 +4965,6 @@ La respuesta devuelve:
 - `text`
 - `precio`
 - `tipo`
-- `unidad_medida`
 
 #### Analisis general del item sin modo explicito
 

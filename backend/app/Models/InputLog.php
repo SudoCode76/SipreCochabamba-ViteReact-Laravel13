@@ -11,6 +11,10 @@ class InputLog extends Model
 
     protected $primaryKey = 'id_log';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

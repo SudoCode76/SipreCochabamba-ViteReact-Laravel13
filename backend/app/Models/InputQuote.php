@@ -11,6 +11,10 @@ class InputQuote extends Model
 
     protected $primaryKey = 'id_cotizacion';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

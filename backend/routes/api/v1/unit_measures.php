@@ -3,7 +3,7 @@
 use App\Http\Controllers\Api\V1\UnitMeasureController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum', 'admin'])->group(function (): void {
+Route::middleware(['auth:sanctum', 'active_user', 'admin'])->group(function (): void {
     Route::get('/unit-measures', [UnitMeasureController::class, 'index']);
     Route::get('/unit-measures/context', [UnitMeasureController::class, 'context']);
     Route::post('/unit-measures', [UnitMeasureController::class, 'store']);

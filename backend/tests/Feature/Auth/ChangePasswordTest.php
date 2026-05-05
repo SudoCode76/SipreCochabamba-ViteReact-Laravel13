@@ -11,8 +11,8 @@ use Tests\TestCase;
 
 class ChangePasswordTest extends TestCase
 {
-    use RefreshDatabase;
     use InteractsWithLegacyAuth;
+    use RefreshDatabase;
 
     protected function setUp(): void
     {

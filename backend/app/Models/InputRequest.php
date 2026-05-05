@@ -13,6 +13,10 @@ class InputRequest extends Model
 
     protected $primaryKey = 'id_solicitud';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

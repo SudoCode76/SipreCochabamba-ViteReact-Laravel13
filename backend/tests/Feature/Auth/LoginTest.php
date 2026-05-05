@@ -11,8 +11,8 @@ use Tests\TestCase;
 
 class LoginTest extends TestCase
 {
-    use RefreshDatabase;
     use InteractsWithLegacyAuth;
+    use RefreshDatabase;
 
     protected function setUp(): void
     {
@@ -104,6 +104,21 @@ class LoginTest extends TestCase
             ->assertJsonPath('data.user.username', $user->username)
             ->assertJsonPath('data.user.role.name', 'Administrador')
             ->assertJsonCount(1, 'data.user.permissions');
+    }
+
+    public function test_authenticated_user_cannot_use_token_when_role_becomes_inactive(): void
+    {
+        $user = $this->createUser();
+
+        Sanctum::actingAs($user);
+
+        $user->role->update([
+            'estado' => 'DC',
+        ]);
+
+        $this->getJson('/api/v1/auth/me')
+            ->assertForbidden()
+            ->assertJsonPath('message', 'El usuario no tiene acceso habilitado.');
     }
 
     public function test_authenticated_user_can_logout_and_current_token_is_deleted(): void

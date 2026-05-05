@@ -5,7 +5,7 @@ use App\Http\Controllers\Api\V1\SearchController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('auth:sanctum')->group(function (): void {
+Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/projects/context', [ProjectController::class, 'context']);
     Route::get('/projects/create-context', [ProjectController::class, 'context']);
     Route::get('/projects', [ProjectController::class, 'index']);

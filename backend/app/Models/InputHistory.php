@@ -11,6 +11,10 @@ class InputHistory extends Model
 
     protected $primaryKey = 'id';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

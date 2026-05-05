@@ -12,6 +12,10 @@ class Role extends Model
 
     protected $primaryKey = 'id_rol';
 
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
     protected $fillable = [

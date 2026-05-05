@@ -2,7 +2,13 @@
 
 namespace Tests\Feature\Project;
 
+use App\Models\Permission;
+use App\Models\Role;
+use App\Models\SystemFunction;
+use App\Models\Unit;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\InteractsWithLegacyAuth;
 use Tests\Concerns\InteractsWithLegacyInputs;
@@ -222,5 +228,104 @@ class ProjectApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.id_usuario', 1)
             ->assertJsonPath('data.funcionario', 'Usuario Demo');
+    }
+
+    public function test_non_admin_without_project_permissions_cannot_manage_projects(): void
+    {
+        $this->createLegacyAuthUser();
+        $this->createProjectRecord();
+
+        Sanctum::actingAs($this->createProjectUserWithPermissions([]));
+
+        $this->getJson('/api/v1/projects/context')->assertForbidden();
+        $this->getJson('/api/v1/projects')->assertForbidden();
+        $this->postJson('/api/v1/projects', [
+            'nombre_proyecto' => 'nuevo proyecto',
+            'fecha' => '2026-04-30',
+            'latitud' => '111',
+            'longitud' => '222',
+            'ubicacion' => 'ubicacion',
+            'responsable' => 1,
+            'solicitante' => 1,
+            'observaciones' => 'obs',
+            'estado' => 'AC',
+            'aprobado' => 'PD',
+        ])->assertForbidden();
+    }
+
+    public function test_non_admin_with_project_permissions_can_access_allowed_endpoints(): void
+    {
+        $this->createLegacyAuthUser();
+        $this->createProjectRecord();
+
+        Sanctum::actingAs($this->createProjectUserWithPermissions(['INDEX', 'REGISTRAR_PROYECTO']));
+
+        $this->getJson('/api/v1/projects/context')
+            ->assertOk()
+            ->assertJsonPath('data.permissions.can_create', true);
+
+        $this->getJson('/api/v1/projects')
+            ->assertOk();
+
+        $this->postJson('/api/v1/projects', [
+            'nombre_proyecto' => 'nuevo proyecto',
+            'fecha' => '2026-04-30',
+            'latitud' => '111',
+            'longitud' => '222',
+            'ubicacion' => 'ubicacion',
+            'responsable' => 1,
+            'solicitante' => 1,
+            'observaciones' => 'obs',
+            'estado' => 'AC',
+            'aprobado' => 'PD',
+        ])->assertCreated();
+    }
+
+    private function createProjectUserWithPermissions(array $functionNames): User
+    {
+        $role = Role::query()->create([
+            'id_rol' => 2,
+            'nombre_rol' => 'Tecnico Proyecto',
+            'estado' => 'AC',
+        ]);
+
+        $unit = Unit::query()->firstOrCreate([
+            'id_unidad' => 2,
+        ], [
+            'descripcion' => 'Unidad Tecnica',
+            'estado' => 'AC',
+        ]);
+
+        foreach (array_values($functionNames) as $index => $functionName) {
+            $function = SystemFunction::query()->create([
+                'id_funcion' => 200 + $index,
+                'nombre_funcion' => $functionName,
+                'descripcion' => $functionName,
+                'clase' => 'PROYECTO',
+                'estado' => 'AC',
+            ]);
+
+            Permission::query()->create([
+                'id_permiso' => 200 + $index,
+                'id_rol' => $role->id_rol,
+                'nombre_rol' => $role->nombre_rol,
+                'id_funcion' => $function->id_funcion,
+                'descripcion' => $function->descripcion,
+                'estado' => 'AC',
+            ]);
+        }
+
+        return User::query()->create([
+            'id_usuario' => 2,
+            'funcionario' => 'Usuario Proyecto',
+            'ci' => '87654321',
+            'username' => 'proyecto',
+            'clave' => Hash::make('secret123'),
+            'estado' => 'AC',
+            'id_unidad' => $unit->id_unidad,
+            'rol' => $role->id_rol,
+            'fecha' => now()->toDateString(),
+            'subalcaldia' => null,
+        ]);
     }
 }
