@@ -294,13 +294,41 @@ Administrar catalogo de tipos de insumo.
 
 ## 5.12. Subgrupos
 
+### Objetivo
+
+Replicar completamente la pantalla legacy `parametros/subgrupos` con soporte para administracion, combos dependientes y eliminacion logica con autorizacion.
+
 ### Endpoints
 
 - `GET /api/v1/subgroups`
 - `POST /api/v1/subgroups`
 - `GET /api/v1/subgroups/{id}`
 - `PUT /api/v1/subgroups/{id}`
-- `PATCH /api/v1/subgroups/{id}/status`
+- `DELETE /api/v1/subgroups/{id}`
+- `GET /api/v1/subgroups/context`
+- `POST /api/v1/subgroups/{id}/delete-authorization-request`
+- `GET /api/v1/subgroups/{id}/delete-authorization-status`
+- `GET /api/v1/subgroups/by-group/{groupId}`
+
+### Reglas implementadas
+
+- el listado administrativo hace join con `grupo`
+- el listado administrativo filtra `sub_grupo.estado != 'DP'`
+- el listado administrativo ordena por `sub_grupo.id_subgrupo ASC`
+- el listado para combos filtra `id_grupo = ?` y `estado = 'AC'`
+- el listado para combos ordena por `descripcion ASC`
+- la API devuelve `status_label` con `AC -> ACTIVO` y `DC -> INACTIVO`
+- la API devuelve `available_actions` por registro con `edit` y `delete`
+- la creacion valida duplicados por `codigo` y `descripcion` ignorando registros `DP`
+- la edicion solo revalida duplicados si el valor realmente cambio
+- la eliminacion exige que no existan `item` activos vinculados al subgrupo
+- la eliminacion exige una autorizacion aprobada en `autorizaciones` con `tabla = 'sub_grupo'`
+- crear, editar y eliminar registran auditoria
+
+### Diferencia de uso del endpoint `GET /api/v1/subgroups`
+
+- sin `group_id`: devuelve el listado administrativo de `parametros/subgrupos`
+- con `group_id`: devuelve subgrupos activos para combos dependientes
 
 ## 5.13. Porcentajes de calculo
 
@@ -323,7 +351,25 @@ Administrar configuraciones de calculo base y variantes del sistema.
 - `POST /api/v1/calculation-percentages`
 - `GET /api/v1/calculation-percentages/{id}`
 - `PUT /api/v1/calculation-percentages/{id}`
-- `PATCH /api/v1/calculation-percentages/{id}/status`
+
+### Reglas implementadas para `parametros/porcentaje_calculo`
+
+- usa la tabla `porcentaje_calculo`
+- lista administrativa ordenada por `id_porcentaje DESC`
+- no expone API de eliminacion
+- estados validos: `AC`, `DC`
+- controla duplicados por `codigo` y `descripcion`
+- devuelve `status_label` y `available_actions`
+- `available_actions` expone solo `edit`
+- crear y editar registran auditoria
+
+### Endpoints implementados actualmente
+
+- `GET /api/v1/calculation-percentages`
+- `GET /api/v1/calculation-percentages/context`
+- `POST /api/v1/calculation-percentages`
+- `GET /api/v1/calculation-percentages/{id}`
+- `PUT /api/v1/calculation-percentages/{id}`
 
 ### Variante por categoria
 

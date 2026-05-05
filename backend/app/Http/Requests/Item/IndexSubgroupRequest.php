@@ -6,6 +6,15 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class IndexSubgroupRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('group_id')) && trim((string) $this->input('group_id')) === '') {
+            $this->merge([
+                'group_id' => null,
+            ]);
+        }
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -14,7 +23,7 @@ class IndexSubgroupRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'group_id' => ['required', 'integer', 'exists:grupo,id_grupo'],
+            'group_id' => ['nullable', 'integer', 'exists:grupo,id_grupo'],
         ];
     }
 }

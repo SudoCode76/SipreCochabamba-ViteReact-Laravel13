@@ -2221,6 +2221,186 @@ GET /api/v1/users/143
 }
 ```
 
+## 14. Grupos
+
+Estas APIs soportan la pantalla React `parametros/grupos`.
+
+Es un modulo de parametrizacion sobre la tabla `grupo`.
+
+### 14.1 Listar Grupos
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/groups`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Campos principales por registro:
+
+- `id_grupo`
+- `codigo_grupo`
+- `nombre_grupo`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas legacy respetadas:
+
+- el listado no devuelve registros con `estado = DP`
+- orden exacto: `id_grupo ASC`
+
+Conversion de estado para frontend:
+
+- `AC` -> `ACTIVO`
+- `DC` -> `INACTIVO`
+
+Acciones disponibles:
+
+```json
+{
+  "available_actions": {
+    "edit": true,
+    "delete": true
+  }
+}
+```
+
+### 14.2 Contexto de Grupos
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/groups/context`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- estados disponibles `AC` y `DC`
+- permisos del usuario autenticado
+
+### 14.3 Crear Grupo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/groups`
+- Autenticacion: `Bearer token`
+
+Campos esperados:
+
+- `codigo_grupo`
+- `nombre_grupo`
+- `estado`
+
+Validaciones minimas:
+
+- `codigo_grupo` requerido
+- `nombre_grupo` requerido
+- `estado` requerido
+
+Reglas funcionales mantenidas:
+
+- valida duplicado por `codigo_grupo` con `estado != DP`
+- valida duplicado por `nombre_grupo` con `estado != DP`
+- si cualquiera existe, rechaza el alta
+- si no existe, inserta en `grupo`
+- registra auditoria
+
+### 14.4 Obtener Detalle de Grupo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/groups/{id}`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- `id_grupo`
+- `codigo_grupo`
+- `nombre_grupo`
+- `estado`
+
+### 14.5 Editar Grupo
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/groups/{id}`
+- Autenticacion: `Bearer token`
+
+Campos esperados:
+
+- `codigo_grupo`
+- `nombre_grupo`
+- `estado`
+
+Reglas funcionales mantenidas:
+
+- si cambia `nombre_grupo`, valida duplicado contra `grupo.nombre_grupo` con `estado != DP`
+- si cambia `codigo_grupo`, valida duplicado contra `grupo.codigo_grupo` con `estado != DP`
+- si no hay conflicto, actualiza registro
+- registra auditoria
+
+### 14.6 Eliminar Grupo con Autorizacion
+
+- Metodo: `DELETE`
+- URL: `http://localhost:8000/api/v1/groups/{id}`
+- Autenticacion: `Bearer token`
+
+Body:
+
+```json
+{
+  "autorizacion": "AUTH-GR-1"
+}
+```
+
+Reglas funcionales mantenidas:
+
+- no elimina si existe algun item activo usando ese grupo
+  - `item.grupo = id_grupo`
+  - `item.estado = AC`
+- exige autorizacion aprobada valida con:
+  - `id_elemento = id_grupo`
+  - `nro_autorizacion = codigo enviado`
+  - `tabla = grupo`
+  - `estado = AP`
+- si cumple, cambia `grupo.estado = DP`
+- registra auditoria
+
+### 14.7 Solicitar Autorizacion de Eliminacion
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/groups/{id}/delete-authorization-request`
+- Autenticacion: `Bearer token`
+
+La solicitud creada usa el flujo funcional de autorizaciones con:
+
+- `id_elemento`
+- `elemento`
+- `tipo_elemento = grupo`
+- `tabla = grupo`
+- `solicitante`
+- `estado = PE`
+
+### 14.8 Consultar Estado de Autorizacion
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/groups/{id}/delete-authorization-status`
+- Autenticacion: `Bearer token`
+
+Responde si:
+
+- no existe autorizacion
+- existe autorizacion pendiente
+- existe autorizacion aprobada y usable
+
+### Ejemplo de error funcional por items activos
+
+```json
+{
+  "success": false,
+  "message": "Error de validacion.",
+  "errors": {
+    "group": [
+      "El grupo no puede eliminarse porque tiene items activos asociados."
+    ]
+  }
+}
+```
+
 ## 15. Proyectos
 
 Estas APIs soportan la pantalla React de `nuevo-proyecto`.
@@ -3580,6 +3760,8 @@ Usala cuando frontend necesite reproducir el comportamiento legacy de recalculo 
 - URL: `http://localhost:8000/api/v1/subgroups?group_id=7`
 - Autenticacion: `Bearer token`
 
+Este modo del endpoint devuelve solo subgrupos activos del grupo solicitado y ordena por `descripcion ASC`.
+
 ### Para que sirve esta API si ya existe `subgroups_by_group` en el contexto
 
 Hay dos formas de poblar el combo dependiente:
@@ -3613,6 +3795,1019 @@ Recomendacion practica:
   }
 }
 ```
+
+## 20. Parametros Subgrupos
+
+Estas APIs replican la pantalla administrativa `parametros/subgrupos`.
+
+### 20.1 Listado Administrativo de Subgrupos
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_subgrupo`
+- `codigo`
+- `descripcion`
+- `id_grupo`
+- `nombre_grupo`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- hace join con `grupo`
+- excluye registros con `estado = 'DP'`
+- ordena por `id_subgrupo ASC`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Subgrupos obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_subgrupo": 1,
+        "codigo": "PRE",
+        "descripcion": "PRELIMINARES",
+        "id_grupo": 1,
+        "nombre_grupo": "OBRAS PRELIMINARES",
+        "estado": "AC",
+        "status_label": "ACTIVO",
+        "available_actions": {
+          "edit": true,
+          "delete": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 20.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- grupos activos para el combo
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 20.3 Crear Subgrupo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/subgroups`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "PRE",
+  "descripcion": "PRELIMINARES",
+  "id_grupo": 1,
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `id_grupo` y `estado` son obligatorios
+- si ya existe otro subgrupo no eliminado con el mismo `codigo`, responde error funcional
+- si ya existe otro subgrupo no eliminado con la misma `descripcion`, responde error funcional
+- registra auditoria al crear
+
+### 20.4 Obtener Detalle de Subgrupo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle para cargar el modal o formulario de edicion, incluyendo `nombre_grupo`.
+
+### 20.5 Editar Subgrupo
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/subgroups/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "PRE-01",
+  "descripcion": "PRELIMINARES AJUSTADO",
+  "id_grupo": 1,
+  "estado": "DC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- solo valida duplicado de `codigo` si `codigo` cambio
+- solo valida duplicado de `descripcion` si `descripcion` cambio
+- registra auditoria al actualizar
+
+### 20.6 Solicitar Autorizacion de Eliminacion
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/subgroups/{id}/delete-authorization-request`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body opcional:
+
+```json
+{
+  "nro_autorizacion": "AUTH-SG-001"
+}
+```
+
+Registra una solicitud en `autorizaciones` con:
+
+- `id_elemento = id_subgrupo`
+- `elemento = descripcion`
+- `tipo_elemento = subgrupo`
+- `tabla = sub_grupo`
+- `solicitante = usuario autenticado`
+- `estado = PE`
+
+### 20.7 Consultar Estado de Autorizacion
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/subgroups/{id}/delete-authorization-status`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Responde alguno de estos estados:
+
+- `not_found`
+- `pending`
+- `approved`
+- `not_usable`
+
+### 20.8 Eliminar Subgrupo
+
+- Metodo: `DELETE`
+- URL: `http://localhost:8000/api/v1/subgroups/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "autorizacion": "AUTH-SG-001"
+}
+```
+
+Reglas funcionales:
+
+- no permite eliminar si existe algun `item` activo con `item.subgrupo = id_subgrupo`
+- exige una autorizacion aprobada `AP` en `autorizaciones` con `tabla = 'sub_grupo'`
+- la eliminacion es logica y actualiza `sub_grupo.estado = 'DP'`
+- registra auditoria al eliminar
+
+### 20.9 Subgrupos para Combos Dependientes
+
+Se soportan dos variantes equivalentes:
+
+- `GET /api/v1/subgroups?group_id={groupId}`
+- `GET /api/v1/subgroups/by-group/{groupId}`
+
+Ambas devuelven subgrupos activos del grupo y ordenan por `descripcion ASC`.
+
+## 21. Parametros Porcentaje de Calculo
+
+Estas APIs replican la pantalla administrativa `parametros/porcentaje_calculo`.
+
+### 21.1 Listado Administrativo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_porcentaje`
+- `codigo`
+- `descripcion`
+- `porcentaje`
+- `observacion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- usa `porcentaje_calculo`
+- ordena por `id_porcentaje DESC`
+- no expone eliminacion en esta pantalla
+- `available_actions` solo incluye `edit`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Porcentajes de calculo obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_porcentaje": 2,
+        "codigo": "PC-002",
+        "descripcion": "IVA",
+        "porcentaje": 14.94,
+        "observacion": "Obs 2",
+        "estado": "DC",
+        "status_label": "INACTIVO",
+        "available_actions": {
+          "edit": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 21.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 21.3 Crear Porcentaje de Calculo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/calculation-percentages`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "PC-003",
+  "descripcion": "HERRAMIENTAS MENORES",
+  "porcentaje": 5,
+  "observacion": "Observacion opcional",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `porcentaje` y `estado` son obligatorios
+- `codigo` debe ser unico
+- `descripcion` no puede duplicarse
+- registra auditoria al crear
+
+### 21.4 Obtener Detalle
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle del porcentaje para cargar el formulario de edicion.
+
+### 21.5 Editar Porcentaje de Calculo
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "PC-002A",
+  "descripcion": "IVA ACTUALIZADO",
+  "porcentaje": 15.5,
+  "observacion": "Obs editada",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- si cambia `codigo`, revalida unicidad por `codigo`
+- si cambia `descripcion`, valida duplicado por `descripcion`
+- `porcentaje` sigue siendo requerido funcionalmente
+- registra auditoria al actualizar
+
+## 22. Parametros Porcentaje de Calculo UPRE
+
+Estas APIs replican la pantalla administrativa `parametros/porcentaje_calculo_upre`.
+
+### 22.1 Listado Administrativo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/upre`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_porcentaje`
+- `codigo`
+- `descripcion`
+- `porcentaje`
+- `observacion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- usa `porcentaje_calculo_upre`
+- ordena por `id_porcentaje DESC`
+- no expone eliminacion en esta pantalla
+- `available_actions` solo incluye `edit`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Porcentajes de calculo UPRE obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_porcentaje": 2,
+        "codigo": "UPRE-002",
+        "descripcion": "IVA",
+        "porcentaje": 14.94,
+        "observacion": "Obs 2",
+        "estado": "DC",
+        "status_label": "INACTIVO",
+        "available_actions": {
+          "edit": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 22.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/upre/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 22.3 Crear Porcentaje de Calculo UPRE
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/upre`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "UPRE-003",
+  "descripcion": "HERRAMIENTAS MENORES",
+  "porcentaje": 5,
+  "observacion": "Observacion opcional",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `porcentaje` y `estado` son obligatorios
+- `codigo` debe ser unico
+- `descripcion` no puede duplicarse
+- registra auditoria al crear
+
+### Decision de compatibilidad sobre unicidad de `codigo`
+
+En el legacy se observaba validacion de unicidad contra `porcentaje_calculo.codigo` incluso para el modulo UPRE.
+
+En esta API nueva se normalizo la regla para validar unicidad dentro de `porcentaje_calculo_upre.codigo`, porque:
+
+- el alta y la edicion operan sobre `porcentaje_calculo_upre`
+- evita rechazos cruzados entre modulos distintos
+- hace consistente la regla con la tabla realmente administrada por esta pantalla
+
+### 22.4 Obtener Detalle
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/upre/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle del porcentaje UPRE para cargar el formulario de edicion.
+
+### 22.5 Editar Porcentaje de Calculo UPRE
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/upre/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "UPRE-002A",
+  "descripcion": "IVA ACTUALIZADO",
+  "porcentaje": 15.5,
+  "observacion": "Obs editada",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- si cambia `codigo`, revalida unicidad por `codigo` dentro de `porcentaje_calculo_upre`
+- si cambia `descripcion`, valida duplicado por `descripcion`
+- `porcentaje` sigue siendo requerido funcionalmente
+- registra auditoria al actualizar
+
+## 23. Parametros Porcentaje de Calculo FPS
+
+Estas APIs replican la pantalla administrativa `parametros/porcentaje_calculo_fps`.
+
+### 23.1 Listado Administrativo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fps`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_porcentaje`
+- `codigo`
+- `descripcion`
+- `porcentaje`
+- `observacion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- usa `porcentaje_calculo_fps`
+- ordena por `id_porcentaje DESC`
+- no expone eliminacion en esta pantalla
+- `available_actions` solo incluye `edit`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Porcentajes de calculo FPS obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_porcentaje": 2,
+        "codigo": "FPS-002",
+        "descripcion": "IVA",
+        "porcentaje": 14.94,
+        "observacion": "Obs 2",
+        "estado": "DC",
+        "status_label": "INACTIVO",
+        "available_actions": {
+          "edit": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 23.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fps/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 23.3 Crear Porcentaje de Calculo FPS
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fps`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "FPS-003",
+  "descripcion": "HERRAMIENTAS MENORES",
+  "porcentaje": 5,
+  "observacion": "Observacion opcional",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `porcentaje` y `estado` son obligatorios
+- `codigo` debe ser unico
+- `descripcion` no puede duplicarse
+- registra auditoria al crear
+
+### Decision de compatibilidad sobre unicidad de `codigo`
+
+En el legacy se observaba validacion de unicidad contra `porcentaje_calculo.codigo` incluso para el modulo FPS.
+
+En esta API nueva se normalizo la regla para validar unicidad dentro de `porcentaje_calculo_fps.codigo`, porque:
+
+- el alta y la edicion operan sobre `porcentaje_calculo_fps`
+- evita rechazos cruzados entre modulos distintos
+- hace consistente la regla con la tabla realmente administrada por esta pantalla
+
+### 23.4 Obtener Detalle
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fps/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle del porcentaje FPS para cargar el formulario de edicion.
+
+### 23.5 Editar Porcentaje de Calculo FPS
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fps/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "FPS-002A",
+  "descripcion": "IVA ACTUALIZADO",
+  "porcentaje": 15.5,
+  "observacion": "Obs editada",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- si cambia `codigo`, revalida unicidad por `codigo` dentro de `porcentaje_calculo_fps`
+- si cambia `descripcion`, valida duplicado por `descripcion`
+- `porcentaje` sigue siendo requerido funcionalmente
+- registra auditoria al actualizar
+
+## 24. Parametros Porcentaje de Calculo FNDR
+
+Estas APIs replican la pantalla administrativa `parametros/porcentaje_calculo_fndr`.
+
+### 24.1 Listado Administrativo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fndr`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_porcentaje`
+- `codigo`
+- `descripcion`
+- `porcentaje`
+- `observacion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- usa `porcentaje_calculo_fndr`
+- ordena por `id_porcentaje DESC`
+- no expone eliminacion en esta pantalla
+- `available_actions` solo incluye `edit`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Porcentajes de calculo FNDR obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_porcentaje": 2,
+        "codigo": "FNDR-002",
+        "descripcion": "IVA",
+        "porcentaje": 10,
+        "observacion": "Obs 2",
+        "estado": "DC",
+        "status_label": "INACTIVO",
+        "available_actions": {
+          "edit": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 24.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fndr/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 24.3 Crear Porcentaje de Calculo FNDR
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fndr`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "FNDR-003",
+  "descripcion": "HERRAMIENTAS MENORES",
+  "porcentaje": 5,
+  "observacion": "Observacion opcional",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `porcentaje` y `estado` son obligatorios
+- `codigo` debe ser unico
+- `descripcion` no puede duplicarse
+- registra auditoria al crear
+
+### Decision de compatibilidad sobre unicidad de `codigo`
+
+En el legacy se observaba validacion de unicidad contra `porcentaje_calculo.codigo` incluso para el modulo FNDR.
+
+En esta API nueva se normalizo la regla para validar unicidad dentro de `porcentaje_calculo_fndr.codigo`, porque:
+
+- el alta y la edicion operan sobre `porcentaje_calculo_fndr`
+- evita rechazos cruzados entre modulos distintos
+- hace consistente la regla con la tabla realmente administrada por esta pantalla
+
+### 24.4 Obtener Detalle
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fndr/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle del porcentaje FNDR para cargar el formulario de edicion.
+
+### 24.5 Editar Porcentaje de Calculo FNDR
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/fndr/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "FNDR-002A",
+  "descripcion": "IVA ACTUALIZADO",
+  "porcentaje": 15.5,
+  "observacion": "Obs editada",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- si cambia `codigo`, revalida unicidad por `codigo` dentro de `porcentaje_calculo_fndr`
+- si cambia `descripcion`, valida duplicado por `descripcion`
+- `porcentaje` sigue siendo requerido funcionalmente
+- registra auditoria al actualizar
+
+## 25. Parametros Porcentaje de Calculo Obras
+
+Estas APIs replican la pantalla administrativa `parametros/porcentaje_calculo_obras`.
+
+### 25.1 Listado Administrativo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/obras`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_porcentaje`
+- `codigo`
+- `descripcion`
+- `porcentaje`
+- `observacion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- usa `porcentaje_calculo_obras`
+- ordena por `id_porcentaje DESC`
+- no expone eliminacion en esta pantalla
+- `available_actions` solo incluye `edit`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Porcentajes de calculo Obras obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_porcentaje": 2,
+        "codigo": "OBR-002",
+        "descripcion": "IVA",
+        "porcentaje": 0,
+        "observacion": "Obs 2",
+        "estado": "DC",
+        "status_label": "INACTIVO",
+        "available_actions": {
+          "edit": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 25.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/obras/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 25.3 Crear Porcentaje de Calculo Obras
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/obras`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "OBR-003",
+  "descripcion": "HERRAMIENTAS MENORES",
+  "porcentaje": 5,
+  "observacion": "Observacion opcional",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `porcentaje` y `estado` son obligatorios
+- `codigo` debe ser unico
+- `descripcion` no puede duplicarse
+- registra auditoria al crear
+
+### Decision de compatibilidad sobre unicidad de `codigo`
+
+En el legacy se observaba validacion de unicidad contra `porcentaje_calculo.codigo` incluso para el modulo Obras.
+
+En esta API nueva se normalizo la regla para validar unicidad dentro de `porcentaje_calculo_obras.codigo`, porque:
+
+- el alta y la edicion operan sobre `porcentaje_calculo_obras`
+- evita rechazos cruzados entre modulos distintos
+- hace consistente la regla con la tabla realmente administrada por esta pantalla
+
+### 25.4 Obtener Detalle
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/obras/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle del porcentaje Obras para cargar el formulario de edicion.
+
+### 25.5 Editar Porcentaje de Calculo Obras
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/obras/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "OBR-002A",
+  "descripcion": "IVA ACTUALIZADO",
+  "porcentaje": 15.5,
+  "observacion": "Obs editada",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- si cambia `codigo`, revalida unicidad por `codigo` dentro de `porcentaje_calculo_obras`
+- si cambia `descripcion`, valida duplicado por `descripcion`
+- `porcentaje` sigue siendo requerido funcionalmente
+- registra auditoria al actualizar
+
+## 26. Parametros Porcentaje de Calculo PROMAN
+
+Estas APIs replican la pantalla administrativa `parametros/porcentaje_calculo_proman`.
+
+### 26.1 Listado Administrativo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/proman`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- `id_porcentaje`
+- `codigo`
+- `descripcion`
+- `porcentaje`
+- `observacion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Reglas funcionales:
+
+- usa `porcentaje_calculo_proman`
+- ordena por `id_porcentaje DESC`
+- no expone eliminacion en esta pantalla
+- `available_actions` solo incluye `edit`
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Porcentajes de calculo PROMAN obtenidos correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_porcentaje": 2,
+        "codigo": "PROM-002",
+        "descripcion": "IVA",
+        "porcentaje": 0,
+        "observacion": "Obs 2",
+        "estado": "DC",
+        "status_label": "INACTIVO",
+        "available_actions": {
+          "edit": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 26.2 Contexto de Pantalla
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/proman/context`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve:
+
+- estados `AC` y `DC`
+- permisos funcionales de la pantalla
+
+### 26.3 Crear Porcentaje de Calculo PROMAN
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/proman`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "PROM-003",
+  "descripcion": "CARGAS SOCIALES",
+  "porcentaje": 57,
+  "observacion": "Observacion opcional",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- `codigo`, `descripcion`, `porcentaje` y `estado` son obligatorios
+- `codigo` debe ser unico
+- `descripcion` no puede duplicarse
+- registra auditoria al crear
+
+### Decision de compatibilidad sobre unicidad de `codigo`
+
+En el legacy se observaba validacion de unicidad contra `porcentaje_calculo.codigo` incluso para el modulo PROMAN.
+
+En esta API nueva se normalizo la regla para validar unicidad dentro de `porcentaje_calculo_proman.codigo`, porque:
+
+- el alta y la edicion operan sobre `porcentaje_calculo_proman`
+- evita rechazos cruzados entre modulos distintos
+- hace consistente la regla con la tabla realmente administrada por esta pantalla
+
+### 26.4 Obtener Detalle
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/proman/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Devuelve el detalle del porcentaje PROMAN para cargar el formulario de edicion.
+
+### 26.5 Editar Porcentaje de Calculo PROMAN
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/calculation-percentages/proman/{id}`
+- Autenticacion: `Bearer token`
+- Permiso actual: administrador
+
+Body esperado:
+
+```json
+{
+  "codigo": "PROM-002A",
+  "descripcion": "IVA ACTUALIZADO",
+  "porcentaje": 1.5,
+  "observacion": "Obs editada",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- si cambia `codigo`, revalida unicidad por `codigo` dentro de `porcentaje_calculo_proman`
+- si cambia `descripcion`, valida duplicado por `descripcion`
+- `porcentaje` sigue siendo requerido funcionalmente
+- registra auditoria al actualizar
 
 ### 16.7 Composicion Operativa del Item
 
