@@ -6,6 +6,7 @@ import ModulePlaceholder from "@/components/ModulePlaceholder";
 import ChangePasswordPage from "@/modules/auth/pages/ChangePasswordPage";
 import LoginPage from "@/modules/auth/pages/LoginPage";
 import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
+import UsersPage from "@/modules/users/pages/UsersPage";
 
 function placeholder(title, description, section, accent) {
   return (
@@ -79,7 +80,7 @@ export const router = createBrowserRouter([
           },
           {
             path: "/administracion/usuarios",
-            element: placeholder("Gestión de Usuarios", "Pantalla lista para listado, filtros y administración del personal del sistema.", "Administración", "emerald"),
+            element: <UsersPage />,
           },
           {
             path: "/administracion/funciones",

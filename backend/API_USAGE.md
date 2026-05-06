@@ -2633,6 +2633,20 @@ Devuelve:
 
 Estos endpoints son administrativos y permiten listar, crear y actualizar usuarios del sistema legacy.
 
+Importante para frontend:
+
+- el campo `unit_id` de usuarios corresponde a `unidad` administrativa
+- no corresponde a `unidad_medida`
+- para poblar el combo de unidades del formulario de usuario se debe usar la API `GET /api/v1/units/context` o `GET /api/v1/units`
+- el flujo legacy principal no obliga a elegir la unidad desde un select
+- normalmente la unidad llega como texto en `unidad.descripcion` despues de buscar el funcionario por CI
+- al guardar, backend busca esa descripcion en tabla `unidad`
+- si la unidad existe, usa su `id_unidad`
+- si no existe, la crea automaticamente y luego la asigna al usuario
+- la UI puede dejar que el usuario escriba la unidad manualmente
+- mientras escribe, puede consultar `GET /api/v1/units?search=...` para sugerir coincidencias existentes
+- si el usuario elige una sugerencia existente, debe reutilizarse esa unidad y no crear una nueva
+
 ### 15.1 Listar Usuarios
 
 - Metodo: `GET`
@@ -2642,17 +2656,38 @@ Estos endpoints son administrativos y permiten listar, crear y actualizar usuari
 
 Filtros disponibles:
 
+- `search`
 - `name`
 - `username`
+- `ci`
 - `status`
 - `role_id`
 - `unit_id`
 - `per_page`
 
+Comportamiento de `search`:
+
+- funciona como busqueda global del listado
+- busca por cualquiera de estos campos:
+  - nombre completo
+  - C.I.
+  - usuario
+  - rol
+  - unidad administrativa
+
 Ejemplo:
 
 ```text
 GET /api/v1/users?name=juan&status=AC&per_page=10
+```
+
+Ejemplos de busqueda global:
+
+```text
+GET /api/v1/users?search=maria&per_page=10
+GET /api/v1/users?search=22222222&per_page=10
+GET /api/v1/users?search=administrador&per_page=10
+GET /api/v1/users?search=unidad tecnica&per_page=10
 ```
 
 ### 15.2 Crear Usuario
@@ -2673,11 +2708,48 @@ GET /api/v1/users?name=juan&status=AC&per_page=10
   "password_confirmation": "newSecret123",
   "estado": "AC",
   "role_id": 1,
-  "unit_id": 1,
+  "unidad": {
+    "descripcion": "DIRECCION DE AUDITORIA INTERNA"
+  },
   "item": null,
   "subalcaldia": null
 }
 ```
+
+Tambien se acepta esta variante si frontend ya conoce el id:
+
+```json
+{
+  "funcionario": "Nuevo Usuario",
+  "ci": "33333333",
+  "username": "nuevo",
+  "password": "newSecret123",
+  "password_confirmation": "newSecret123",
+  "estado": "AC",
+  "role_id": 1,
+  "unit_id": 1
+}
+```
+
+Para el campo de unidad se puede usar:
+
+- `GET /api/v1/units/context`
+- o `GET /api/v1/units`
+
+Para autocompletado manual se recomienda:
+
+- `GET /api/v1/units?search=texto`
+
+Pero en el flujo legacy real lo mas comun es enviar:
+
+- `unidad.descripcion`
+
+En ese caso backend:
+
+- busca la unidad por descripcion
+- si la encuentra, usa su `id_unidad`
+- si no la encuentra, crea una nueva unidad activa y luego la asigna al usuario
+- la comparacion se hace normalizando mayusculas/minusculas y espacios repetidos para evitar duplicados triviales
 
 ### 11.3 Ver Usuario
 
@@ -2708,11 +2780,15 @@ GET /api/v1/users/143
   "username": "editado",
   "estado": "AC",
   "role_id": 1,
-  "unit_id": 1,
+  "unidad": {
+    "descripcion": "UNIDAD OPERATIVA"
+  },
   "item": 10,
   "subalcaldia": 20
 }
 ```
+
+Tambien se acepta `unit_id` si frontend ya lo conoce.
 
 ### 11.5 Cambiar Estado de Usuario
 
@@ -2758,6 +2834,121 @@ GET /api/v1/users/143
   "unit_id": 2
 }
 ```
+
+Tambien se acepta:
+
+```json
+{
+  "unidad": {
+    "descripcion": "UNIDAD OPERATIVA"
+  }
+}
+```
+
+En ese caso backend resuelve o crea la unidad automaticamente.
+
+## 15.8 Unidades Administrativas para Usuarios
+
+Estas APIs exponen la tabla `unidad` administrativa usada por usuarios.
+
+No confundir con:
+
+- `unidad` administrativa: usada en usuarios
+- `unidad_medida`: usada en insumos, items y solicitudes
+
+### 15.8.1 Listar Unidades
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/units`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Devuelve:
+
+- `id_unidad`
+- `descripcion`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Uso recomendado:
+
+- se puede usar para mostrar todas las unidades en una pantalla administrativa o para edición de usuarios
+- incluye unidades activas e inactivas
+- soporta `search` para sugerencias o autocompletado por descripcion
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Unidades obtenidas correctamente.",
+  "data": {
+    "items": [
+      {
+        "id_unidad": 1,
+        "descripcion": "Unidad Central",
+        "estado": "AC",
+        "status_label": "ACTIVO",
+        "available_actions": {
+          "select": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### 15.8.2 Contexto de Unidades para Combo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/units/context`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Devuelve:
+
+- `units`: solo unidades activas
+- `statuses`
+- `permissions`
+
+Uso recomendado:
+
+- para el formulario de crear o editar usuario
+- usar `data.units` para poblar el select de unidad
+
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "message": "Contexto de unidades obtenido correctamente.",
+  "data": {
+    "units": [
+      {
+        "id_unidad": 1,
+        "descripcion": "Unidad Central",
+        "estado": "AC"
+      }
+    ],
+    "statuses": [
+      { "code": "AC", "label": "ACTIVO" },
+      { "code": "DC", "label": "INACTIVO" }
+    ],
+    "permissions": {
+      "can_view": true,
+      "can_select": true
+    }
+  }
+}
+```
+
+### 15.8.3 Ver Unidad
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/units/{id}`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
 
 ## 14. Grupos
 
@@ -3178,482 +3369,6 @@ Replica el comportamiento del legacy cuando frontend selecciona responsable o so
 ```
 
 ## Flujo Recomendado de Uso
-
-Estas APIs soportan la pantalla React de `nuevo-proyecto`.
-
-Importante:
-
-- el mapa se resuelve en frontend
-- el backend no dibuja capas ni interactua con OpenLayers
-- el backend solo recibe, valida y guarda los datos territoriales capturados por frontend
-
-### 15.1 Contexto de Creacion de Proyecto
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/projects/create-context`
-- Autenticacion: `Bearer token`
-
-Tambien existe por compatibilidad:
-
-- `GET /api/v1/projects/context`
-
-### Para que sirve
-
-Devuelve todo lo necesario para cargar la pagina `nuevo-proyecto`:
-
-- personas activas para `responsable`
-- personas activas para `solicitante`
-- estados disponibles `AC` y `DC`
-- condiciones disponibles `PD`, `RV`, `AP`
-- permisos funcionales del usuario autenticado
-- metadata de apoyo para el formulario
-
-### Ejemplo de respuesta
-
-```json
-{
-  "success": true,
-  "message": "Contexto de proyectos obtenido correctamente.",
-  "data": {
-    "responsible_options": [
-      {
-        "id_usuario": 1,
-        "funcionario": "Usuario Demo",
-        "username": "demo",
-        "estado": "AC"
-      }
-    ],
-    "requester_options": [
-      {
-        "id_usuario": 1,
-        "funcionario": "Usuario Demo",
-        "username": "demo",
-        "estado": "AC"
-      }
-    ],
-    "statuses": [
-      { "code": "AC", "label": "ACTIVO" },
-      { "code": "DC", "label": "INACTIVO" }
-    ],
-    "conditions": [
-      { "code": "PD", "label": "PENDIENTE" },
-      { "code": "RV", "label": "REVISADO" },
-      { "code": "AP", "label": "APROBADO" }
-    ],
-    "permissions": {
-      "can_create": true
-    },
-    "metadata": {
-      "creator_user_id": 1,
-      "location_fields": ["latitud", "longitud", "distrito", "zona", "otb", "ubicacion"],
-      "defaults": {
-        "estado": "AC",
-        "aprobado": "PD"
-      }
-    }
-  }
-}
-```
-
-### 15.2 Crear Proyecto
-
-- Metodo: `POST`
-- URL: `http://localhost:8000/api/v1/projects`
-- Autenticacion: `Bearer token`
-
-### Campos que acepta
-
-- `nombre_proyecto`
-- `fecha`
-- `latitud`
-- `longitud`
-- `distrito`
-- `zona`
-- `otb`
-- `ubicacion`
-- `responsable`
-- `solicitante`
-- `observaciones`
-- `estado`
-- `aprobado`
-
-Nota:
-
-- `id_usuario` se toma del usuario autenticado
-- no es necesario enviarlo desde frontend
-
-### Body ejemplo
-
-```json
-{
-  "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
-  "fecha": "2026-05-04",
-  "latitud": "-17.3935",
-  "longitud": "-66.1570",
-  "distrito": "2",
-  "zona": "Zona Sur",
-  "otb": "OTB Central",
-  "ubicacion": "Av. Principal esquina Calle 5",
-  "responsable": 1,
-  "solicitante": 1,
-  "observaciones": "Proyecto registrado desde la nueva pantalla React.",
-  "estado": "AC",
-  "aprobado": "PD"
-}
-```
-
-### Validaciones aplicadas
-
-- `nombre_proyecto`: requerido
-- `fecha`: requerida
-- `latitud`: requerida
-- `longitud`: requerida
-- `responsable`: requerido
-- `solicitante`: requerido
-- `observaciones`: requerida
-- `estado`: requerido y debe ser `AC` o `DC`
-- `aprobado`: requerido y debe ser `PD`, `RV` o `AP`
-- `ubicacion`: requerida
-- `distrito`: nullable
-- `zona`: nullable
-- `otb`: nullable
-
-### Regla legacy mantenida
-
-- los campos textuales del proyecto se convierten a mayusculas antes de guardar
-- se valida duplicado por `nombre_proyecto`
-- la comparacion de duplicado se hace de forma normalizada con `UPPER(TRIM(nombre_proyecto))`
-- si ya existe un proyecto con el mismo nombre, no se inserta
-
-### Campos de ubicacion que guarda el backend
-
-- `latitud`
-- `longitud`
-- `distrito`
-- `zona`
-- `otb`
-- `ubicacion`
-
-### Ejemplo de respuesta exitosa
-
-```json
-{
-  "success": true,
-  "message": "Proyecto creado correctamente.",
-  "data": {
-    "project": {
-      "id_proyecto": 15,
-      "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
-      "ubicacion": "AV. PRINCIPAL ESQUINA CALLE 5",
-      "fecha": "2026-05-04",
-      "responsable": "1",
-      "solicitante": 1,
-      "observaciones": "PROYECTO REGISTRADO DESDE LA NUEVA PANTALLA REACT.",
-      "aprobado": "PD",
-      "estado": "AC",
-      "id_usuario": 1,
-      "nombre_responsable": "Usuario Demo",
-      "latitud": "-17.3935",
-      "longitud": "-66.1570",
-      "distrito": "2",
-      "zona": "ZONA SUR",
-      "otb": "OTB CENTRAL"
-    }
-  }
-}
-```
-
-### Ejemplo de error por duplicado
-
-```json
-{
-  "success": false,
-  "message": "Error de validacion.",
-  "errors": {
-    "nombre_proyecto": [
-      "Ya existe un proyecto con el mismo nombre."
-    ]
-  }
-}
-```
-
-### 15.3 Nombre Visible de Usuario
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/users/{id}/display-name`
-- Autenticacion: `Bearer token`
-
-### Para que sirve
-
-Replica el comportamiento del legacy cuando frontend selecciona responsable o solicitante y necesita recuperar el nombre visible del usuario.
-
-### Ejemplo de respuesta
-
-```json
-{
-  "success": true,
-  "message": "Nombre visible del usuario obtenido correctamente.",
-  "data": {
-    "id_usuario": 1,
-    "funcionario": "Usuario Demo",
-    "username": "demo",
-    "estado": "AC"
-  }
-}
-```
-
-## Flujo Recomendado de Uso
-
-Estas APIs soportan la pantalla React de `nuevo-proyecto`.
-
-Importante:
-
-- el mapa se resuelve en frontend
-- el backend no dibuja capas ni interactua con OpenLayers
-- el backend solo recibe, valida y guarda los datos territoriales capturados por frontend
-
-### 15.1 Contexto de Creacion de Proyecto
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/projects/create-context`
-- Autenticacion: `Bearer token`
-
-Tambien existe por compatibilidad:
-
-- `GET /api/v1/projects/context`
-
-### Para que sirve
-
-Devuelve todo lo necesario para cargar la pagina `nuevo-proyecto`:
-
-- personas activas para `responsable`
-- personas activas para `solicitante`
-- estados disponibles `AC` y `DC`
-- condiciones disponibles `PD`, `RV`, `AP`
-- permisos funcionales del usuario autenticado
-- metadata de apoyo para el formulario
-
-### Ejemplo de respuesta
-
-```json
-{
-  "success": true,
-  "message": "Contexto de proyectos obtenido correctamente.",
-  "data": {
-    "responsible_options": [
-      {
-        "id_usuario": 1,
-        "funcionario": "Usuario Demo",
-        "username": "demo",
-        "estado": "AC"
-      }
-    ],
-    "requester_options": [
-      {
-        "id_usuario": 1,
-        "funcionario": "Usuario Demo",
-        "username": "demo",
-        "estado": "AC"
-      }
-    ],
-    "statuses": [
-      { "code": "AC", "label": "ACTIVO" },
-      { "code": "DC", "label": "INACTIVO" }
-    ],
-    "conditions": [
-      { "code": "PD", "label": "PENDIENTE" },
-      { "code": "RV", "label": "REVISADO" },
-      { "code": "AP", "label": "APROBADO" }
-    ],
-    "permissions": {
-      "can_create": true
-    },
-    "metadata": {
-      "creator_user_id": 1,
-      "location_fields": ["latitud", "longitud", "distrito", "zona", "otb", "ubicacion"],
-      "defaults": {
-        "estado": "AC",
-        "aprobado": "PD"
-      }
-    }
-  }
-}
-```
-
-### 15.2 Crear Proyecto
-
-- Metodo: `POST`
-- URL: `http://localhost:8000/api/v1/projects`
-- Autenticacion: `Bearer token`
-
-### Campos que acepta
-
-- `nombre_proyecto`
-- `fecha`
-- `latitud`
-- `longitud`
-- `distrito`
-- `zona`
-- `otb`
-- `ubicacion`
-- `responsable`
-- `solicitante`
-- `observaciones`
-- `estado`
-- `aprobado`
-
-Nota:
-
-- `id_usuario` se toma del usuario autenticado
-- no es necesario enviarlo desde frontend
-
-### Body ejemplo
-
-```json
-{
-  "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
-  "fecha": "2026-05-04",
-  "latitud": "-17.3935",
-  "longitud": "-66.1570",
-  "distrito": "2",
-  "zona": "Zona Sur",
-  "otb": "OTB Central",
-  "ubicacion": "Av. Principal esquina Calle 5",
-  "responsable": 1,
-  "solicitante": 1,
-  "observaciones": "Proyecto registrado desde la nueva pantalla React.",
-  "estado": "AC",
-  "aprobado": "PD"
-}
-```
-
-### Validaciones aplicadas
-
-- `nombre_proyecto`: requerido
-- `fecha`: requerida
-- `latitud`: requerida
-- `longitud`: requerida
-- `responsable`: requerido
-- `solicitante`: requerido
-- `observaciones`: requerida
-- `estado`: requerido y debe ser `AC` o `DC`
-- `aprobado`: requerido y debe ser `PD`, `RV` o `AP`
-- `ubicacion`: requerida
-- `distrito`: nullable
-- `zona`: nullable
-- `otb`: nullable
-
-### Regla legacy mantenida
-
-- los campos textuales del proyecto se convierten a mayusculas antes de guardar
-- se valida duplicado por `nombre_proyecto`
-- la comparacion de duplicado se hace de forma normalizada con `UPPER(TRIM(nombre_proyecto))`
-- si ya existe un proyecto con el mismo nombre, no se inserta
-
-### Campos de ubicacion que guarda el backend
-
-- `latitud`
-- `longitud`
-- `distrito`
-- `zona`
-- `otb`
-- `ubicacion`
-
-### Ejemplo de respuesta exitosa
-
-```json
-{
-  "success": true,
-  "message": "Proyecto creado correctamente.",
-  "data": {
-    "project": {
-      "id_proyecto": 15,
-      "nombre_proyecto": "NUEVO PROYECTO ZONA SUR",
-      "ubicacion": "AV. PRINCIPAL ESQUINA CALLE 5",
-      "fecha": "2026-05-04",
-      "responsable": "1",
-      "solicitante": 1,
-      "observaciones": "PROYECTO REGISTRADO DESDE LA NUEVA PANTALLA REACT.",
-      "aprobado": "PD",
-      "estado": "AC",
-      "id_usuario": 1,
-      "nombre_responsable": "Usuario Demo",
-      "latitud": "-17.3935",
-      "longitud": "-66.1570",
-      "distrito": "2",
-      "zona": "ZONA SUR",
-      "otb": "OTB CENTRAL"
-    }
-  }
-}
-```
-
-### Ejemplo de error por duplicado
-
-```json
-{
-  "success": false,
-  "message": "Error de validacion.",
-  "errors": {
-    "nombre_proyecto": [
-      "Ya existe un proyecto con el mismo nombre."
-    ]
-  }
-}
-```
-
-### 15.3 Nombre Visible de Usuario
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/users/{id}/display-name`
-- Autenticacion: `Bearer token`
-
-### Para que sirve
-
-Replica el comportamiento del legacy cuando frontend selecciona responsable o solicitante y necesita recuperar el nombre visible del usuario.
-
-### Ejemplo de respuesta
-
-```json
-{
-  "success": true,
-  "message": "Nombre visible del usuario obtenido correctamente.",
-  "data": {
-    "id_usuario": 1,
-    "funcionario": "Usuario Demo",
-    "username": "demo",
-    "estado": "AC"
-  }
-}
-```
-
-## Flujo Recomendado de Uso
-
-1. Verificar que el backend esta disponible con `GET /api/health`.
-2. Iniciar sesion con `POST /api/v1/auth/login`.
-3. Guardar el valor de `data.token`.
-4. Enviar ese token como `Bearer` para consumir `GET /api/v1/auth/me` o `GET /api/v1/profile`.
-5. Si necesitas inspeccionar la matriz completa de permisos, consumir `GET /api/v1/permissions/matrix`.
-6. Si necesitas ver o actualizar permisos de un rol, usar `GET` o `PUT /api/v1/roles/{role}/permissions`.
-
-## 16. Items FNDR
-
-Estas APIs reemplazan la logica de la pantalla legacy `items/fndr`.
-
-El objetivo de este modulo es soportar completamente la pantalla React de analisis FNDR sin usar vistas server-side.
-
-### Diferencia entre estas APIs
-
-- `GET /api/v1/items/fndr/context`: carga el contexto inicial completo de la pantalla
-- `GET /api/v1/items/fndr`: lista paginada y filtrable de items FNDR
-- `POST /api/v1/items`: crea un item nuevo
-- `GET /api/v1/items/{id}/price-analysis?mode=fndr`: devuelve el analisis FNDR actual del item
-- `POST /api/v1/items/{id}/price-recalculation?mode=fndr`: recalcula el analisis usando `log_insumo` hasta una fecha dada
-- `GET /api/v1/subgroups?group_id=...`: llena el combo dependiente de subgrupos
-
-### Autorizacion funcional
-
-Este modulo no usa solamente el criterio de administrador.
 
 Estas APIs soportan la pantalla React de `nuevo-proyecto`.
 
@@ -6428,391 +6143,6 @@ Esta API es compartida por `general`, `fndr`, `upre`, `fps`, `obras` y `proman`.
 
 Sirve para el combo dependiente cuando no quieras cargar todos los subgrupos en memoria desde el contexto.
 
-## 18. Items FPS
-
-Estas APIs reemplazan la logica de la pantalla legacy `items/fps`.
-
-El comportamiento general es el mismo que en FNDR y UPRE, pero el modo `fps` usa su propia tabla de porcentajes y por eso cambia el resultado de `calculated_price` y del analisis/recalculo.
-
-### Diferencia respecto a otros modos
-
-La diferencia principal es la fuente de porcentajes:
-
-- FNDR usa `porcentaje_calculo_fndr`
-- UPRE usa `porcentaje_calculo_upre`
-- FPS usa `porcentaje_calculo_fps`
-
-### 18.1 Contexto FPS
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/items/fps/context`
-- Autenticacion: `Bearer token`
-
-### Para que sirve
-
-Sirve para cargar toda la pantalla FPS con una sola llamada inicial.
-
-Devuelve:
-
-- grupos activos
-- subgrupos activos
-- `subgroups_by_group`
-- estados disponibles
-- unidades de medida activas
-- permisos funcionales del usuario autenticado
-- metadata de la pantalla y endpoints relacionados
-
-### Como usarla desde frontend
-
-1. Llamar a `GET /api/v1/items/fps/context` al entrar a la pantalla.
-2. Usar `groups` para el combo principal.
-3. Usar `subgroups_by_group[groupId]` para resolver subgrupos localmente, o usar `GET /api/v1/subgroups?group_id=...` si quieres carga bajo demanda.
-4. Leer `permissions` para habilitar acciones.
-5. Consumir el listado con `GET /api/v1/items/fps`.
-
-### 18.2 Listar Items FPS
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/items/fps`
-- Autenticacion: `Bearer token`
-
-### Filtros soportados
-
-- `search`
-- `group_id`
-- `subgroup_id`
-- `status`
-- `page`
-- `per_page`
-
-Ejemplo:
-
-```text
-GET /api/v1/items/fps?search=ACERO&group_id=7&subgroup_id=10&status=AC&page=1&per_page=20
-```
-
-### Precio calculado del listado FPS
-
-`calculated_price` se calcula en backend usando los insumos activos del item y los porcentajes activos de `porcentaje_calculo_fps`.
-
-La secuencia aplicada es:
-
-1. materiales = suma de insumos tipo `1`
-2. mano de obra base = suma de insumos tipo `2`
-3. cargas sociales = porcentaje FPS sobre mano de obra base
-4. IVA = porcentaje FPS sobre mano de obra base + cargas sociales
-5. herramientas base = suma de insumos tipo `3`
-6. herramientas menores = porcentaje FPS sobre mano de obra ajustada
-7. costo directo = materiales + mano de obra ajustada + herramientas ajustadas
-8. gastos generales = porcentaje FPS sobre costo directo
-9. utilidad = porcentaje FPS sobre costo directo + gastos generales
-10. subtotal = costo directo + gastos generales + utilidad
-11. IT = porcentaje FPS sobre subtotal
-12. total final = subtotal + IT
-
-### Ejemplo de respuesta
-
-```json
-{
-  "success": true,
-  "message": "Items FPS obtenidos correctamente.",
-  "data": {
-    "items": [
-      {
-        "id_item": 3,
-        "name": "ACERO ESTRUCTURAL S/D",
-        "calculated_price": 61.9885,
-        "status": "AC",
-        "group": {
-          "id": 7,
-          "name": "2.- OBRA GRUESA",
-          "code": "002-OGR"
-        },
-        "subgroup": {
-          "id": 10,
-          "description": "ESTRUCTURAS",
-          "code": "EST"
-        },
-        "unit_measure": {
-          "id": 58,
-          "description": "kilogramo",
-          "abbreviation": "kg"
-        }
-      }
-    ],
-    "meta": {
-      "current_page": 1,
-      "per_page": 20,
-      "total": 2486
-    }
-  }
-}
-```
-
-### 18.3 Crear Item
-
-- Metodo: `POST`
-- URL: `http://localhost:8000/api/v1/items`
-- Autenticacion: `Bearer token`
-
-Se reutiliza exactamente la misma API de creacion de items usada por FNDR y UPRE.
-
-Reglas importantes:
-
-- `group_id` obligatorio
-- `subgroup_id` obligatorio
-- `item` obligatorio
-- `unit_measure_id` obligatorio
-- `status` obligatorio
-- el subgrupo debe pertenecer al grupo seleccionado
-- se asocia `id_usuario` del autenticado
-- `fecha_item` se guarda en formato PostgreSQL
-
-### Regla de duplicados
-
-Se aplica la misma regla endurecida:
-
-- no se permite repetir `group_id + subgroup_id + item`
-
-### 18.4 Ver Analisis de Precio FPS
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/items/{id}/price-analysis?mode=fps`
-- Autenticacion: `Bearer token`
-
-### Para que sirve
-
-Devuelve el analisis actual del item usando precios actuales de `insumo` y porcentajes de `porcentaje_calculo_fps`.
-
-Incluye:
-
-- datos base del item
-- materiales
-- mano de obra
-- herramientas
-- porcentajes activos FPS
-- subtotales y total final
-
-### 18.5 Recalcular Analisis FPS por Fecha
-
-- Metodo: `POST`
-- URL: `http://localhost:8000/api/v1/items/{id}/price-recalculation?mode=fps`
-- Autenticacion: `Bearer token`
-
-Body:
-
-```json
-{
-  "fecha": "2026-04-30"
-}
-```
-
-### Regla usada para el recalculo
-
-Para cada insumo del item, backend busca el ultimo `log_insumo` valido hasta la fecha indicada y usa ese precio historico para recalcular el analisis completo.
-
-No suma todos los logs del mismo insumo.
-
-La regla es:
-
-- un solo precio historico por insumo
-- el ultimo `log_insumo` con `fecha <= fecha enviada`
-- recalculo completo con porcentajes de `porcentaje_calculo_fps`
-
-### 18.6 Listar Subgrupos por Grupo
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/subgroups?group_id=7`
-- Autenticacion: `Bearer token`
-
-Esta API es compartida por FNDR, UPRE y FPS.
-
-Sirve para el combo dependiente cuando no quieras cargar todos los subgrupos en memoria desde el contexto.
-
-## 19. Items PROMAN
-
-Estas APIs reemplazan la logica de la pantalla legacy `items/proman`.
-
-La estructura funcional es la misma familia de `items/fndr`, `items/upre`, `items/fps` y `items/obras`, pero el modo `proman` usa su propia tabla de porcentajes.
-
-### Fuente de porcentajes
-
-PROMAN usa exclusivamente:
-
-- `porcentaje_calculo_proman`
-
-No mezcla:
-
-- `porcentaje_calculo`
-- `porcentaje_calculo_fndr`
-- `porcentaje_calculo_upre`
-- `porcentaje_calculo_fps`
-- `porcentaje_calculo_obras`
-
-### 19.1 Contexto PROMAN
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/items/proman/context`
-- Autenticacion: `Bearer token`
-
-### Para que sirve
-
-Sirve para cargar toda la pantalla PROMAN con una sola llamada inicial.
-
-Devuelve:
-
-- grupos activos
-- subgrupos activos
-- `subgroups_by_group`
-- estados disponibles
-- unidades de medida activas
-- permisos funcionales del usuario autenticado
-- metadata de la pantalla y endpoints relacionados
-
-### Como usarla desde frontend
-
-1. Llamar a `GET /api/v1/items/proman/context` al entrar a la pantalla.
-2. Usar `groups` para el combo principal.
-3. Usar `subgroups_by_group[groupId]` para resolver subgrupos localmente, o `GET /api/v1/subgroups?group_id=...` si prefieres carga bajo demanda.
-4. Leer `permissions` para habilitar acciones.
-5. Consumir el listado con `GET /api/v1/items/proman`.
-
-### 19.2 Listar Items PROMAN
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/items/proman`
-- Autenticacion: `Bearer token`
-
-### Filtros soportados
-
-- `search`
-- `group_id`
-- `subgroup_id`
-- `status`
-- `page`
-- `per_page`
-
-Ejemplo:
-
-```text
-GET /api/v1/items/proman?search=ACERO&group_id=7&subgroup_id=10&status=AC&page=1&per_page=20
-```
-
-### Orden exacto aplicado en el listado
-
-Se respeta exactamente el orden legacy:
-
-1. `grupo.nombre_grupo ASC`
-2. `sub_grupo.descripcion ASC`
-3. `item.item ASC`
-4. `item.id_item ASC`
-
-### Precio calculado del listado PROMAN
-
-`calculated_price` se calcula en backend usando los insumos activos del item y los porcentajes activos de `porcentaje_calculo_proman`.
-
-La secuencia aplicada es:
-
-1. materiales = suma de insumos tipo `1`
-2. mano de obra base = suma de insumos tipo `2`
-3. cargas sociales = porcentaje PROMAN sobre mano de obra base
-4. IVA = porcentaje PROMAN sobre mano de obra base + cargas sociales
-5. herramientas base = suma de insumos tipo `3`
-6. herramientas menores = porcentaje PROMAN sobre mano de obra ajustada
-7. costo directo = materiales + mano de obra ajustada + herramientas ajustadas
-8. gastos generales = porcentaje PROMAN sobre costo directo
-9. utilidad = porcentaje PROMAN sobre costo directo + gastos generales
-10. subtotal = costo directo + gastos generales + utilidad
-11. IT = porcentaje PROMAN sobre subtotal
-12. total final = subtotal + IT
-
-### 19.3 Crear Item
-
-- Metodo: `POST`
-- URL: `http://localhost:8000/api/v1/items`
-- Autenticacion: `Bearer token`
-
-Se reutiliza exactamente la misma API de creación de items usada por los demás modos.
-
-Reglas importantes:
-
-- `group_id` obligatorio
-- `subgroup_id` obligatorio
-- `item` obligatorio
-- `unit_measure_id` obligatorio
-- `status` obligatorio
-- el subgrupo debe pertenecer al grupo seleccionado
-- se asocia `id_usuario` del autenticado
-- `fecha_item` se guarda en formato PostgreSQL `Y-m-d`
-
-### Duplicados
-
-Se mantiene la regla endurecida aplicada al nuevo backend:
-
-- no se permite repetir `group_id + subgroup_id + item`
-
-### 19.4 Ver Analisis de Precio PROMAN
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/items/{id}/price-analysis?mode=proman`
-- Autenticacion: `Bearer token`
-
-### Para que sirve
-
-Devuelve el análisis actual del item usando precios actuales de `insumo` y porcentajes de `porcentaje_calculo_proman`.
-
-Incluye:
-
-- datos base del item
-- materiales
-- mano de obra
-- herramientas
-- porcentajes activos PROMAN
-- subtotales y total final
-
-### Orden exacto aplicado en el análisis
-
-Cada bloque de materiales, mano de obra y herramientas se devuelve respetando el orden legacy efectivo:
-
-1. `nombre_grupo ASC`
-2. `subgrupo ASC`
-
-### 19.5 Recalcular Analisis PROMAN por Fecha
-
-- Metodo: `POST`
-- URL: `http://localhost:8000/api/v1/items/{id}/price-recalculation?mode=proman`
-- Autenticacion: `Bearer token`
-
-Body:
-
-```json
-{
-  "fecha": "2026-04-30"
-}
-```
-
-### Regla usada para el recálculo
-
-Para cada insumo del item, backend busca el último `log_insumo` válido hasta la fecha indicada y usa ese precio histórico para recalcular el análisis completo.
-
-No suma todos los logs del mismo insumo.
-
-### Orden exacto aplicado en el recálculo
-
-Se respeta exactamente el orden legacy:
-
-1. `id_insumo DESC`
-2. `id_log DESC`
-
-### 19.6 Listar Subgrupos por Grupo
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/subgroups?group_id=7`
-- Autenticacion: `Bearer token`
-
-Esta API es compartida por `general`, `fndr`, `upre`, `fps`, `obras` y `proman`.
-
-Sirve para el combo dependiente cuando no quieras cargar todos los subgrupos desde el contexto.
 7. Si el usuario desea actualizar su contrasena, llamar a `PUT /api/v1/profile/password` o `POST /api/v1/auth/change-password` con el mismo token.
 8. Cuando el usuario termine, llamar a `POST /api/v1/auth/logout` con el mismo token.
 

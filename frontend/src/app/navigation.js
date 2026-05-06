@@ -1,12 +1,10 @@
 import {
   Blocks,
-  CircleUserRound,
   FolderKanban,
   KeyRound,
   LayoutDashboard,
   Package,
   ShieldCheck,
-  SlidersHorizontal,
   SquareChartGantt,
   UsersRound,
 } from "lucide-react";
@@ -68,10 +66,10 @@ export const navigationSections = [
     title: "Administración",
     icon: ShieldCheck,
     children: [
-      { title: "Usuarios", path: "/usuarios", icon: UsersRound, accent: "emerald" },
-      { title: "Funciones", path: "/funciones", icon: Blocks, accent: "sky" },
-      { title: "Roles", path: "/roles", icon: ShieldCheck, accent: "violet" },
-      { title: "Autorizaciones", path: "/autorizaciones", icon: KeyRound, accent: "amber" },
+      { title: "Usuarios", path: "/administracion/usuarios", icon: UsersRound, accent: "emerald" },
+      { title: "Funciones", path: "/administracion/funciones", icon: Blocks, accent: "sky" },
+      { title: "Roles", path: "/administracion/roles", icon: ShieldCheck, accent: "violet" },
+      { title: "Autorizaciones", path: "/administracion/autorizaciones", icon: KeyRound, accent: "amber" },
     ],
   },
 ];
