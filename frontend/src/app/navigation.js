@@ -21,7 +21,7 @@ export const navigationSections = [
     title: "Item",
     icon: Blocks,
     children: [
-      { title: "Item", path: "/analisis/fndr", icon: SquareChartGantt, accent: "emerald" },
+      { title: "Item", path: "/items", icon: SquareChartGantt, accent: "emerald" },
       { title: "Análisis FNDR", path: "/analisis/fndr", icon: SquareChartGantt, accent: "emerald" },
       { title: "Análisis UPRE", path: "/analisis/upre", icon: SquareChartGantt, accent: "amber" },
       { title: "Análisis FPS", path: "/analisis/fps", icon: SquareChartGantt, accent: "sky" },

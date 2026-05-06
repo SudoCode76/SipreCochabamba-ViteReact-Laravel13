@@ -6,6 +6,13 @@ import ModulePlaceholder from "@/components/ModulePlaceholder";
 import ChangePasswordPage from "@/modules/auth/pages/ChangePasswordPage";
 import LoginPage from "@/modules/auth/pages/LoginPage";
 import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
+import ItemsPage from "@/modules/items/pages/ItemsPage";
+import FndrAnalysisPage from "@/modules/analysis/fndr/pages/FndrAnalysisPage";
+import UpreAnalysisPage from "@/modules/analysis/upre/pages/UpreAnalysisPage";
+import FpsAnalysisPage from "@/modules/analysis/fps/pages/FpsAnalysisPage";
+import ObrasAnalysisPage from "@/modules/analysis/obras/pages/ObrasAnalysisPage";
+import PromanAnalysisPage from "@/modules/analysis/proman/pages/PromanAnalysisPage";
+import PriceRecalculationPage from "@/modules/analysis/pages/PriceRecalculationPage";
 
 function placeholder(title, description, section, accent) {
   return (
@@ -39,27 +46,31 @@ export const router = createBrowserRouter([
           },
           {
             path: "/items",
-            element: placeholder("Items", "Composición, detalle técnico y flujo operativo de ítems.", "Operaciones", "slate"),
+            element: <ItemsPage />,
           },
           {
-            path: "/analisis/fndr", // SE CORRIGIÓ: Se agregó el path que faltaba
-            element: placeholder("Análisis FNDR", "Espacio reservado para revisión, cálculo y seguimiento del flujo FNDR.", "Operaciones", "emerald"),
+            path: "/analisis/fndr",
+            element: <FndrAnalysisPage />,
           },
           {
             path: "/analisis/upre",
-            element: placeholder("Análisis UPRE", "Pantalla preparada para evaluaciones y decisiones del circuito UPRE.", "Operaciones", "amber"),
+            element: <UpreAnalysisPage />,
           },
           {
             path: "/analisis/fps",
-            element: placeholder("Análisis FPS", "Contenedor listo para controles, aprobación y trazabilidad de análisis FPS.", "Operaciones", "sky"),
+            element: <FpsAnalysisPage />,
           },
           {
             path: "/analisis/obras-publicas",
-            element: placeholder("Análisis Obras Públicas", "Base visual lista para incorporar reglas, filtros y seguimiento de obras públicas.", "Operaciones", "violet"),
+            element: <ObrasAnalysisPage />,
           },
           {
             path: "/analisis/proman",
-            element: placeholder("Análisis Proman", "Interfaz pendiente de integrar con el flujo Proman sin cambiar el nuevo sistema visual.", "Operaciones", "rose"),
+            element: <PromanAnalysisPage />,
+          },
+          {
+            path: "/items/:itemId/recalculate",
+            element: <PriceRecalculationPage />,
           },
           {
             path: "/insumos",
@@ -78,19 +89,19 @@ export const router = createBrowserRouter([
             element: placeholder("Administración", "Centro de control para gobierno del sistema, permisos y operación interna.", "Administración", "slate"),
           },
           {
-            path: "/administracion/usuarios",
+            path: "/usuarios",
             element: placeholder("Gestión de Usuarios", "Pantalla lista para listado, filtros y administración del personal del sistema.", "Administración", "emerald"),
           },
           {
-            path: "/administracion/funciones",
+            path: "/funciones",
             element: placeholder("Gestión de Funciones", "Base visual prevista para funciones del sistema y acciones autorizables.", "Administración", "sky"),
           },
           {
-            path: "/administracion/roles",
+            path: "/roles",
             element: placeholder("Gestión de Roles", "Módulo pensado para roles, matrices de acceso y cambios controlados.", "Administración", "violet"),
           },
           {
-            path: "/administracion/autorizaciones",
+            path: "/autorizaciones",
             element: placeholder("Gestión de Autorizaciones", "Interfaz reservada para permisos específicos y revisiones sensibles.", "Administración", "amber"),
           },
           {

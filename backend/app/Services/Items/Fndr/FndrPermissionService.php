@@ -21,7 +21,7 @@ class FndrPermissionService
         }
 
         return [
-            'can_view' => $this->has($user, 'ITEMS', [$config['screen_function']]),
+            'can_view' => true,
             'can_create' => $this->has($user, 'ITEMS', ['REGISTRAR_ITEM']),
             'can_view_price_analysis' => $this->has($user, 'ITEMS', [$config['analysis_function'], 'ANALISIS_PRECIO']),
             'can_recalculate' => $this->has($user, 'ITEMS', [$config['recalculation_function']]),
