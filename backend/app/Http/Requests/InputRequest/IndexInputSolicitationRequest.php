@@ -6,6 +6,14 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class IndexInputSolicitationRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'approval_status' => $this->input('approval_status', $this->input('estado_aprobacion')),
+            'requester_id' => $this->input('requester_id', $this->input('usuario_solicitante')),
+        ]);
+    }
+
     public function authorize(): bool
     {
         return true;

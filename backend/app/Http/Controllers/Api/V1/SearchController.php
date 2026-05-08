@@ -53,11 +53,13 @@ class SearchController extends Controller
 
     public function unitMeasures(Request $request): JsonResponse
     {
+        $search = (string) $request->query('search', $request->query('q', ''));
+
         return response()->json([
             'success' => true,
             'message' => 'Unidades de medida encontradas correctamente.',
             'data' => [
-                'items' => $this->inputSearchService->searchUnitMeasures((string) $request->query('search', '')),
+                'items' => $this->inputSearchService->searchUnitMeasures($search),
             ],
         ]);
     }

@@ -22,6 +22,9 @@ trait InteractsWithLegacyInputRequests
             $table->unsignedInteger('usuario_solicitante')->nullable();
             $table->string('estado_aprobacion', 2)->nullable();
             $table->string('notificacion', 255)->nullable();
+            $table->string('observacion', 500)->nullable();
+            $table->unsignedInteger('usuario_aprobacion')->nullable();
+            $table->date('fecha_aprobacion')->nullable();
             $table->string('archivo', 180)->nullable();
             $table->string('archivo1', 180)->nullable();
             $table->string('archivo2', 180)->nullable();
@@ -43,6 +46,9 @@ trait InteractsWithLegacyInputRequests
             'usuario_solicitante' => 1,
             'estado_aprobacion' => 'PD',
             'notificacion' => 'Pendiente de revision',
+            'observacion' => null,
+            'usuario_aprobacion' => null,
+            'fecha_aprobacion' => null,
             'archivo' => 'archivos/cotizaciones/valido/solicitud.pdf',
             'archivo1' => 'archivos/cotizaciones/propuesto_1/alternativa-1.pdf',
             'archivo2' => 'archivos/cotizaciones/propuesto_2/alternativa-2.pdf',

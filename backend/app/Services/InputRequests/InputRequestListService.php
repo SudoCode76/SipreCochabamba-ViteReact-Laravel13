@@ -14,12 +14,32 @@ class InputRequestListService
             ->with(['type', 'unitMeasure', 'requester'])
             ->orderBy('descripcion');
 
+        $this->applyFilters($query, $filters);
+
+        return $query->paginate((int) ($filters['per_page'] ?? 15))->withQueryString();
+    }
+
+    public function executeManagement(array $filters): LengthAwarePaginator
+    {
+        $query = InputRequest::query()
+            ->with(['type', 'unitMeasure', 'requester'])
+            ->orderBy('estado_aprobacion')
+            ->orderBy('id_solicitud');
+
+        $this->applyFilters($query, $filters);
+
+        return $query->paginate((int) ($filters['per_page'] ?? 15))->withQueryString();
+    }
+
+    private function applyFilters($query, array $filters): void
+    {
         if (! empty($filters['search'])) {
             $search = Str::lower(trim((string) $filters['search']));
             $query->where(function ($query) use ($search): void {
                 $query->whereRaw('LOWER(TRIM(descripcion)) LIKE ?', ["%{$search}%"])
                     ->orWhereRaw('LOWER(TRIM(ubicacion)) LIKE ?', ["%{$search}%"])
-                    ->orWhereRaw('LOWER(TRIM(justificacion)) LIKE ?', ["%{$search}%"]);
+                    ->orWhereRaw('LOWER(TRIM(justificacion)) LIKE ?', ["%{$search}%"])
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(notificacion, ''))) LIKE ?", ["%{$search}%"]);
             });
         }
 
@@ -38,7 +58,5 @@ class InputRequestListService
         if (! empty($filters['requester_id'])) {
             $query->where('usuario_solicitante', (int) $filters['requester_id']);
         }
-
-        return $query->paginate((int) ($filters['per_page'] ?? 15))->withQueryString();
     }
 }
