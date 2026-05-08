@@ -39,8 +39,18 @@ class FunctionApiTest extends TestCase
         $this->getJson('/api/v1/functions')
             ->assertOk()
             ->assertJsonPath('success', true)
+            ->assertJsonPath('data.meta.total', 2)
+            ->assertJsonPath('data.meta.from', 1)
+            ->assertJsonPath('data.meta.to', 2)
+            ->assertJsonPath('data.meta.last_page', 1)
+            ->assertJsonPath('data.meta.has_more_pages', false)
             ->assertJsonPath('data.items.0.id', 2)
             ->assertJsonPath('data.items.0.name', 'USUARIOS')
+            ->assertJsonPath('data.items.0.controller', 'ADMINISTRADOR')
+            ->assertJsonPath('data.items.0.status_label', 'ACTIVO')
+            ->assertJsonPath('data.items.0.available_actions.edit', true)
+            ->assertJsonPath('data.items.0.available_actions.deactivate', true)
+            ->assertJsonPath('data.items.0.available_actions.activate', false)
             ->assertJsonPath('data.items.1.id', 1);
 
         $this->getJson("/api/v1/functions/{$function->id_funcion}")
@@ -48,7 +58,48 @@ class FunctionApiTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.function.id', $function->id_funcion)
             ->assertJsonPath('data.function.name', 'USUARIOS')
-            ->assertJsonPath('data.function.class', 'ADMINISTRADOR');
+            ->assertJsonPath('data.function.class', 'ADMINISTRADOR')
+            ->assertJsonPath('data.function.controller', 'ADMINISTRADOR');
+    }
+
+    public function test_administrator_can_get_context_and_filter_paginated_functions(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        SystemFunction::query()->create([
+            'id_funcion' => 2,
+            'nombre_funcion' => 'UNIDAD',
+            'descripcion' => 'Administrar unidades',
+            'clase' => 'ADMINISTRADOR',
+            'estado' => 'DC',
+        ]);
+
+        SystemFunction::query()->create([
+            'id_funcion' => 3,
+            'nombre_funcion' => 'LISTA_INSUMO',
+            'descripcion' => 'Listar insumos',
+            'clase' => 'INSUMO',
+            'estado' => 'AC',
+        ]);
+
+        $this->getJson('/api/v1/functions/context')
+            ->assertOk()
+            ->assertJsonPath('data.statuses.0.code', 'AC')
+            ->assertJsonPath('data.statuses.0.label', 'ACTIVO')
+            ->assertJsonFragment(['value' => 'ADMINISTRADOR'])
+            ->assertJsonFragment(['value' => 'INSUMO']);
+
+        $this->getJson('/api/v1/functions?search=unidad&controlador=ADMINISTRADOR&estado=INACTIVO&per_page=1')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.meta.per_page', 1)
+            ->assertJsonPath('data.meta.from', 1)
+            ->assertJsonPath('data.meta.to', 1)
+            ->assertJsonPath('data.items.0.name', 'UNIDAD')
+            ->assertJsonPath('data.items.0.status', 'DC')
+            ->assertJsonPath('data.items.0.available_actions.activate', true)
+            ->assertJsonPath('data.items.0.available_actions.deactivate', false)
+            ->assertJsonPath('data.items.0.status_label', 'INACTIVO');
     }
 
     public function test_administrator_can_create_function(): void
@@ -56,10 +107,10 @@ class FunctionApiTest extends TestCase
         Sanctum::actingAs($this->createLegacyAuthUser());
 
         $response = $this->postJson('/api/v1/functions', [
-            'nombre_funcion' => 'INPUT_QUOTES',
-            'descripcion' => 'Gestionar cotizaciones',
-            'clase' => 'INSUMO',
-            'estado' => 'AC',
+            'name' => 'INPUT_QUOTES',
+            'description' => 'Gestionar cotizaciones',
+            'controlador' => 'INSUMO',
+            'status' => 'ACTIVO',
         ]);
 
         $response->assertCreated()
@@ -89,16 +140,16 @@ class FunctionApiTest extends TestCase
         ]);
 
         $this->putJson("/api/v1/functions/{$function->id_funcion}", [
-            'nombre_funcion' => 'INPUTS_ADMIN',
-            'descripcion' => 'Administrar insumos y cotizaciones',
-            'clase' => 'INSUMO',
-            'estado' => 'DC',
+            'name' => 'INPUTS_ADMIN',
+            'description' => 'Administrar insumos y cotizaciones',
+            'class' => 'INSUMO',
+            'status' => 'INACTIVO',
         ])->assertOk()
             ->assertJsonPath('data.function.name', 'INPUTS_ADMIN')
             ->assertJsonPath('data.function.status', 'DC');
 
         $this->patchJson("/api/v1/functions/{$function->id_funcion}/status", [
-            'estado' => 'AC',
+            'status' => 'ACTIVO',
         ])->assertOk()
             ->assertJsonPath('data.function.status', 'AC');
 

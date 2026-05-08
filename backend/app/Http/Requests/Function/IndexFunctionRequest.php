@@ -4,12 +4,13 @@ namespace App\Http\Requests\Function;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateFunctionStatusRequest extends FormRequest
+class IndexFunctionRequest extends FormRequest
 {
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'estado' => $this->normalizeStatus($this->input('estado', $this->input('status'))),
+            'class' => $this->input('class', $this->input('clase', $this->input('controlador'))),
+            'status' => $this->normalizeStatus($this->input('status', $this->input('estado'))),
         ]);
     }
 
@@ -21,7 +22,10 @@ class UpdateFunctionStatusRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'estado' => ['required', 'string', 'size:2', 'in:AC,DC'],
+            'search' => ['nullable', 'string', 'max:100'],
+            'class' => ['nullable', 'string', 'max:30'],
+            'status' => ['nullable', 'string', 'size:2', 'in:AC,DC'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];
     }
 

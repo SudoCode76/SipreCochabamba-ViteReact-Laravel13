@@ -6,6 +6,7 @@ import ModulePlaceholder from "@/components/ModulePlaceholder";
 import ChangePasswordPage from "@/modules/auth/pages/ChangePasswordPage";
 import LoginPage from "@/modules/auth/pages/LoginPage";
 import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
+import FunctionsPage from "@/modules/functions/pages/FunctionsPage";
 import UsersPage from "@/modules/users/pages/UsersPage";
 
 function placeholder(title, description, section, accent) {
@@ -84,7 +85,7 @@ export const router = createBrowserRouter([
           },
           {
             path: "/administracion/funciones",
-            element: placeholder("Gestión de Funciones", "Base visual prevista para funciones del sistema y acciones autorizables.", "Administración", "sky"),
+            element: <FunctionsPage />,
           },
           {
             path: "/administracion/roles",
