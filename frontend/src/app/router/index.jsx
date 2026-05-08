@@ -4,6 +4,7 @@ import MainLayout from "@/app/layouts/MainLayout";
 import ProtectedRoute from "./ProtectedRoute";
 import ModulePlaceholder from "@/components/ModulePlaceholder";
 import ChangePasswordPage from "@/modules/auth/pages/ChangePasswordPage";
+import AuthorizationsPage from "@/modules/authorizations/pages/AuthorizationsPage";
 import LoginPage from "@/modules/auth/pages/LoginPage";
 import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
 import FunctionsPage from "@/modules/functions/pages/FunctionsPage";
@@ -94,7 +95,7 @@ export const router = createBrowserRouter([
           },
           {
             path: "/administracion/autorizaciones",
-            element: placeholder("Gestión de Autorizaciones", "Interfaz reservada para permisos específicos y revisiones sensibles.", "Administración", "amber"),
+            element: <AuthorizationsPage />,
           },
           {
             path: "/perfil",

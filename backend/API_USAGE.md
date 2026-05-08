@@ -400,7 +400,49 @@ Accept: application/json
 }
 ```
 
-## 8. Listar Roles
+## 8. Roles
+
+### 8.1 Contexto de Roles
+
+Sirve para cargar catalogos y metadatos de la pantalla administrativa de roles.
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/roles/context`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Ejemplo de respuesta:
+
+```json
+{
+  "success": true,
+  "message": "Contexto de roles obtenido correctamente.",
+  "data": {
+    "statuses": [
+      { "code": "AC", "label": "ACTIVO" },
+      { "code": "DC", "label": "INACTIVO" }
+    ],
+    "permissions": {
+      "can_view": true,
+      "can_create": true,
+      "can_update": true,
+      "can_assign_functions": true
+    },
+    "filters": ["search", "status", "page", "per_page"],
+    "endpoints": {
+      "list": "/api/v1/roles",
+      "create": "/api/v1/roles",
+      "show": "/api/v1/roles/{id}",
+      "update": "/api/v1/roles/{id}",
+      "update_status": "/api/v1/roles/{id}/status",
+      "permissions": "/api/v1/roles/{id}/permissions",
+      "permissions_context": "/api/v1/roles/{id}/permissions/context"
+    }
+  }
+}
+```
+
+### 8.2 Listar Roles
 
 Sirve para obtener los roles registrados en la tabla legacy `rol`.
 
@@ -409,14 +451,20 @@ Sirve para obtener los roles registrados en la tabla legacy `rol`.
 - Autenticacion: `Bearer token`
 - Restriccion: solo `ADMINISTRADOR`
 
-### Headers
+Filtros soportados:
+
+- `search`
+- `status` o `estado`
+- `page`
+- `per_page`
+
+Ejemplo:
 
 ```text
-Authorization: Bearer TU_TOKEN
-Accept: application/json
+GET /api/v1/roles?search=Visualizacion&status=DC&per_page=10&page=1
 ```
 
-### Ejemplo de respuesta
+Ejemplo de respuesta:
 
 ```json
 {
@@ -425,223 +473,157 @@ Accept: application/json
   "data": {
     "items": [
       {
-        "id": 1,
-        "name": "ADMINISTRADOR",
-        "status": "AC"
+        "id": 3,
+        "name": "VISUALIZACION",
+        "nombre_rol": "VISUALIZACION",
+        "status": "DC",
+        "estado": "DC",
+        "status_label": "INACTIVO",
+        "available_actions": {
+          "edit": true,
+          "assign_functions": true,
+          "update_status": true,
+          "activate": true,
+          "deactivate": false,
+          "select": true
+        }
       }
-    ]
+    ],
+    "meta": {
+      "current_page": 1,
+      "per_page": 10,
+      "total": 1,
+      "from": 1,
+      "to": 1,
+      "last_page": 1,
+      "has_more_pages": false
+    }
   }
 }
 ```
 
-## 9. Crear Rol
-
-Sirve para registrar un nuevo rol del sistema.
+### 8.3 Crear Rol
 
 - Metodo: `POST`
 - URL: `http://localhost:8000/api/v1/roles`
 - Autenticacion: `Bearer token`
 - Restriccion: solo `ADMINISTRADOR`
 
-### Headers
-
-```text
-Authorization: Bearer TU_TOKEN
-Content-Type: application/json
-Accept: application/json
-```
-
-### Body
+Body valido:
 
 ```json
 {
-  "nombre_rol": "Supervisor",
-  "estado": "AC"
+  "name": "Supervisor",
+  "status": "ACTIVO"
 }
 ```
 
-Restricciones:
+Tambien acepta:
 
-- `nombre_rol` es obligatorio
-- `nombre_rol` debe ser unico
-- `nombre_rol` admite hasta `20` caracteres para mantener compatibilidad con la tabla legacy `permiso`
-- `estado` debe ser `AC` o `DC`
+- `nombre_rol`
+- `role`
+- `estado`
+- `AC` o `DC`
 
-### Ejemplo de respuesta
-
-```json
-{
-  "success": true,
-  "message": "Rol creado correctamente.",
-  "data": {
-    "role": {
-      "id": 6,
-      "name": "Supervisor",
-      "status": "AC"
-    }
-  }
-}
-```
-
-## 10. Ver Detalle de Rol
-
-Sirve para obtener un rol especifico por su `id_rol` legacy.
+### 8.4 Ver Detalle de Rol
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/roles/{role}`
-- Autenticacion: `Bearer token`
-- Restriccion: solo `ADMINISTRADOR`
 
-### Headers
-
-```text
-Authorization: Bearer TU_TOKEN
-Accept: application/json
-```
-
-### Ejemplo de respuesta
-
-```json
-{
-  "success": true,
-  "message": "Rol obtenido correctamente.",
-  "data": {
-    "role": {
-      "id": 1,
-      "name": "ADMINISTRADOR",
-      "status": "AC"
-    }
-  }
-}
-```
-
-## 11. Editar Rol
-
-Sirve para actualizar el nombre o estado de un rol existente.
+### 8.5 Editar Rol
 
 - Metodo: `PUT`
 - URL: `http://localhost:8000/api/v1/roles/{role}`
-- Autenticacion: `Bearer token`
-- Restriccion: solo `ADMINISTRADOR`
 
-### Importante
-
-- Si cambia el nombre del rol, tambien se actualiza `nombre_rol` en la tabla legacy `permiso` para mantener consistencia.
-
-### Headers
-
-```text
-Authorization: Bearer TU_TOKEN
-Content-Type: application/json
-Accept: application/json
-```
-
-### Body
+Ejemplo:
 
 ```json
 {
-  "nombre_rol": "Supervisor Tecnico",
-  "estado": "DC"
+  "role": "Supervisor Tecnico",
+  "status": "INACTIVO"
 }
 ```
 
-Restricciones:
+Si cambia el nombre del rol, tambien se actualiza `nombre_rol` en la tabla legacy `permiso`.
 
-- `nombre_rol` es obligatorio
-- `nombre_rol` debe ser unico
-- `nombre_rol` admite hasta `20` caracteres para mantener compatibilidad con la tabla legacy `permiso`
-- `estado` debe ser `AC` o `DC`
-
-### Ejemplo de respuesta
-
-```json
-{
-  "success": true,
-  "message": "Rol actualizado correctamente.",
-  "data": {
-    "role": {
-      "id": 2,
-      "name": "Supervisor Tecnico",
-      "status": "DC"
-    },
-    "previous_name": "Tecnico"
-  }
-}
-```
-
-## 12. Activar o Desactivar Rol
-
-Sirve para cambiar solamente el estado de un rol existente.
+### 8.6 Cambiar Estado de Rol
 
 - Metodo: `PATCH`
 - URL: `http://localhost:8000/api/v1/roles/{role}/status`
-- Autenticacion: `Bearer token`
-- Restriccion: solo `ADMINISTRADOR`
 
-### Headers
-
-```text
-Authorization: Bearer TU_TOKEN
-Content-Type: application/json
-Accept: application/json
-```
-
-### Body
+Ejemplo:
 
 ```json
 {
-  "estado": "DC"
+  "status": "INACTIVO"
 }
 ```
 
-Restricciones:
+## 9. Permisos por Rol
 
-- `estado` debe ser `AC` o `DC`
+### 9.1 Contexto de Permisos de un Rol
 
-### Ejemplo de respuesta
+Sirve para cargar el modal de asignacion de funciones de un rol con sus funciones disponibles.
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/roles/{role}/permissions/context`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Ejemplo de respuesta:
 
 ```json
 {
   "success": true,
-  "message": "Estado del rol actualizado correctamente.",
+  "message": "Contexto de permisos del rol obtenido correctamente.",
   "data": {
     "role": {
       "id": 2,
-      "name": "Supervisor Tecnico",
-      "status": "DC"
+      "name": "TECNICO",
+      "status": "AC",
+      "status_label": "ACTIVO"
+    },
+    "available_functions": [
+      {
+        "id": 15,
+        "name": "LISTA_INSUMO",
+        "description": "Listar insumos",
+        "class": "INSUMO",
+        "status": "AC",
+        "label": "INSUMO - Listar insumos - LISTA_INSUMO"
+      }
+    ],
+    "endpoints": {
+      "show": "/api/v1/roles/2/permissions",
+      "attach": "/api/v1/roles/2/permissions/attach",
+      "detach": "/api/v1/roles/2/permissions/detach",
+      "sync": "/api/v1/roles/2/permissions",
+      "clone_from": "/api/v1/roles/2/permissions/clone-from/{sourceRoleId}"
     }
   }
 }
 ```
 
-## 8. Ver Permisos de un Rol
-
-Sirve para obtener los permisos activos asignados actualmente a un rol especifico.
+### 9.2 Ver Permisos de un Rol
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/roles/{role}/permissions`
 - Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
 
-### Importante
+Filtros soportados:
 
-- Este endpoint no devuelve todos los permisos existentes del sistema.
-- Devuelve solo los permisos activos del rol solicitado.
-- Cada permiso incluye la funcion legacy asociada.
+- `search`
+- `page`
+- `per_page`
 
-### Headers
-
-```text
-Authorization: Bearer TU_TOKEN
-Accept: application/json
-```
-
-### Ejemplo
+Ejemplo:
 
 ```text
-GET http://localhost:8000/api/v1/roles/1/permissions
+GET /api/v1/roles/2/permissions?search=insumos&per_page=10&page=1
 ```
 
-### Ejemplo de respuesta
+Ejemplo de respuesta:
 
 ```json
 {
@@ -649,51 +631,62 @@ GET http://localhost:8000/api/v1/roles/1/permissions
   "message": "Permisos del rol obtenidos correctamente.",
   "data": {
     "role": {
-      "id": 1,
-      "name": "ADMINISTRADOR",
-      "status": "AC"
+      "id": 2,
+      "name": "TECNICO",
+      "status": "AC",
+      "status_label": "ACTIVO"
     },
     "permissions": [
       {
         "id": 1,
-        "description": "ADMINISTRAR USUARIOS",
+        "description": "Puede listar insumos",
         "status": "AC",
         "function": {
-          "id": 4,
-          "name": "USUARIOS",
-          "description": "ADMINISTRAR USUARIOS",
-          "class": "ADMINISTRADOR",
+          "id": 15,
+          "name": "LISTA_INSUMO",
+          "description": "Listar insumos",
+          "class": "INSUMO",
           "status": "AC"
         }
       }
-    ]
+    ],
+    "available_functions": [
+      {
+        "id": 16,
+        "name": "NUEVA_SOLICITUD",
+        "description": "Crear solicitud",
+        "class": "INSUMO",
+        "status": "AC",
+        "label": "INSUMO - Crear solicitud - NUEVA_SOLICITUD"
+      }
+    ],
+    "meta": {
+      "current_page": 1,
+      "per_page": 10,
+      "total": 1,
+      "from": 1,
+      "to": 1,
+      "last_page": 1,
+      "has_more_pages": false
+    }
   }
 }
 ```
 
-## 9. Actualizar Permisos de un Rol
-
-Sirve para sincronizar los permisos de un rol a partir de una lista completa de funciones permitidas.
+### 9.3 Sincronizar Permisos de un Rol
 
 - Metodo: `PUT`
 - URL: `http://localhost:8000/api/v1/roles/{role}/permissions`
-- Autenticacion: `Bearer token`
-- Content-Type: `application/json`
 
-### Como funciona
+Body:
 
-- Recibe una lista de `function_ids`.
-- Los permisos del rol que no esten en esa lista se desactivan.
-- Los permisos ya existentes en la lista se reactivan o actualizan.
-- Los permisos que no existian para ese rol se crean.
+```json
+{
+  "function_ids": [4, 8, 20]
+}
+```
 
-### Como agregar un permiso a un rol
-
-Ahora existen dos formas:
-
-#### Opcion recomendada: agregar uno solo con `attach`
-
-Usa este endpoint cuando solo quieras sumar una funcion puntual a un rol sin reenviar toda la lista.
+### 9.4 Agregar una Funcion a un Rol
 
 - Metodo: `POST`
 - URL: `http://localhost:8000/api/v1/roles/{role}/permissions/attach`
@@ -706,75 +699,7 @@ Body:
 }
 ```
 
-Ejemplo de respuesta:
-
-```json
-{
-  "success": true,
-  "message": "Permiso agregado correctamente al rol.",
-  "data": {
-    "role": {
-      "id": 1,
-      "name": "ADMINISTRADOR",
-      "status": "AC"
-    },
-    "function_id": 31
-  }
-}
-```
-
-#### Opcion alternativa: sincronizacion completa con `PUT`
-
-Si prefieres trabajar con una lista total de funciones activas del rol, puedes seguir usando `PUT /api/v1/roles/{role}/permissions`.
-
-En ese caso, para agregar un nuevo permiso a un rol debes:
-
-1. Consultar primero los permisos actuales del rol con:
-
-```text
-GET /api/v1/roles/{role}/permissions
-```
-
-2. Tomar los `id` de las funciones que ya tiene asignadas ese rol.
-3. Agregar a esa lista el `id_funcion` nuevo que quieres habilitar.
-4. Enviar la lista completa en:
-
-```text
-PUT /api/v1/roles/{role}/permissions
-```
-
-### Ejemplo practico
-
-Si el rol `1` actualmente tiene funciones `4`, `8` y `20`, y quieres agregarle tambien la funcion `31`, debes enviar:
-
-```json
-{
-  "function_ids": [4, 8, 20, 31]
-}
-```
-
-Si envias solo:
-
-```json
-{
-  "function_ids": [31]
-}
-```
-
-entonces el sistema interpretara que quieres dejar activo solamente ese permiso y desactivar los demas.
-
-### Recomendacion de uso
-
-- Para agregar una sola funcion, usa `POST /api/v1/roles/{role}/permissions/attach`.
-- Para reemplazar toda la lista del rol, usa `PUT /api/v1/roles/{role}/permissions`.
-
-### Como quitar un permiso de un rol
-
-Ahora existen dos formas:
-
-#### Opcion recomendada: quitar uno solo con `detach`
-
-Usa este endpoint cuando solo quieras quitar una funcion puntual sin reenviar toda la lista.
+### 9.5 Quitar una Funcion de un Rol
 
 - Metodo: `POST`
 - URL: `http://localhost:8000/api/v1/roles/{role}/permissions/detach`
@@ -787,378 +712,55 @@ Body:
 }
 ```
 
-Ejemplo de respuesta:
-
-```json
-{
-  "success": true,
-  "message": "Permiso quitado correctamente del rol.",
-  "data": {
-    "role": {
-      "id": 1,
-      "name": "ADMINISTRADOR",
-      "status": "AC"
-    },
-    "function_id": 31
-  }
-}
-```
-
-#### Opcion alternativa: sincronizacion completa con `PUT`
-
-Para quitar un permiso tambien puedes seguir usando sincronizacion completa, excluyendo de la lista final el `id_funcion` que ya no debe quedar activo.
-
-1. Consultar permisos actuales del rol con:
-
-```text
-GET /api/v1/roles/{role}/permissions
-```
-
-2. Identificar el `id` de la funcion que quieres quitar.
-3. Construir la lista final sin ese `id_funcion`.
-4. Enviar la lista completa restante en:
-
-```text
-PUT /api/v1/roles/{role}/permissions
-```
-
-### Ejemplo practico
-
-Si el rol `1` actualmente tiene funciones `4`, `8`, `20` y `31`, y quieres quitar la funcion `31`, debes enviar:
-
-```json
-{
-  "function_ids": [4, 8, 20]
-}
-```
-
-Con eso, la funcion `31` quedara desactivada para ese rol y las otras seguiran activas.
-
-### Importante
-
-- `attach` agrega una funcion puntual al rol.
-- `detach` quita una funcion puntual del rol.
-- `PUT /roles/{role}/permissions` sigue siendo util para sincronizacion masiva.
-- Siempre piensa el `PUT` como: "esta es la lista final exacta de permisos que debe tener el rol".
-
-### Como obtener el `id_funcion` correcto para usar en el `PUT`
-
-Para agregar o quitar permisos necesitas conocer el `id_funcion` de cada funcion del sistema.
-
-Hoy puedes obtenerlo de dos formas practicas:
-
-1. Consultando la matriz completa:
-
-```text
-GET /api/v1/permissions/matrix
-```
-
-Ese endpoint devuelve todas las funciones activas con esta estructura:
-
-```json
-{
-  "id": 4,
-  "name": "USUARIOS",
-  "description": "ADMINISTRAR USUARIOS",
-  "class": "ADMINISTRADOR",
-  "status": "AC"
-}
-```
-
-En ese caso, el valor de `id` es el `id_funcion` que debes usar en `function_ids`.
-
-2. Consultando los permisos actuales de un rol:
-
-```text
-GET /api/v1/roles/{role}/permissions
-```
-
-Ese endpoint devuelve cada permiso con su funcion asociada:
-
-```json
-{
-  "id": 1,
-  "description": "ADMINISTRAR USUARIOS",
-  "status": "AC",
-  "function": {
-    "id": 4,
-    "name": "USUARIOS",
-    "description": "ADMINISTRAR USUARIOS",
-    "class": "ADMINISTRADOR",
-    "status": "AC"
-  }
-}
-```
-
-De nuevo, `function.id` es el `id_funcion` que debes usar en el `PUT`.
-
-### Recomendacion practica
-
-- Si quieres ver todas las funciones posibles del sistema, usa `GET /api/v1/permissions/matrix`.
-- Si solo quieres partir del estado actual de un rol, usa `GET /api/v1/roles/{role}/permissions`.
-- Luego construye el array `function_ids` con esos `id`.
-- Si solo quieres agregar o quitar una funcion puntual, usa `attach` o `detach` con `function_id`.
-
-### Headers
-
-```text
-Authorization: Bearer TU_TOKEN
-Content-Type: application/json
-Accept: application/json
-```
-
-### Body
-
-```json
-{
-  "function_ids": [4, 8, 20]
-}
-```
-
-### Ejemplo de respuesta
-
-```json
-{
-  "success": true,
-  "message": "Permisos del rol actualizados correctamente.",
-  "data": {
-    "role": {
-      "id": 1,
-      "name": "ADMINISTRADOR",
-      "status": "AC"
-    },
-    "function_ids": [4, 8, 20],
-    "permissions_count": 3
-  }
-}
-```
-
-## 10. Sincronizar Permisos de un Rol
-
-Sirve para sincronizar permisos usando `POST` en lugar de `PUT`, manteniendo el mismo comportamiento de reemplazo total de la lista final.
+### 9.6 Sincronizar con POST
 
 - Metodo: `POST`
 - URL: `http://localhost:8000/api/v1/roles/{role}/permissions/sync`
-- Autenticacion: `Bearer token`
-- Content-Type: `application/json`
 
-### Headers
-
-```text
-Authorization: Bearer TU_TOKEN
-Content-Type: application/json
-Accept: application/json
-```
-
-### Body
-
-```json
-{
-  "function_ids": [4, 8, 20]
-}
-```
-
-### Ejemplo de respuesta
-
-```json
-{
-  "success": true,
-  "message": "Permisos del rol sincronizados correctamente.",
-  "data": {
-    "role": {
-      "id": 1,
-      "name": "ADMINISTRADOR",
-      "status": "AC"
-    },
-    "function_ids": [4, 8, 20],
-    "permissions_count": 3
-  }
-}
-```
-
-## 11. Clonar Permisos Desde Otro Rol
-
-Sirve para copiar al rol destino la lista activa de permisos de otro rol origen.
+### 9.7 Clonar Permisos Desde Otro Rol
 
 - Metodo: `POST`
 - URL: `http://localhost:8000/api/v1/roles/{role}/permissions/clone-from/{sourceRoleId}`
-- Autenticacion: `Bearer token`
-- Restriccion: solo `ADMINISTRADOR`
 
-### Como funciona
-
-- Toma los permisos activos del rol origen `sourceRoleId`.
-- Reemplaza la lista activa del rol destino `{role}` con esa lista.
-- Si el rol destino tenia permisos extras, se desactivan.
-
-### Headers
-
-```text
-Authorization: Bearer TU_TOKEN
-Accept: application/json
-```
-
-### Ejemplo de respuesta
-
-```json
-{
-  "success": true,
-  "message": "Permisos del rol clonados correctamente.",
-  "data": {
-    "role": {
-      "id": 2,
-      "name": "TECNICO",
-      "status": "AC"
-    },
-    "source_role": {
-      "id": 1,
-      "name": "ADMINISTRADOR",
-      "status": "AC"
-    },
-    "function_ids": [4, 8, 20],
-    "permissions_count": 3
-  }
-}
-```
-
-## 12. Ver Matriz de Permisos
-
-Sirve para obtener una matriz completa de permisos por roles y funciones, optimizada para construir una UI tipo tabla o checkboxes.
+### 9.8 Ver Matriz de Permisos
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/permissions/matrix`
-- Autenticacion: `Bearer token`
 
-### Importante
+Este endpoint devuelve la vista completa rol-funcion del sistema.
 
-- Este endpoint devuelve todos los roles activos.
-- Devuelve todas las funciones activas del sistema.
-- Para cada funcion indica que roles la tienen asignada.
-- Este es el endpoint correcto si quieres ver la relacion completa rol-funcion.
-
-### Headers
-
-```text
-Authorization: Bearer TU_TOKEN
-Accept: application/json
-```
-
-### Ejemplo de respuesta
-
-```json
-{
-  "success": true,
-  "message": "Matriz de permisos obtenida correctamente.",
-  "data": {
-    "roles": [
-      {
-        "id": 1,
-        "name": "ADMINISTRADOR",
-        "status": "AC"
-      },
-      {
-        "id": 2,
-        "name": "TECNICO",
-        "status": "AC"
-      }
-    ],
-    "functions": [
-      {
-        "id": 4,
-        "name": "USUARIOS",
-        "description": "ADMINISTRAR USUARIOS",
-        "class": "ADMINISTRADOR",
-        "status": "AC",
-        "assigned_role_ids": [1],
-        "permissions": [
-          {
-            "role_id": 1,
-            "allowed": true
-          },
-          {
-            "role_id": 2,
-            "allowed": false
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-### Resumen practico
-
-- `GET /api/v1/roles/{role}/permissions`: devuelve solo los permisos activos del rol pedido.
-- `PUT /api/v1/roles/{role}/permissions`: reemplaza/sincroniza los permisos de ese rol.
-- `GET /api/v1/permissions/matrix`: devuelve la vista completa de roles y funciones del sistema.
-
-### Restriccion funcional esperada
-
-- Estos endpoints requieren `Bearer token`.
-- Ademas, solo pueden ser usados por usuarios cuyo rol activo sea `ADMINISTRADOR`.
-- Si un usuario autenticado no administrador intenta usarlos, el backend responde `403 Forbidden`.
-
-## 13. Funciones del Sistema
+## 10. Funciones del Sistema
 
 Este modulo administra la tabla legacy `funcion`.
 
-### Que es una funcion del sistema
+### 10.1 Contexto de Funciones
 
-Una funcion del sistema es una accion o modulo que puede ser autorizado a un rol.
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/functions/context`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
 
-Ejemplos reales observados en la base legacy:
+Devuelve:
 
-- `USUARIOS`
-- `ROLES`
-- `INSUMO`
-- `LISTA_INSUMO`
+- `statuses`
+- `available_classes`
+- `filters`
+- `endpoints`
 
-Cada funcion define:
-
-- el identificador funcional `nombre_funcion`
-- la descripcion visible
-- la clase o modulo al que pertenece
-- su estado
-
-### Diferencia entre `functions` y `permissions`
-
-Esto es importante para frontend y backend:
-
-- `functions` = catalogo maestro de acciones disponibles del sistema
-- `permissions` = asignaciones de esas funciones a cada rol
-
-En otras palabras:
-
-- primero existe una fila en `funcion`
-- luego un rol recibe acceso a esa funcion mediante una fila en `permiso`
-
-Ejemplo:
-
-- `function`: `INSUMO`
-- `permission`: el rol `ADMINISTRADOR` tiene asignada la funcion `INSUMO`
-
-Por eso:
-
-- si quieres crear o editar el catalogo base de acciones del sistema, usa `/api/v1/functions`
-- si quieres asignar o quitar acceso a un rol, usa `/api/v1/roles/{role}/permissions`
-
-### Regla importante de unicidad
-
-`nombre_funcion` se valida como unico global en toda la tabla `funcion`.
-
-Esto significa que no se permite repetir el mismo `nombre_funcion` aunque cambie la `clase`.
-
-### 13.1 Listar Funciones del Sistema
+### 10.2 Listar Funciones del Sistema
 
 - Metodo: `GET`
 - URL: `http://localhost:8000/api/v1/functions`
 - Autenticacion: `Bearer token`
 - Restriccion: solo `ADMINISTRADOR`
 
-Orden actual de salida:
+Filtros soportados:
 
-- primero por `class`
-- luego por `name`
+- `search`
+- `class` o `clase` o `controlador`
+- `status` o `estado`
+- `page`
+- `per_page`
 
 Ejemplo de respuesta:
 
@@ -1171,82 +773,201 @@ Ejemplo de respuesta:
       {
         "id": 7,
         "name": "FUNCIONES",
+        "nombre_funcion": "FUNCIONES",
         "description": "MENU FUNCIONES",
+        "descripcion": "MENU FUNCIONES",
         "class": "ADMINISTRADOR",
-        "status": "AC"
+        "controller": "ADMINISTRADOR",
+        "clase": "ADMINISTRADOR",
+        "status": "AC",
+        "estado": "AC",
+        "status_label": "ACTIVO",
+        "available_actions": {
+          "edit": true,
+          "update_status": true,
+          "activate": false,
+          "deactivate": true,
+          "select": true
+        }
       }
+    ],
+    "meta": {
+      "current_page": 1,
+      "per_page": 10,
+      "total": 1,
+      "from": 1,
+      "to": 1,
+      "last_page": 1,
+      "has_more_pages": false
+    }
+  }
+}
+```
+
+### 10.3 Crear Funcion del Sistema
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/functions`
+
+Body valido:
+
+```json
+{
+  "name": "INPUT_QUOTES",
+  "description": "Gestionar cotizaciones",
+  "controlador": "INSUMO",
+  "status": "ACTIVO"
+}
+```
+
+Tambien acepta:
+
+- `nombre_funcion`
+- `descripcion`
+- `class` o `clase`
+- `estado`
+
+### 10.4 Ver Detalle de Funcion
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/functions/{function}`
+
+### 10.5 Editar Funcion del Sistema
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/functions/{function}`
+
+### 10.6 Cambiar Estado de Funcion
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/functions/{function}/status`
+
+## 11. Autorizaciones
+
+### 11.1 Contexto de Autorizaciones
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/authorizations/context`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Ejemplo de respuesta:
+
+```json
+{
+  "success": true,
+  "message": "Contexto de autorizaciones obtenido correctamente.",
+  "data": {
+    "statuses": [
+      { "code": "PE", "label": "PENDIENTE" },
+      { "code": "AP", "label": "AUTORIZADO" },
+      { "code": "NP", "label": "NO PROCEDE" }
+    ],
+    "processable_statuses": [
+      { "code": "AP", "label": "AUTORIZADO" },
+      { "code": "NP", "label": "NO PROCEDE" }
+    ],
+    "modules": [
+      { "value": "insumo", "label": "INSUMO" }
     ]
   }
 }
 ```
 
-### 13.2 Crear Funcion del Sistema
+### 11.2 Listar Autorizaciones
 
-- Metodo: `POST`
-- URL: `http://localhost:8000/api/v1/functions`
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/authorizations`
 - Autenticacion: `Bearer token`
 - Restriccion: solo `ADMINISTRADOR`
 
-Body ejemplo:
+Filtros soportados:
 
-```json
-{
-  "nombre_funcion": "INPUT_QUOTES",
-  "descripcion": "Gestionar cotizaciones",
-  "clase": "INSUMO",
-  "estado": "AC"
-}
-```
+- `search`
+- `status` o `estado`
+- `module` o `modulo`
+- `page`
+- `per_page`
 
-Restricciones:
-
-- `nombre_funcion` es obligatorio
-- `nombre_funcion` debe ser unico globalmente
-- `nombre_funcion` maximo `100` caracteres
-- `descripcion` maximo `50` caracteres
-- `clase` maximo `30` caracteres
-- `estado` debe ser `AC` o `DC`
-
-### 13.3 Ver Detalle de Funcion
-
-- Metodo: `GET`
-- URL: `http://localhost:8000/api/v1/functions/{function}`
-
-### 13.4 Editar Funcion del Sistema
-
-- Metodo: `PUT`
-- URL: `http://localhost:8000/api/v1/functions/{function}`
-
-Usa el mismo body de creacion.
-
-### 13.5 Activar o Desactivar Funcion del Sistema
-
-- Metodo: `PATCH`
-- URL: `http://localhost:8000/api/v1/functions/{function}/status`
-
-Body ejemplo:
-
-```json
-{
-  "estado": "DC"
-}
-```
-
-### Como se relaciona esto con permisos por rol
-
-Flujo recomendado:
-
-1. Crear o actualizar la funcion en `/api/v1/functions`
-2. Consultar la matriz en `/api/v1/permissions/matrix`
-3. Asignar esa funcion a uno o varios roles con:
+Ejemplo:
 
 ```text
-PUT /api/v1/roles/{role}/permissions
-POST /api/v1/roles/{role}/permissions/attach
-POST /api/v1/roles/{role}/permissions/sync
+GET /api/v1/authorizations?search=Fierro&status=AUTORIZADO&module=insumo&per_page=10&page=1
 ```
 
-Si una funcion existe pero no esta asignada a un rol, el rol no tiene acceso.
+Ejemplo de respuesta:
+
+```json
+{
+  "success": true,
+  "message": "Autorizaciones obtenidas correctamente.",
+  "data": {
+    "items": [
+      {
+        "id": 2,
+        "element": "Fierro liso 1/4\"",
+        "module": "insumo",
+        "requester": "Erika Ayala Gonzales",
+        "authorization_number": "1034437",
+        "status": "AP",
+        "status_label": "AUTORIZADO",
+        "date": "2024-11-15 15:51:17",
+        "available_actions": {
+          "process": false,
+          "approve": false,
+          "reject": false,
+          "view": true
+        }
+      }
+    ],
+    "meta": {
+      "current_page": 1,
+      "per_page": 10,
+      "total": 1,
+      "from": 1,
+      "to": 1,
+      "last_page": 1,
+      "has_more_pages": false
+    }
+  }
+}
+```
+
+### 11.3 Ver Detalle de Autorizacion
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/authorizations/{authorization}`
+
+### 11.4 Procesar Autorizacion
+
+- Metodo: `PATCH`
+- URL: `http://localhost:8000/api/v1/authorizations/{authorization}/status`
+
+Body valido:
+
+```json
+{
+  "status": "AUTORIZADO"
+}
+```
+
+Tambien acepta:
+
+- `estado: AP`
+- `estado: NP`
+- `status: NO PROCEDE`
+
+Reglas:
+
+- solo se puede procesar una autorizacion en estado `PE`
+- una autorizacion ya procesada no admite nuevos cambios
+- si el estado final es `AUTORIZADO`, el backend genera automaticamente `nro_autorizacion`
+- la generacion usa esta regla:
+  1. toma el `num_sec` de la solicitud
+  2. genera un entero aleatorio entre `10` y `9999`
+  3. concatena ambos valores
+  4. guarda el resultado en `nro_autorizacion`
+- el frontend no necesita construir ese numero; solo debe leerlo de la respuesta
 
 ## 14. Gestion de Insumos
 

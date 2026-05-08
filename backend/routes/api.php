@@ -36,4 +36,5 @@ Route::prefix('v1')->group(function (): void {
     require __DIR__.'/api/v1/input_types.php';
     require __DIR__.'/api/v1/unit_measures.php';
     require __DIR__.'/api/v1/input_requests.php';
+    require __DIR__.'/api/v1/authorizations.php';
 });
