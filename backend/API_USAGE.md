@@ -4216,7 +4216,9 @@ Estas APIs replican la pantalla administrativa `parametros/porcentaje_calculo`.
 
 Devuelve:
 
+- `id` o `internal_id` como identificador interno real
 - `id_porcentaje`
+- `display_id` como identificador visible de grilla
 - `codigo`
 - `descripcion`
 - `porcentaje`
@@ -4910,7 +4912,8 @@ Reglas funcionales:
 - usa `porcentaje_calculo_proman`
 - ordena por `id_porcentaje DESC`
 - no expone eliminacion en esta pantalla
-- `available_actions` solo incluye `edit`
+- `available_actions` incluye `edit` y `select`
+- la columna visible `ID` en la grilla legacy corresponde al campo `codigo`, no a `id_porcentaje`
 
 ### Ejemplo de respuesta
 
@@ -4921,15 +4924,24 @@ Reglas funcionales:
   "data": {
     "items": [
       {
+        "id": 2,
+        "internal_id": 2,
         "id_porcentaje": 2,
+        "display_id": "PROM-002",
         "codigo": "PROM-002",
+        "code": "PROM-002",
         "descripcion": "IVA",
+        "description": "IVA",
         "porcentaje": 0,
+        "percentage": 0,
         "observacion": "Obs 2",
+        "observation": "Obs 2",
+        "status": "DC",
         "estado": "DC",
         "status_label": "INACTIVO",
         "available_actions": {
-          "edit": true
+          "edit": true,
+          "select": true
         }
       }
     ]
@@ -4948,6 +4960,8 @@ Devuelve:
 
 - estados `AC` y `DC`
 - permisos funcionales de la pantalla
+- `filters`
+- `endpoints`
 
 ### 26.3 Crear Porcentaje de Calculo PROMAN
 
@@ -4960,13 +4974,21 @@ Body esperado:
 
 ```json
 {
-  "codigo": "PROM-003",
-  "descripcion": "CARGAS SOCIALES",
-  "porcentaje": 57,
-  "observacion": "Observacion opcional",
-  "estado": "AC"
+  "code": "PROM-003",
+  "description": "CARGAS SOCIALES",
+  "percentage": 57,
+  "observation": "Observacion opcional",
+  "status": "ACTIVO"
 }
 ```
+
+Tambien acepta los nombres legacy:
+
+- `codigo`
+- `descripcion`
+- `porcentaje`
+- `observacion`
+- `estado`
 
 Reglas funcionales:
 
@@ -5005,11 +5027,11 @@ Body esperado:
 
 ```json
 {
-  "codigo": "PROM-002A",
-  "descripcion": "IVA ACTUALIZADO",
-  "porcentaje": 1.5,
-  "observacion": "Obs editada",
-  "estado": "AC"
+  "code": "PROM-002A",
+  "description": "IVA ACTUALIZADO",
+  "percentage": 1.5,
+  "observation": "Obs editada",
+  "status": "ACTIVO"
 }
 ```
 

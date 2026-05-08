@@ -59,7 +59,7 @@ export const navigationSections = [
       { title: "% Calculo FPS", path: "/Gestionar Solicitud", icon: FolderKanban, accent: "sky" },
       { title: "% Calculo FNDR", path: "/Gestionar Solicitud", icon: FolderKanban, accent: "sky" },
       { title: "% OBRAS PUBLICAS", path: "/Gestionar Solicitud", icon: FolderKanban, accent: "sky" },
-      { title: "% PROMAN", path: "/Gestionar Solicitud", icon: FolderKanban, accent: "sky" },
+      { title: "% PROMAN", path: "/parametros/proman", icon: FolderKanban, accent: "sky" },
     ],
   },
   {

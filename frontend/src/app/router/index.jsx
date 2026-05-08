@@ -6,6 +6,7 @@ import ModulePlaceholder from "@/components/ModulePlaceholder";
 import ChangePasswordPage from "@/modules/auth/pages/ChangePasswordPage";
 import AuthorizationsPage from "@/modules/authorizations/pages/AuthorizationsPage";
 import LoginPage from "@/modules/auth/pages/LoginPage";
+import PromanCalculationPercentagesPage from "@/modules/calculation-percentages/pages/PromanCalculationPercentagesPage";
 import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
 import FunctionsPage from "@/modules/functions/pages/FunctionsPage";
 import RolesPage from "@/modules/roles/pages/RolesPage";
@@ -76,6 +77,10 @@ export const router = createBrowserRouter([
           {
             path: "/parametros",
             element: placeholder("Parámetros", "Aquí pueden entrar catálogos maestros, configuraciones y reglas base del sistema.", "Gestión", "amber"),
+          },
+          {
+            path: "/parametros/proman",
+            element: <PromanCalculationPercentagesPage />,
           },
           {
             path: "/administracion",
