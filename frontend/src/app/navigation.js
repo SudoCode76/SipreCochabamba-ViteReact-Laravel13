@@ -19,7 +19,7 @@ export const navigationSections = [
     title: "Item",
     icon: Blocks,
     children: [
-      { title: "Item", path: "/analisis/fndr", icon: SquareChartGantt, accent: "emerald" },
+      { title: "Item", path: "/items", icon: SquareChartGantt, accent: "emerald" },
       { title: "Análisis FNDR", path: "/analisis/fndr", icon: SquareChartGantt, accent: "emerald" },
       { title: "Análisis UPRE", path: "/analisis/upre", icon: SquareChartGantt, accent: "amber" },
       { title: "Análisis FPS", path: "/analisis/fps", icon: SquareChartGantt, accent: "sky" },
@@ -40,7 +40,7 @@ export const navigationSections = [
     icon: FolderKanban,
     children: [
       { title: "Insumo", path: "/Insumo", icon: Package, accent: "emerald" },
-      { title: "Listar Solicitud de Insumo", path: "/Listar Solicitud de Insumo", icon: FolderKanban, accent: "sky" },
+      { title: "Listar solicitud de insumo", path: "/Listar solicitud de Insumo", icon: Package, accent: "emerald" },
       { title: "Crear Solicitud Insumo", path: "/Crear Solicitud Insumo", icon: FolderKanban, accent: "sky" },
       { title: "Gestionar Solicitud", path: "/Gestionar Solicitud", icon: FolderKanban, accent: "sky" },
 
