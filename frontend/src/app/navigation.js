@@ -42,7 +42,7 @@ export const navigationSections = [
     icon: FolderKanban,
     children: [
       { title: "Insumo", path: "/Insumo", icon: Package, accent: "emerald" },
-      { title: "Listar Solicitud de Insumo", path: "/Listar Solicitud de Insumo", icon: FolderKanban, accent: "sky" },
+      { title: "Listar solicitud de insumo", path: "/Listar solicitud de Insumo", icon: Package, accent: "emerald" },
       { title: "Crear Solicitud Insumo", path: "/Crear Solicitud Insumo", icon: FolderKanban, accent: "sky" },
       { title: "Gestionar Solicitud", path: "/Gestionar Solicitud", icon: FolderKanban, accent: "sky" },
 

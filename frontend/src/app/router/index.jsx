@@ -15,6 +15,9 @@ import PromanAnalysisPage from "@/modules/analysis/proman/pages/PromanAnalysisPa
 import PriceRecalculationPage from "@/modules/analysis/pages/PriceRecalculationPage";
 import ProjectsPage from "@/modules/projects/pages/ProjectsPage";
 import NewProjectPage from "@/modules/projects/pages/NewProjectPage";
+import InputsPage from "@/modules/inputs/pages/InputsPage";
+import InputRequestsPage from "@/modules/input-requests/pages/InputRequestsPage";
+import CreateInputRequestPage from "@/modules/input-requests/pages/CreateInputRequestPage";
 
 function placeholder(title, description, section, accent) {
   return (
@@ -75,8 +78,16 @@ export const router = createBrowserRouter([
             element: <PriceRecalculationPage />,
           },
           {
-            path: "/insumos",
-            element: placeholder("Insumos", "Módulo destinado al catálogo, historial y control operativo de insumos.", "Gestión", "emerald"),
+            path: "/Insumo",
+            element: <InputsPage />,
+          },
+          {
+            path: "/Listar Solicitud de Insumo",
+            element: <InputRequestsPage />,
+          },
+          {
+            path: "/Crear Solicitud Insumo",
+            element: <CreateInputRequestPage />,
           },
           {
             path: "/Proyecto",
