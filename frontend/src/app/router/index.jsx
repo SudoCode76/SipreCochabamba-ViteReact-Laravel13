@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter, Navigate, redirect } from "react-router-dom";
 
 import MainLayout from "@/app/layouts/MainLayout";
 import ProtectedRoute from "./ProtectedRoute";
@@ -13,6 +13,8 @@ import FpsAnalysisPage from "@/modules/analysis/fps/pages/FpsAnalysisPage";
 import ObrasAnalysisPage from "@/modules/analysis/obras/pages/ObrasAnalysisPage";
 import PromanAnalysisPage from "@/modules/analysis/proman/pages/PromanAnalysisPage";
 import PriceRecalculationPage from "@/modules/analysis/pages/PriceRecalculationPage";
+import ProjectsPage from "@/modules/projects/pages/ProjectsPage";
+import NewProjectPage from "@/modules/projects/pages/NewProjectPage";
 
 function placeholder(title, description, section, accent) {
   return (
@@ -77,8 +79,12 @@ export const router = createBrowserRouter([
             element: placeholder("Insumos", "Módulo destinado al catálogo, historial y control operativo de insumos.", "Gestión", "emerald"),
           },
           {
-            path: "/proyectos",
-            element: placeholder("Proyectos", "Vista preparada para coordinación, resumen y detalle de proyectos institucionales.", "Gestión", "sky"),
+            path: "/Proyecto",
+            element: <ProjectsPage />,
+          },
+          {
+            path: "/Nuevo proyecto",
+            element: <NewProjectPage />,
           },
           {
             path: "/parametros",
