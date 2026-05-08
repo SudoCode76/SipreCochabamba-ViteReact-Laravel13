@@ -8,6 +8,14 @@ use Illuminate\Validation\Rule;
 
 class UpdateRoleRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'nombre_rol' => $this->input('nombre_rol', $this->input('name', $this->input('role'))),
+            'estado' => $this->normalizeStatus($this->input('estado', $this->input('status'))),
+        ]);
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -27,5 +35,18 @@ class UpdateRoleRequest extends FormRequest
             ],
             'estado' => ['required', 'string', 'size:2', 'in:AC,DC'],
         ];
+    }
+
+    private function normalizeStatus(mixed $value): mixed
+    {
+        if (! is_string($value)) {
+            return $value;
+        }
+
+        return match (strtoupper(trim($value))) {
+            'ACTIVO' => 'AC',
+            'INACTIVO' => 'DC',
+            default => strtoupper(trim($value)),
+        };
     }
 }

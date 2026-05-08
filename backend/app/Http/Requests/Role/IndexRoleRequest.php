@@ -3,15 +3,13 @@
 namespace App\Http\Requests\Role;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
-class StoreRoleRequest extends FormRequest
+class IndexRoleRequest extends FormRequest
 {
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'nombre_rol' => $this->input('nombre_rol', $this->input('name', $this->input('role'))),
-            'estado' => $this->normalizeStatus($this->input('estado', $this->input('status'))),
+            'status' => $this->normalizeStatus($this->input('status', $this->input('estado'))),
         ]);
     }
 
@@ -23,13 +21,9 @@ class StoreRoleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nombre_rol' => [
-                'required',
-                'string',
-                'max:20',
-                Rule::unique('rol', 'nombre_rol'),
-            ],
-            'estado' => ['required', 'string', 'size:2', 'in:AC,DC'],
+            'search' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'string', 'size:2', 'in:AC,DC'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];
     }
 

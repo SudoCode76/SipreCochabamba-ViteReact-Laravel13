@@ -7,6 +7,7 @@ import ChangePasswordPage from "@/modules/auth/pages/ChangePasswordPage";
 import LoginPage from "@/modules/auth/pages/LoginPage";
 import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
 import FunctionsPage from "@/modules/functions/pages/FunctionsPage";
+import RolesPage from "@/modules/roles/pages/RolesPage";
 import UsersPage from "@/modules/users/pages/UsersPage";
 
 function placeholder(title, description, section, accent) {
@@ -89,7 +90,7 @@ export const router = createBrowserRouter([
           },
           {
             path: "/administracion/roles",
-            element: placeholder("Gestión de Roles", "Módulo pensado para roles, matrices de acceso y cambios controlados.", "Administración", "violet"),
+            element: <RolesPage />,
           },
           {
             path: "/administracion/autorizaciones",
