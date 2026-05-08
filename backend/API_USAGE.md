@@ -1660,9 +1660,16 @@ Campos principales por registro:
 - `usuario_solicitante`
 - `available_actions`
 
-Orden legacy respetado:
+Orden del listado administrativo base:
 
 - `descripcion ASC`
+
+Para la pantalla legacy `gestion-solicitud` tambien existen rutas operativas equivalentes con orden legacy por estado:
+
+- `GET /api/v1/solicitudes-insumo/gestion`
+- `GET /api/v1/solicitudes-insumo/{id}`
+- `POST /api/v1/solicitudes-insumo/{id}/gestion`
+- `POST /api/v1/solicitudes-insumo/{id}/revertir`
 
 Filtros soportados:
 
@@ -1680,10 +1687,17 @@ La API devuelve `available_actions` para que frontend no tenga que inferir regla
 
 - si `estado_aprobacion = PD`
   - `edit = true`
+  - `gestionar = true`
   - `view_quotes = true`
 - si `estado_aprobacion = AP` o `RC`
   - `edit = false`
+  - `revertir = true`
   - `view_quotes = true`
+
+Ademas expone `action_names` con:
+
+- `['gestionar']` si esta en `PD`
+- `['revertir']` si esta en `AP` o `RC`
 
 ### 14.2 Contexto de Solicitudes de Insumo
 
@@ -1697,6 +1711,10 @@ Devuelve:
 - unidades de medida activas
 - estados de aprobacion disponibles `PD`, `AP`, `RC`
 - permisos del usuario autenticado
+- endpoints auxiliares para:
+  - `manage`
+  - `revert`
+  - `unit_measure_search`
 
 ### 14.3 Crear Solicitud de Insumo
 
@@ -1838,6 +1856,70 @@ Devuelve:
 
 - `id`
 - `text`
+
+### 14.9 Gestionar Solicitud Pendiente
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/solicitudes-insumo/{id}/gestion`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Body ejemplo:
+
+```json
+{
+  "estado_aprobacion": "AP",
+  "precio": 123.45,
+  "unidad_medida": 72,
+  "ubicacion": "CHIMBA",
+  "justificacion": "PARA REVISION",
+  "notificacion": "COTIZACION REALIZADA",
+  "usuario_aprobacion": 15,
+  "fecha_aprobacion": "2026-05-08"
+}
+```
+
+Reglas de negocio:
+
+- solo se puede gestionar si la solicitud esta en `PD`
+- si el estado final es `AP`, crea un nuevo `insumo` activo y registra `log_insumo` con `accion = RG`
+- antes de aprobar, valida que no exista otro `insumo` activo con la misma descripcion
+- si el estado final es `RC`, no crea insumo
+- toda la operacion es transaccional
+
+### 14.10 Revertir Solicitud Gestionada
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/solicitudes-insumo/{id}/revertir`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Body ejemplo:
+
+```json
+{
+  "observacion": "Motivo de reversión",
+  "usuario_rev": 15,
+  "fecha_rev": "2026-05-08"
+}
+```
+
+Reglas de negocio:
+
+- solo se puede revertir si la solicitud esta en `AP` o `RC`
+- si estaba en `AP`, da de baja logica al `insumo` relacionado cambiando su `estado` a `DC` y registra `log_insumo` con `accion = RV`
+- si estaba en `RC`, solo devuelve la solicitud a `PD`
+- en ambos casos registra la observacion de reversión si la columna existe en el esquema
+- toda la operacion es transaccional
+
+### 14.11 Buscar Unidades de Medida para Gestion de Solicitud
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/unidades-medida/search?q=metro`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Tambien acepta `search` como parametro de consulta.
 
 ## 13.20 Tipos de Insumo
 

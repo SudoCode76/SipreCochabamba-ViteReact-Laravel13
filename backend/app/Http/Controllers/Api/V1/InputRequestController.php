@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\InputRequest\IndexInputSolicitationRequest;
+use App\Http\Requests\InputRequest\ManageInputSolicitationRequest;
+use App\Http\Requests\InputRequest\RevertInputSolicitationRequest;
 use App\Http\Requests\InputRequest\StoreInputSolicitationRequest;
 use App\Http\Requests\InputRequest\UpdateInputSolicitationRequest;
 use App\Http\Resources\InputRequest\InputRequestQuoteResource;
@@ -12,6 +14,7 @@ use App\Models\InputRequest;
 use App\Services\InputRequests\InputRequestContextService;
 use App\Services\InputRequests\InputRequestCrudService;
 use App\Services\InputRequests\InputRequestListService;
+use App\Services\InputRequests\InputRequestManagementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,6 +24,7 @@ class InputRequestController extends Controller
         private readonly InputRequestListService $inputRequestListService,
         private readonly InputRequestContextService $inputRequestContextService,
         private readonly InputRequestCrudService $inputRequestCrudService,
+        private readonly InputRequestManagementService $inputRequestManagementService,
     ) {}
 
     public function index(IndexInputSolicitationRequest $request): JsonResponse
@@ -127,6 +131,63 @@ class InputRequestController extends Controller
                 'archivo2' => $inputRequest->archivo2,
                 'id_log' => $lastQuote?->id_log_insumo,
                 'fecha' => $inputRequest->fecha?->toDateString(),
+            ],
+        ]);
+    }
+
+    public function managementIndex(IndexInputSolicitationRequest $request): JsonResponse
+    {
+        $items = $this->inputRequestListService->executeManagement($request->validated());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Solicitudes de insumo para gestion obtenidas correctamente.',
+            'data' => [
+                'items' => InputRequestResource::collection($items->getCollection())->resolve(),
+                'meta' => [
+                    'current_page' => $items->currentPage(),
+                    'per_page' => $items->perPage(),
+                    'total' => $items->total(),
+                    'from' => $items->firstItem(),
+                    'to' => $items->lastItem(),
+                    'last_page' => $items->lastPage(),
+                    'has_more_pages' => $items->hasMorePages(),
+                ],
+            ],
+        ]);
+    }
+
+    public function managementShow(InputRequest $inputRequest): JsonResponse
+    {
+        return $this->show($inputRequest);
+    }
+
+    public function manage(ManageInputSolicitationRequest $request, InputRequest $inputRequest): JsonResponse
+    {
+        $inputRequest = $this->inputRequestManagementService->manage($request, $inputRequest, $request->user());
+        $inputRequest->load(['type', 'unitMeasure', 'requester']);
+
+        return response()->json([
+            'success' => true,
+            'message' => strtoupper((string) $inputRequest->estado_aprobacion) === 'AP'
+                ? 'Solicitud aprobada correctamente.'
+                : 'Solicitud rechazada correctamente.',
+            'data' => [
+                'request' => InputRequestResource::make($inputRequest)->resolve(),
+            ],
+        ]);
+    }
+
+    public function revert(RevertInputSolicitationRequest $request, InputRequest $inputRequest): JsonResponse
+    {
+        $inputRequest = $this->inputRequestManagementService->revert($request, $inputRequest, $request->user());
+        $inputRequest->load(['type', 'unitMeasure', 'requester']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Solicitud revertida correctamente.',
+            'data' => [
+                'request' => InputRequestResource::make($inputRequest)->resolve(),
             ],
         ]);
     }

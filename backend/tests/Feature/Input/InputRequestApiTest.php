@@ -57,9 +57,45 @@ class InputRequestApiTest extends TestCase
             ->assertJsonPath('data.items.0.nombre_completo', 'Usuario Demo')
             ->assertJsonPath('data.items.0.approval_status_label', 'PENDIENTE')
             ->assertJsonPath('data.items.0.available_actions.edit', true)
+            ->assertJsonPath('data.items.0.available_actions.gestionar', true)
             ->assertJsonPath('data.items.0.available_actions.view_quotes', true)
             ->assertJsonPath('data.items.1.approval_status_label', 'APROBADO')
-            ->assertJsonPath('data.items.1.available_actions.edit', false);
+            ->assertJsonPath('data.items.1.available_actions.edit', false)
+            ->assertJsonPath('data.items.1.available_actions.revertir', true);
+    }
+
+    public function test_admin_can_list_management_requests_with_legacy_order_and_actions(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInputRequestRecord([
+            'id_solicitud' => 1,
+            'descripcion' => 'SOLICITUD APROBADA',
+            'estado_aprobacion' => 'AP',
+        ]);
+
+        $this->createInputRequestRecord([
+            'id_solicitud' => 2,
+            'descripcion' => 'SOLICITUD PENDIENTE',
+            'estado_aprobacion' => 'PD',
+        ]);
+
+        $this->createInputRequestRecord([
+            'id_solicitud' => 3,
+            'descripcion' => 'SOLICITUD RECHAZADA',
+            'estado_aprobacion' => 'RC',
+        ]);
+
+        $this->getJson('/api/v1/solicitudes-insumo/gestion?per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_solicitud', 1)
+            ->assertJsonPath('data.items.0.approval_status', 'AP')
+            ->assertJsonPath('data.items.0.available_actions.revertir', true)
+            ->assertJsonPath('data.items.1.id_solicitud', 2)
+            ->assertJsonPath('data.items.1.approval_status', 'PD')
+            ->assertJsonPath('data.items.1.available_actions.gestionar', true)
+            ->assertJsonPath('data.items.2.id_solicitud', 3)
+            ->assertJsonPath('data.items.2.approval_status', 'RC');
     }
 
     public function test_admin_can_get_context_and_search_input_types(): void
@@ -163,6 +199,195 @@ class InputRequestApiTest extends TestCase
             ->assertJsonPath('data.archivo', 'archivos/cotizaciones/valido/solicitud.pdf');
     }
 
+    public function test_admin_can_approve_pending_request_and_create_input_and_log(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $request = $this->createInputRequestRecord([
+            'id_solicitud' => 1,
+            'descripcion' => 'NUEVO INSUMO',
+            'estado_aprobacion' => 'PD',
+        ]);
+
+        $this->postJson("/api/v1/solicitudes-insumo/{$request->id_solicitud}/gestion", [
+            'estado_aprobacion' => 'AP',
+            'precio' => 123.45,
+            'unidad_medida' => 1,
+            'ubicacion' => 'CHIMBA',
+            'justificacion' => 'PARA REVISION',
+            'notificacion' => 'COTIZACION REALIZADA',
+            'usuario_aprobacion' => 1,
+            'fecha_aprobacion' => '2026-05-08',
+        ])->assertOk()
+            ->assertJsonPath('message', 'Solicitud aprobada correctamente.')
+            ->assertJsonPath('data.request.approval_status', 'AP');
+
+        $this->assertDatabaseHas('solicitud_insumo', [
+            'id_solicitud' => 1,
+            'estado_aprobacion' => 'AP',
+            'usuario_aprobacion' => 1,
+        ]);
+
+        $this->assertDatabaseHas('insumo', [
+            'descripcion' => 'NUEVO INSUMO',
+            'precio' => 123.45,
+            'unidad_medida' => 1,
+            'estado' => 'AC',
+            'usuario' => 1,
+            'solicitud' => 1,
+        ]);
+
+        $this->assertDatabaseHas('log_insumo', [
+            'descripcion' => 'NUEVO INSUMO',
+            'precio' => 123.45,
+            'unidad_medida' => 1,
+            'accion' => 'RG',
+            'usuario' => 1,
+            'estado' => 'AC',
+        ]);
+    }
+
+    public function test_admin_can_reject_pending_request_without_creating_input(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $request = $this->createInputRequestRecord([
+            'id_solicitud' => 1,
+            'descripcion' => 'NUEVO INSUMO',
+            'estado_aprobacion' => 'PD',
+        ]);
+
+        $this->postJson("/api/v1/solicitudes-insumo/{$request->id_solicitud}/gestion", [
+            'estado_aprobacion' => 'RC',
+            'precio' => 123.45,
+            'unidad_medida' => 1,
+            'ubicacion' => 'CHIMBA',
+            'justificacion' => 'PARA REVISION',
+            'notificacion' => 'NO PROCEDE',
+            'usuario_aprobacion' => 1,
+            'fecha_aprobacion' => '2026-05-08',
+        ])->assertOk()
+            ->assertJsonPath('message', 'Solicitud rechazada correctamente.')
+            ->assertJsonPath('data.request.approval_status', 'RC');
+
+        $this->assertDatabaseHas('solicitud_insumo', [
+            'id_solicitud' => 1,
+            'estado_aprobacion' => 'RC',
+        ]);
+
+        $this->assertDatabaseMissing('insumo', [
+            'solicitud' => 1,
+        ]);
+    }
+
+    public function test_cannot_approve_pending_request_if_active_input_with_same_description_exists(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $request = $this->createInputRequestRecord([
+            'id_solicitud' => 1,
+            'descripcion' => 'INSUMO DUPLICADO',
+            'estado_aprobacion' => 'PD',
+        ]);
+
+        $this->createInput(['descripcion' => 'INSUMO DUPLICADO', 'estado' => 'AC']);
+
+        $this->postJson("/api/v1/solicitudes-insumo/{$request->id_solicitud}/gestion", [
+            'estado_aprobacion' => 'AP',
+            'precio' => 123.45,
+            'unidad_medida' => 1,
+            'ubicacion' => 'CHIMBA',
+            'justificacion' => 'PARA REVISION',
+            'notificacion' => 'COTIZACION REALIZADA',
+            'usuario_aprobacion' => 1,
+            'fecha_aprobacion' => '2026-05-08',
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.descripcion.0', 'Ya existe un insumo activo con la misma descripcion.');
+    }
+
+    public function test_admin_can_revert_approved_request_and_deactivate_related_input(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $request = $this->createInputRequestRecord([
+            'id_solicitud' => 1,
+            'descripcion' => 'INSUMO REVERTIBLE',
+            'estado_aprobacion' => 'AP',
+            'notificacion' => 'APROBADA',
+        ]);
+
+        $this->createInput([
+            'id_insumo' => 1,
+            'descripcion' => 'INSUMO REVERTIBLE',
+            'solicitud' => 1,
+            'estado' => 'AC',
+        ]);
+
+        $this->postJson("/api/v1/solicitudes-insumo/{$request->id_solicitud}/revertir", [
+            'observacion' => 'Motivo de reversión',
+            'usuario_rev' => 1,
+            'fecha_rev' => '2026-05-08',
+        ])->assertOk()
+            ->assertJsonPath('data.request.approval_status', 'PD')
+            ->assertJsonPath('data.request.notificacion', '');
+
+        $this->assertDatabaseHas('solicitud_insumo', [
+            'id_solicitud' => 1,
+            'estado_aprobacion' => 'PD',
+            'observacion' => 'Motivo de reversión',
+        ]);
+
+        $this->assertDatabaseHas('insumo', [
+            'id_insumo' => 1,
+            'estado' => 'DC',
+        ]);
+
+        $this->assertDatabaseHas('log_insumo', [
+            'id_insumo' => 1,
+            'accion' => 'RV',
+            'estado' => 'DC',
+        ]);
+    }
+
+    public function test_admin_can_revert_rejected_request_without_touching_inputs(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $request = $this->createInputRequestRecord([
+            'id_solicitud' => 1,
+            'estado_aprobacion' => 'RC',
+        ]);
+
+        $this->postJson("/api/v1/solicitudes-insumo/{$request->id_solicitud}/revertir", [
+            'observacion' => 'Motivo de reversión',
+            'usuario_rev' => 1,
+            'fecha_rev' => '2026-05-08',
+        ])->assertOk()
+            ->assertJsonPath('data.request.approval_status', 'PD');
+
+        $this->assertDatabaseHas('solicitud_insumo', [
+            'id_solicitud' => 1,
+            'estado_aprobacion' => 'PD',
+            'observacion' => 'Motivo de reversión',
+        ]);
+    }
+
+    public function test_admin_can_search_unit_measures_with_legacy_alias_q(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createUnitMeasure([
+            'id_unidad_medida' => 2,
+            'descripcion' => 'Metro cubico',
+            'abreviatura' => 'M3',
+            'estado' => 'AC',
+        ]);
+
+        $this->getJson('/api/v1/unidades-medida/search?q=metro')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id', 2);
+    }
+
     public function test_input_request_endpoints_require_authentication(): void
     {
         $this->createInputRequestRecord();
@@ -175,6 +400,11 @@ class InputRequestApiTest extends TestCase
         $this->getJson('/api/v1/input-requests/1/quotes/history')->assertUnauthorized();
         $this->getJson('/api/v1/input-requests/1/quote-summary')->assertUnauthorized();
         $this->getJson('/api/v1/search/input-types')->assertUnauthorized();
+        $this->getJson('/api/v1/solicitudes-insumo/gestion')->assertUnauthorized();
+        $this->getJson('/api/v1/solicitudes-insumo/1')->assertUnauthorized();
+        $this->postJson('/api/v1/solicitudes-insumo/1/gestion', [])->assertUnauthorized();
+        $this->postJson('/api/v1/solicitudes-insumo/1/revertir', [])->assertUnauthorized();
+        $this->getJson('/api/v1/unidades-medida/search?q=metro')->assertUnauthorized();
     }
 
     public function test_non_admin_cannot_manage_input_requests(): void
@@ -221,5 +451,10 @@ class InputRequestApiTest extends TestCase
             'justificacion' => 'JUSTIFICACION',
             'usuario_solicitante' => 1,
         ])->assertForbidden();
+
+        $this->getJson('/api/v1/solicitudes-insumo/gestion')->assertForbidden();
+        $this->postJson('/api/v1/solicitudes-insumo/1/gestion', [])->assertForbidden();
+        $this->postJson('/api/v1/solicitudes-insumo/1/revertir', [])->assertForbidden();
+        $this->getJson('/api/v1/unidades-medida/search?q=metro')->assertForbidden();
     }
 }
