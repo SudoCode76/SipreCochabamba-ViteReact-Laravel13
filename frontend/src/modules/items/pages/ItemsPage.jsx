@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ChevronLeft, ChevronRight, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,14 +16,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { itemsService } from "@/modules/dashboard/services/items.service";
 import {
   DropdownMenu,
@@ -53,7 +46,12 @@ export default function ItemsPage() {
   const handleEdit = (item) => {
     setEditItem(item);
     setEditOpen(true);
-  }
+  };
+
+  const closeEdit = () => {
+    setEditOpen(false);
+    setEditItem(null);
+  };
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
     queryKey: ["items", { page, perPage, search }],
@@ -87,7 +85,7 @@ export default function ItemsPage() {
   };
 
   return (
-    <div className={`flex flex-col gap-6 animate-in fade-in duration-500 ${editOpen ? 'blur-sm' : ''}`}>
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       <Card className="border border-border/70 bg-white/86 shadow-[0_24px_90px_rgba(15,23,42,0.08)] backdrop-blur">
         <CardHeader className="gap-4 border-b border-border/70 bg-muted/25">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -348,50 +346,83 @@ export default function ItemsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-lg rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Editar Item</DialogTitle>
-            <DialogDescription>
-              Código: {editItem?.codigo_item}
-            </DialogDescription>
-          </DialogHeader>
+      {editOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-2xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Editar Item</CardTitle>
+                    <CardDescription>
+                      {editItem?.codigo_item ? `Código: ${editItem.codigo_item}` : "Actualiza la información base del item seleccionado."}
+                    </CardDescription>
+                  </div>
 
-          {editItem && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nombre</Label>
-                <Input id="name" defaultValue={editItem.name} className="w-full" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="grupo">Grupo</Label>
-                <Input id="grupo" defaultValue={editItem.group?.name} className="w-full" disabled />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="subgrupo">Subgrupo</Label>
-                <Input id="subgrupo" defaultValue={editItem.subgroup?.description} className="w-full" disabled />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="precio">Precio</Label>
-                <Input id="precio" type="number" defaultValue={editItem.calculated_price} className="w-full" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="unidad">Unidad</Label>
-                <Input id="unidad" defaultValue={editItem.unit_measure?.abbreviation} className="w-full" disabled />
-              </div>
-            </div>
-          )}
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeEdit}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
 
-          <DialogFooter className="mt-4">
-            <Button type="submit" className="flex-1">
-              Guardar
-            </Button>
-            <Button type="button" variant="outline" className="flex-1" onClick={() => setEditOpen(false)}>
-              Cancelar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <CardContent className="p-5 sm:p-6">
+                {editItem && (
+                  <form className="flex flex-col gap-5">
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <div className="flex flex-col gap-2 sm:col-span-2">
+                        <Label htmlFor="name" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                          Nombre
+                        </Label>
+                        <Input id="name" defaultValue={editItem.name} className="h-12 rounded-2xl border-border/80 bg-background/90" />
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="grupo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                          Grupo
+                        </Label>
+                        <Input id="grupo" defaultValue={editItem.group?.name} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled />
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="subgrupo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                          Subgrupo
+                        </Label>
+                        <Input id="subgrupo" defaultValue={editItem.subgroup?.description} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled />
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="precio" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                          Precio
+                        </Label>
+                        <Input id="precio" type="number" defaultValue={editItem.calculated_price} className="h-12 rounded-2xl border-border/80 bg-background/90" />
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="unidad" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                          Unidad
+                        </Label>
+                        <Input id="unidad" defaultValue={editItem.unit_measure?.abbreviation} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled />
+                      </div>
+                    </div>
+
+                    <Separator className="bg-border/70" />
+
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={closeEdit}>
+                        Cancelar
+                      </Button>
+                      <Button type="submit" className="rounded-full bg-foreground text-background hover:bg-foreground/90">
+                        Guardar cambios
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
