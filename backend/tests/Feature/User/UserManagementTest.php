@@ -64,6 +64,24 @@ class UserManagementTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.meta.total', 1)
             ->assertJsonPath('data.items.0.username', 'JUAN');
+
+        $this->getJson('/api/v1/users?search=2222&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.username', 'MARIA');
+
+        $this->getJson('/api/v1/users?search=maria&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.ci', '22222222');
+
+        $this->getJson('/api/v1/users?search=tecnica&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 2);
+
+        $this->getJson('/api/v1/users?search=administrador&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 3);
     }
 
     public function test_admin_can_create_user(): void
@@ -104,6 +122,74 @@ class UserManagementTest extends TestCase
             'ci' => '33333333',
             'rol' => $role->id_rol,
         ]);
+    }
+
+    public function test_admin_can_create_user_resolving_unit_by_description(): void
+    {
+        $admin = $this->createAdminUser();
+        $role = Role::query()->create([
+            'id_rol' => 2,
+            'nombre_rol' => 'Tecnico',
+            'estado' => 'AC',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->postJson('/api/v1/users', [
+            'funcionario' => 'Nuevo Usuario Unidad Texto',
+            'ci' => '33333334',
+            'username' => 'nuevotexto',
+            'password' => 'newSecret123',
+            'password_confirmation' => 'newSecret123',
+            'estado' => 'AC',
+            'role_id' => $role->id_rol,
+            'unidad' => [
+                'descripcion' => 'DIRECCION DE AUDITORIA INTERNA',
+            ],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.user.unit.description', 'DIRECCION DE AUDITORIA INTERNA');
+
+        $this->assertDatabaseHas('unidad', [
+            'descripcion' => 'DIRECCION DE AUDITORIA INTERNA',
+        ]);
+    }
+
+    public function test_admin_reuses_existing_unit_when_description_matches_with_case_or_extra_spaces(): void
+    {
+        $admin = $this->createAdminUser();
+        $role = Role::query()->create([
+            'id_rol' => 2,
+            'nombre_rol' => 'Tecnico',
+            'estado' => 'AC',
+        ]);
+
+        $unit = Unit::query()->create([
+            'id_unidad' => 2,
+            'descripcion' => 'DIRECCION DE AUDITORIA INTERNA',
+            'estado' => 'AC',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->postJson('/api/v1/users', [
+            'funcionario' => 'Usuario Sin Duplicar Unidad',
+            'ci' => '33333335',
+            'username' => 'norepiteunidad',
+            'password' => 'newSecret123',
+            'password_confirmation' => 'newSecret123',
+            'estado' => 'AC',
+            'role_id' => $role->id_rol,
+            'unidad' => [
+                'descripcion' => '  direccion   de auditoria interna  ',
+            ],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.user.unit.id', $unit->id_unidad);
+
+        $this->assertDatabaseCount('unidad', 2);
     }
 
     public function test_admin_can_view_and_update_user(): void

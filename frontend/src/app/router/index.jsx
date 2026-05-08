@@ -4,7 +4,9 @@ import MainLayout from "@/app/layouts/MainLayout";
 import ProtectedRoute from "./ProtectedRoute";
 import ModulePlaceholder from "@/components/ModulePlaceholder";
 import ChangePasswordPage from "@/modules/auth/pages/ChangePasswordPage";
+import AuthorizationsPage from "@/modules/authorizations/pages/AuthorizationsPage";
 import LoginPage from "@/modules/auth/pages/LoginPage";
+import PromanCalculationPercentagesPage from "@/modules/calculation-percentages/pages/PromanCalculationPercentagesPage";
 import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
 import ItemsPage from "@/modules/items/pages/ItemsPage";
 import FndrAnalysisPage from "@/modules/analysis/fndr/pages/FndrAnalysisPage";
@@ -18,6 +20,9 @@ import NewProjectPage from "@/modules/projects/pages/NewProjectPage";
 import InputsPage from "@/modules/inputs/pages/InputsPage";
 import InputRequestsPage from "@/modules/input-requests/pages/InputRequestsPage";
 import CreateInputRequestPage from "@/modules/input-requests/pages/CreateInputRequestPage";
+import FunctionsPage from "@/modules/functions/pages/FunctionsPage";
+import RolesPage from "@/modules/roles/pages/RolesPage";
+import UsersPage from "@/modules/users/pages/UsersPage";
 
 function placeholder(title, description, section, accent) {
   return (
@@ -102,6 +107,10 @@ export const router = createBrowserRouter([
             element: placeholder("Parámetros", "Aquí pueden entrar catálogos maestros, configuraciones y reglas base del sistema.", "Gestión", "amber"),
           },
           {
+            path: "/parametros/proman",
+            element: <PromanCalculationPercentagesPage />,
+          },
+          {
             path: "/administracion",
             element: placeholder("Administración", "Centro de control para gobierno del sistema, permisos y operación interna.", "Administración", "slate"),
           },
@@ -120,6 +129,20 @@ export const router = createBrowserRouter([
           {
             path: "/autorizaciones",
             element: placeholder("Gestión de Autorizaciones", "Interfaz reservada para permisos específicos y revisiones sensibles.", "Administración", "amber"),
+            path: "/administracion/usuarios",
+            element: <UsersPage />,
+          },
+          {
+            path: "/administracion/funciones",
+            element: <FunctionsPage />,
+          },
+          {
+            path: "/administracion/roles",
+            element: <RolesPage />,
+          },
+          {
+            path: "/administracion/autorizaciones",
+            element: <AuthorizationsPage />,
           },
           {
             path: "/perfil",

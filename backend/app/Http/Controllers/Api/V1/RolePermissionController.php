@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\RolePermission\ShowRolePermissionsRequest;
 use App\Http\Requests\RolePermission\SyncRolePermissionsRequest;
 use App\Http\Requests\RolePermission\UpdateRolePermissionRequest;
 use App\Models\Permission;
@@ -17,24 +18,83 @@ class RolePermissionController extends Controller
         private readonly RolePermissionSyncService $rolePermissionSyncService,
     ) {}
 
-    public function show(Role $role): JsonResponse
+    public function context(Role $role): JsonResponse
     {
-        $role->load([
-            'permissions' => fn ($query) => $query->active()
-                ->with('systemFunction')
-                ->orderBy('id_funcion'),
+        $assignedFunctionIds = Permission::query()
+            ->active()
+            ->where('id_rol', $role->id_rol)
+            ->pluck('id_funcion');
+
+        $availableFunctions = SystemFunction::query()
+            ->active()
+            ->whereNotIn('id_funcion', $assignedFunctionIds)
+            ->orderBy('clase')
+            ->orderBy('nombre_funcion')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Contexto de permisos del rol obtenido correctamente.',
+            'data' => [
+                'role' => $this->serializeRole($role),
+                'available_functions' => $availableFunctions->map(fn (SystemFunction $function): array => [
+                    'id' => $function->id_funcion,
+                    'name' => $function->nombre_funcion,
+                    'description' => $function->descripcion,
+                    'class' => $function->clase,
+                    'status' => $function->estado,
+                    'label' => trim($function->clase.' - '.$function->descripcion.' - '.$function->nombre_funcion),
+                ])->values()->all(),
+                'endpoints' => [
+                    'show' => "/api/v1/roles/{$role->id_rol}/permissions",
+                    'attach' => "/api/v1/roles/{$role->id_rol}/permissions/attach",
+                    'detach' => "/api/v1/roles/{$role->id_rol}/permissions/detach",
+                    'sync' => "/api/v1/roles/{$role->id_rol}/permissions",
+                    'clone_from' => "/api/v1/roles/{$role->id_rol}/permissions/clone-from/{sourceRoleId}",
+                ],
+            ],
         ]);
+    }
+
+    public function show(ShowRolePermissionsRequest $request, Role $role): JsonResponse
+    {
+        $query = $role->permissions()
+            ->active()
+            ->with('systemFunction')
+            ->orderBy('id_funcion');
+
+        if ($request->filled('search')) {
+            $search = trim($request->string('search')->toString());
+
+            $query->whereHas('systemFunction', function ($query) use ($search): void {
+                $query->where('nombre_funcion', 'like', "%{$search}%")
+                    ->orWhere('descripcion', 'like', "%{$search}%")
+                    ->orWhere('clase', 'like', "%{$search}%");
+            });
+        }
+
+        $permissions = $query
+            ->paginate($request->integer('per_page', 15))
+            ->withQueryString();
+
+        $assignedFunctionIds = Permission::query()
+            ->active()
+            ->where('id_rol', $role->id_rol)
+            ->pluck('id_funcion');
+
+        $availableFunctions = SystemFunction::query()
+            ->active()
+            ->whereNotIn('id_funcion', $assignedFunctionIds)
+            ->orderBy('clase')
+            ->orderBy('nombre_funcion')
+            ->get();
 
         return response()->json([
             'success' => true,
             'message' => 'Permisos del rol obtenidos correctamente.',
             'data' => [
-                'role' => [
-                    'id' => $role->id_rol,
-                    'name' => $role->nombre_rol,
-                    'status' => $role->estado,
-                ],
-                'permissions' => $role->permissions
+                'role' => $this->serializeRole($role),
+                'permissions' => collect($permissions->items())
                     ->map(fn (Permission $permission): array => [
                         'id' => $permission->id_permiso,
                         'description' => $permission->descripcion,
@@ -49,6 +109,23 @@ class RolePermissionController extends Controller
                     ])
                     ->values()
                     ->all(),
+                'available_functions' => $availableFunctions->map(fn (SystemFunction $function): array => [
+                    'id' => $function->id_funcion,
+                    'name' => $function->nombre_funcion,
+                    'description' => $function->descripcion,
+                    'class' => $function->clase,
+                    'status' => $function->estado,
+                    'label' => trim($function->clase.' - '.$function->descripcion.' - '.$function->nombre_funcion),
+                ])->values()->all(),
+                'meta' => [
+                    'current_page' => $permissions->currentPage(),
+                    'per_page' => $permissions->perPage(),
+                    'total' => $permissions->total(),
+                    'from' => $permissions->firstItem(),
+                    'to' => $permissions->lastItem(),
+                    'last_page' => $permissions->lastPage(),
+                    'has_more_pages' => $permissions->hasMorePages(),
+                ],
             ],
         ]);
     }

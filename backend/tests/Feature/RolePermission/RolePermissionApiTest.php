@@ -52,14 +52,49 @@ class RolePermissionApiTest extends TestCase
             'estado' => 'AC',
         ]);
 
-        $response = $this->getJson("/api/v1/roles/{$role->id_rol}/permissions");
+        SystemFunction::query()->create([
+            'id_funcion' => 3,
+            'nombre_funcion' => 'insumos.store',
+            'descripcion' => 'Crear insumos',
+            'clase' => 'Insumos',
+            'estado' => 'AC',
+        ]);
+
+        $response = $this->getJson("/api/v1/roles/{$role->id_rol}/permissions?search=insumos.index&per_page=1");
 
         $response->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.role.id', $role->id_rol)
             ->assertJsonPath('data.role.name', 'Tecnico')
             ->assertJsonCount(1, 'data.permissions')
-            ->assertJsonPath('data.permissions.0.function.name', 'insumos.index');
+            ->assertJsonPath('data.permissions.0.function.name', 'insumos.index')
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonFragment(['name' => 'insumos.store']);
+    }
+
+    public function test_authenticated_user_can_get_role_permissions_context(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $role = Role::query()->create([
+            'id_rol' => 2,
+            'nombre_rol' => 'Tecnico',
+            'estado' => 'AC',
+        ]);
+
+        SystemFunction::query()->create([
+            'id_funcion' => 2,
+            'nombre_funcion' => 'insumos.index',
+            'descripcion' => 'Listar insumos',
+            'clase' => 'Insumos',
+            'estado' => 'AC',
+        ]);
+
+        $this->getJson("/api/v1/roles/{$role->id_rol}/permissions/context")
+            ->assertOk()
+            ->assertJsonPath('data.role.id', $role->id_rol)
+            ->assertJsonFragment(['name' => 'insumos.index'])
+            ->assertJsonPath('data.endpoints.attach', "/api/v1/roles/{$role->id_rol}/permissions/attach");
     }
 
     public function test_authenticated_user_can_sync_role_permissions(): void
@@ -349,6 +384,9 @@ class RolePermissionApiTest extends TestCase
         $this->getJson("/api/v1/roles/{$role->id_rol}/permissions")
             ->assertUnauthorized();
 
+        $this->getJson("/api/v1/roles/{$role->id_rol}/permissions/context")
+            ->assertUnauthorized();
+
         $this->putJson("/api/v1/roles/{$role->id_rol}/permissions", [
             'function_ids' => [],
         ])->assertUnauthorized();
@@ -426,6 +464,10 @@ class RolePermissionApiTest extends TestCase
             ->assertJsonPath('success', false);
 
         $this->getJson('/api/v1/roles/1/permissions')
+            ->assertForbidden()
+            ->assertJsonPath('success', false);
+
+        $this->getJson('/api/v1/roles/1/permissions/context')
             ->assertForbidden()
             ->assertJsonPath('success', false);
 

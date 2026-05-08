@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Function\IndexFunctionRequest;
 use App\Http\Requests\Function\StoreFunctionRequest;
 use App\Http\Requests\Function\UpdateFunctionRequest;
 use App\Http\Requests\Function\UpdateFunctionStatusRequest;
@@ -12,18 +13,83 @@ use Illuminate\Http\JsonResponse;
 
 class FunctionController extends Controller
 {
-    public function index(): JsonResponse
+    public function context(): JsonResponse
     {
-        $functions = SystemFunction::query()
+        $classes = SystemFunction::query()
+            ->select('clase')
+            ->whereNotNull('clase')
+            ->distinct()
+            ->orderBy('clase')
+            ->pluck('clase')
+            ->filter(fn (?string $value): bool => filled(trim((string) $value)))
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Contexto de funciones obtenido correctamente.',
+            'data' => [
+                'statuses' => [
+                    ['code' => 'AC', 'label' => 'ACTIVO'],
+                    ['code' => 'DC', 'label' => 'INACTIVO'],
+                ],
+                'available_classes' => $classes->map(fn (string $class): array => [
+                    'value' => $class,
+                    'label' => $class,
+                ])->all(),
+                'filters' => ['search', 'class', 'status', 'page', 'per_page'],
+                'endpoints' => [
+                    'list' => '/api/v1/functions',
+                    'create' => '/api/v1/functions',
+                    'show' => '/api/v1/functions/{id}',
+                    'update' => '/api/v1/functions/{id}',
+                    'update_status' => '/api/v1/functions/{id}/status',
+                ],
+            ],
+        ]);
+    }
+
+    public function index(IndexFunctionRequest $request): JsonResponse
+    {
+        $query = SystemFunction::query();
+
+        if ($request->filled('search')) {
+            $search = trim($request->string('search')->toString());
+
+            $query->where(function ($query) use ($search): void {
+                $query->where('nombre_funcion', 'like', "%{$search}%")
+                    ->orWhere('descripcion', 'like', "%{$search}%")
+                    ->orWhere('clase', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('class')) {
+            $query->where('clase', trim($request->string('class')->toString()));
+        }
+
+        if ($request->filled('status')) {
+            $query->where('estado', strtoupper($request->string('status')->toString()));
+        }
+
+        $functions = $query
             ->orderBy('clase')
             ->orderBy('nombre_funcion')
-            ->get();
+            ->paginate($request->integer('per_page', 15))
+            ->withQueryString();
 
         return response()->json([
             'success' => true,
             'message' => 'Funciones del sistema obtenidas correctamente.',
             'data' => [
-                'items' => FunctionResource::collection($functions)->resolve(),
+                'items' => FunctionResource::collection($functions->getCollection())->resolve(),
+                'meta' => [
+                    'current_page' => $functions->currentPage(),
+                    'per_page' => $functions->perPage(),
+                    'total' => $functions->total(),
+                    'from' => $functions->firstItem(),
+                    'to' => $functions->lastItem(),
+                    'last_page' => $functions->lastPage(),
+                    'has_more_pages' => $functions->hasMorePages(),
+                ],
             ],
         ]);
     }

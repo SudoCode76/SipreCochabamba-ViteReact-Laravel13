@@ -8,6 +8,16 @@ use Illuminate\Validation\Rule;
 
 class UpdateFunctionRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'nombre_funcion' => $this->input('nombre_funcion', $this->input('name')),
+            'descripcion' => $this->input('descripcion', $this->input('description')),
+            'clase' => $this->input('clase', $this->input('class', $this->input('controlador'))),
+            'estado' => $this->normalizeStatus($this->input('estado', $this->input('status'))),
+        ]);
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -29,5 +39,18 @@ class UpdateFunctionRequest extends FormRequest
             'clase' => ['required', 'string', 'max:30'],
             'estado' => ['required', 'string', 'size:2', 'in:AC,DC'],
         ];
+    }
+
+    private function normalizeStatus(mixed $value): mixed
+    {
+        if (! is_string($value)) {
+            return $value;
+        }
+
+        return match (strtoupper(trim($value))) {
+            'ACTIVO' => 'AC',
+            'INACTIVO' => 'DC',
+            default => strtoupper(trim($value)),
+        };
     }
 }
