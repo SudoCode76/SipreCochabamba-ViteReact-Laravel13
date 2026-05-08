@@ -8,7 +8,13 @@ class UpdateCalculationPercentageRequest extends FormRequest
 {
     protected function prepareForValidation(): void
     {
-        $data = [];
+        $data = [
+            'codigo' => $this->input('codigo', $this->input('code')),
+            'descripcion' => $this->input('descripcion', $this->input('description')),
+            'porcentaje' => $this->input('porcentaje', $this->input('percentage')),
+            'observacion' => $this->input('observacion', $this->input('observation')),
+            'estado' => $this->normalizeStatus($this->input('estado', $this->input('status'))),
+        ];
 
         if (is_string($this->input('codigo'))) {
             $data['codigo'] = trim((string) $this->input('codigo'));
@@ -41,5 +47,18 @@ class UpdateCalculationPercentageRequest extends FormRequest
             'observacion' => ['nullable', 'string'],
             'estado' => ['required', 'string', 'size:2', 'in:AC,DC'],
         ];
+    }
+
+    private function normalizeStatus(mixed $value): mixed
+    {
+        if (! is_string($value)) {
+            return $value;
+        }
+
+        return match (strtoupper(trim($value))) {
+            'ACTIVO' => 'AC',
+            'INACTIVO' => 'DC',
+            default => strtoupper(trim($value)),
+        };
     }
 }
