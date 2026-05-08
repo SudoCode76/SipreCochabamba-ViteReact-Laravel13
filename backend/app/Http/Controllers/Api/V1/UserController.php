@@ -12,6 +12,7 @@ use App\Http\Requests\User\UpdateUserUnitRequest;
 use App\Http\Resources\User\UserResource;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Services\Users\UserUnitResolverService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -20,6 +21,7 @@ class UserController extends Controller
 {
     public function __construct(
         private readonly AuditService $auditService,
+        private readonly UserUnitResolverService $userUnitResolverService,
     ) {}
 
     public function index(IndexUserRequest $request): JsonResponse
@@ -28,9 +30,29 @@ class UserController extends Controller
             ->with(['role', 'unit'])
             ->orderBy('id_usuario');
 
+        if ($request->filled('search')) {
+            $search = Str::lower(trim($request->string('search')->toString()));
+            $query->where(function ($query) use ($search): void {
+                $query->whereRaw('LOWER(TRIM(funcionario)) LIKE ?', ["%{$search}%"])
+                    ->orWhereRaw('LOWER(TRIM(username)) LIKE ?', ["%{$search}%"])
+                    ->orWhereRaw('LOWER(TRIM(ci)) LIKE ?', ["%{$search}%"])
+                    ->orWhereHas('role', function ($query) use ($search): void {
+                        $query->whereRaw('LOWER(TRIM(nombre_rol)) LIKE ?', ["%{$search}%"]);
+                    })
+                    ->orWhereHas('unit', function ($query) use ($search): void {
+                        $query->whereRaw('LOWER(TRIM(descripcion)) LIKE ?', ["%{$search}%"]);
+                    });
+            });
+        }
+
         if ($request->filled('name')) {
             $name = Str::lower(trim($request->string('name')->toString()));
             $query->whereRaw('LOWER(TRIM(funcionario)) LIKE ?', ["%{$name}%"]);
+        }
+
+        if ($request->filled('ci')) {
+            $ci = trim($request->string('ci')->toString());
+            $query->whereRaw('TRIM(ci) = ?', [$ci]);
         }
 
         if ($request->filled('username')) {
@@ -69,13 +91,18 @@ class UserController extends Controller
 
     public function store(StoreUserRequest $request): JsonResponse
     {
+        $resolvedUnitId = $this->userUnitResolverService->resolveId(
+            $request->filled('unit_id') ? (int) $request->integer('unit_id') : null,
+            $request->filled('unit_description') ? $request->string('unit_description')->toString() : null,
+        );
+
         $user = User::query()->create([
             'funcionario' => trim($request->string('funcionario')->toString()),
             'ci' => trim($request->string('ci')->toString()),
             'username' => strtoupper(trim($request->string('username')->toString())),
             'clave' => Hash::make($request->string('password')->toString()),
             'estado' => strtoupper($request->string('estado')->toString()),
-            'id_unidad' => $request->filled('unit_id') ? (int) $request->integer('unit_id') : null,
+            'id_unidad' => $resolvedUnitId,
             'rol' => (int) $request->integer('role_id'),
             'item' => $request->filled('item') ? (int) $request->integer('item') : null,
             'fecha' => now()->toDateString(),
@@ -123,12 +150,17 @@ class UserController extends Controller
 
     public function update(UpdateUserRequest $request, User $user): JsonResponse
     {
+        $resolvedUnitId = $this->userUnitResolverService->resolveId(
+            $request->filled('unit_id') ? (int) $request->integer('unit_id') : null,
+            $request->filled('unit_description') ? $request->string('unit_description')->toString() : null,
+        );
+
         $user->update([
             'funcionario' => trim($request->string('funcionario')->toString()),
             'ci' => trim($request->string('ci')->toString()),
             'username' => strtoupper(trim($request->string('username')->toString())),
             'estado' => strtoupper($request->string('estado')->toString()),
-            'id_unidad' => $request->filled('unit_id') ? (int) $request->integer('unit_id') : null,
+            'id_unidad' => $resolvedUnitId,
             'rol' => (int) $request->integer('role_id'),
             'item' => $request->filled('item') ? (int) $request->integer('item') : null,
             'subalcaldia' => $request->filled('subalcaldia') ? (int) $request->integer('subalcaldia') : null,
@@ -184,8 +216,13 @@ class UserController extends Controller
 
     public function updateUnit(UpdateUserUnitRequest $request, User $user): JsonResponse
     {
+        $resolvedUnitId = $this->userUnitResolverService->resolveId(
+            $request->filled('unit_id') ? (int) $request->integer('unit_id') : null,
+            $request->filled('unit_description') ? $request->string('unit_description')->toString() : null,
+        );
+
         $user->update([
-            'id_unidad' => $request->filled('unit_id') ? (int) $request->integer('unit_id') : null,
+            'id_unidad' => $resolvedUnitId,
         ]);
 
         $user->refresh()->load(['role', 'unit']);

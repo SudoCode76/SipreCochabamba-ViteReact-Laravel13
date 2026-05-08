@@ -15,6 +15,9 @@ class UpdateUserRequest extends FormRequest
             'ci' => is_string($this->ci) ? trim($this->ci) : $this->ci,
             'username' => is_string($this->username) ? strtoupper(trim($this->username)) : $this->username,
             'estado' => is_string($this->estado) ? strtoupper(trim($this->estado)) : $this->estado,
+            'unit_description' => is_string(data_get($this->input('unidad'), 'descripcion'))
+                ? trim((string) data_get($this->input('unidad'), 'descripcion'))
+                : $this->input('unit_description'),
         ]);
     }
 
@@ -35,6 +38,9 @@ class UpdateUserRequest extends FormRequest
             'estado' => ['required', 'string', 'size:2', 'in:AC,DC'],
             'role_id' => ['required', 'integer', 'exists:rol,id_rol'],
             'unit_id' => ['nullable', 'integer', 'exists:unidad,id_unidad'],
+            'unit_description' => ['nullable', 'string', 'max:255'],
+            'unidad' => ['nullable', 'array'],
+            'unidad.descripcion' => ['nullable', 'string', 'max:255'],
             'item' => ['nullable', 'integer'],
             'subalcaldia' => ['nullable', 'integer'],
         ];

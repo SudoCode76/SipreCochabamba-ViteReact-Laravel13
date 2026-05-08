@@ -112,6 +112,7 @@ trait InteractsWithLegacyInputs
         if (Schema::hasTable('autorizaciones') === false) {
             Schema::create('autorizaciones', function (Blueprint $table): void {
                 $table->increments('id_autorizacion');
+                $table->unsignedInteger('num_sec')->nullable();
                 $table->unsignedInteger('id_elemento')->nullable();
                 $table->string('elemento', 150)->nullable();
                 $table->string('tipo_elemento', 50)->nullable();
@@ -119,7 +120,9 @@ trait InteractsWithLegacyInputs
                 $table->unsignedInteger('solicitante')->nullable();
                 $table->string('estado', 2)->nullable();
                 $table->string('nro_autorizacion', 100)->nullable();
+                $table->unsignedInteger('usuario_adm')->nullable();
                 $table->timestamp('fecha')->nullable();
+                $table->timestamp('fecha_aut')->nullable();
             });
         }
     }
@@ -241,6 +244,7 @@ trait InteractsWithLegacyInputs
     {
         return Authorization::query()->create(array_merge([
             'id_autorizacion' => 1,
+            'num_sec' => 1,
             'id_elemento' => 1,
             'elemento' => 'Acero estructural',
             'tipo_elemento' => 'insumo',
@@ -248,7 +252,9 @@ trait InteractsWithLegacyInputs
             'solicitante' => 1,
             'estado' => 'PE',
             'nro_autorizacion' => 'AUTH-001',
+            'usuario_adm' => null,
             'fecha' => now(),
+            'fecha_aut' => null,
         ], $overrides));
     }
 }

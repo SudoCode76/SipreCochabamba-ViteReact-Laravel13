@@ -5,12 +5,14 @@ use App\Http\Controllers\Api\V1\RolePermissionController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'active_user', 'admin'])->group(function (): void {
+    Route::get('/roles/context', [RoleController::class, 'context']);
     Route::get('/roles', [RoleController::class, 'index']);
     Route::post('/roles', [RoleController::class, 'store']);
     Route::get('/roles/{role}', [RoleController::class, 'show']);
     Route::put('/roles/{role}', [RoleController::class, 'update']);
     Route::patch('/roles/{role}/status', [RoleController::class, 'updateStatus']);
 
+    Route::get('/roles/{role}/permissions/context', [RolePermissionController::class, 'context']);
     Route::get('/roles/{role}/permissions', [RolePermissionController::class, 'show']);
     Route::put('/roles/{role}/permissions', [RolePermissionController::class, 'update']);
     Route::post('/roles/{role}/permissions/attach', [RolePermissionController::class, 'attach']);

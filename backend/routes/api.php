@@ -21,6 +21,7 @@ Route::prefix('v1')->group(function (): void {
     require __DIR__.'/api/v1/users.php';
     require __DIR__.'/api/v1/roles.php';
     require __DIR__.'/api/v1/functions.php';
+    require __DIR__.'/api/v1/units.php';
     require __DIR__.'/api/v1/groups.php';
     require __DIR__.'/api/v1/subgroups.php';
     require __DIR__.'/api/v1/calculation_percentages_fndr.php';
@@ -35,4 +36,5 @@ Route::prefix('v1')->group(function (): void {
     require __DIR__.'/api/v1/input_types.php';
     require __DIR__.'/api/v1/unit_measures.php';
     require __DIR__.'/api/v1/input_requests.php';
+    require __DIR__.'/api/v1/authorizations.php';
 });

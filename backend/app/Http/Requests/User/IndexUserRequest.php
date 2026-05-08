@@ -14,7 +14,9 @@ class IndexUserRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'search' => ['nullable', 'string', 'max:80'],
             'name' => ['nullable', 'string', 'max:80'],
+            'ci' => ['nullable', 'string', 'max:30'],
             'username' => ['nullable', 'string', 'max:50'],
             'status' => ['nullable', 'string', 'size:2', 'in:AC,DC'],
             'role_id' => ['nullable', 'integer', 'exists:rol,id_rol'],
