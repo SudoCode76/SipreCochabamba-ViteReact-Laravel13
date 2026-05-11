@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Item\IndexObrasCalculationPercentageRequest;
 use App\Http\Requests\Item\StoreCalculationPercentageRequest;
 use App\Http\Requests\Item\UpdateCalculationPercentageRequest;
 use App\Http\Resources\Item\CalculationPercentageResource;
@@ -17,13 +18,24 @@ class ObrasCalculationPercentageController extends Controller
         private readonly ObrasCalculationPercentageService $obrasCalculationPercentageService,
     ) {}
 
-    public function index(): JsonResponse
+    public function index(IndexObrasCalculationPercentageRequest $request): JsonResponse
     {
+        $items = $this->obrasCalculationPercentageService->list($request->validated());
+
         return response()->json([
             'success' => true,
             'message' => 'Porcentajes de calculo Obras obtenidos correctamente.',
             'data' => [
-                'items' => CalculationPercentageResource::collection($this->obrasCalculationPercentageService->list())->resolve(),
+                'items' => CalculationPercentageResource::collection($items->getCollection())->resolve(),
+                'meta' => [
+                    'current_page' => $items->currentPage(),
+                    'per_page' => $items->perPage(),
+                    'total' => $items->total(),
+                    'from' => $items->firstItem(),
+                    'to' => $items->lastItem(),
+                    'last_page' => $items->lastPage(),
+                    'has_more_pages' => $items->hasMorePages(),
+                ],
             ],
         ]);
     }

@@ -1,11 +1,14 @@
-import { createBrowserRouter, Navigate, redirect } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import MainLayout from "@/app/layouts/MainLayout";
 import ProtectedRoute from "./ProtectedRoute";
 import ModulePlaceholder from "@/components/ModulePlaceholder";
 import ChangePasswordPage from "@/modules/auth/pages/ChangePasswordPage";
 import AuthorizationsPage from "@/modules/authorizations/pages/AuthorizationsPage";
+import FpsCalculationPercentagesPage from "@/modules/calculation-percentages/pages/FpsCalculationPercentagesPage";
 import LoginPage from "@/modules/auth/pages/LoginPage";
+import FndrCalculationPercentagesPage from "@/modules/calculation-percentages/pages/FndrCalculationPercentagesPage";
+import ObrasCalculationPercentagesPage from "@/modules/calculation-percentages/pages/ObrasCalculationPercentagesPage";
 import PromanCalculationPercentagesPage from "@/modules/calculation-percentages/pages/PromanCalculationPercentagesPage";
 import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
 import ItemsPage from "@/modules/items/pages/ItemsPage";
@@ -107,8 +110,20 @@ export const router = createBrowserRouter([
             element: placeholder("Parámetros", "Aquí pueden entrar catálogos maestros, configuraciones y reglas base del sistema.", "Gestión", "amber"),
           },
           {
+            path: "/parametros/fps",
+            element: <FpsCalculationPercentagesPage />,
+          },
+          {
+            path: "/parametros/fndr",
+            element: <FndrCalculationPercentagesPage />,
+          },
+          {
             path: "/parametros/proman",
             element: <PromanCalculationPercentagesPage />,
+          },
+          {
+            path: "/parametros/obras-publicas",
+            element: <ObrasCalculationPercentagesPage />,
           },
           {
             path: "/administracion",
@@ -129,6 +144,8 @@ export const router = createBrowserRouter([
           {
             path: "/autorizaciones",
             element: placeholder("Gestión de Autorizaciones", "Interfaz reservada para permisos específicos y revisiones sensibles.", "Administración", "amber"),
+          },
+          {
             path: "/administracion/usuarios",
             element: <UsersPage />,
           },
