@@ -122,17 +122,21 @@ class UnitMeasureService
     public function delete(UnitMeasure $unitMeasure, DeleteUnitMeasureRequest $request, User $user): UnitMeasure
     {
         return DB::transaction(function () use ($unitMeasure, $request, $user): UnitMeasure {
-            $authorizationExists = Authorization::query()
-                ->where('id_elemento', $unitMeasure->id_unidad_medida)
-                ->where('nro_autorizacion', trim($request->string('autorizacion')->toString()))
-                ->where('tabla', 'unidad_medida')
-                ->where('estado', 'AP')
-                ->exists();
+            $authorizationCode = trim((string) $request->input('autorizacion', ''));
 
-            if (! $authorizationExists) {
-                throw ValidationException::withMessages([
-                    'autorizacion' => ['No existe una autorizacion aprobada valida para eliminar esta unidad de medida.'],
-                ]);
+            if ($authorizationCode !== '') {
+                $authorizationExists = Authorization::query()
+                    ->where('id_elemento', $unitMeasure->id_unidad_medida)
+                    ->where('nro_autorizacion', $authorizationCode)
+                    ->where('tabla', 'unidad_medida')
+                    ->where('estado', 'AP')
+                    ->exists();
+
+                if (! $authorizationExists) {
+                    throw ValidationException::withMessages([
+                        'autorizacion' => ['No existe una autorizacion aprobada valida para eliminar esta unidad de medida.'],
+                    ]);
+                }
             }
 
             $unitMeasure->update([

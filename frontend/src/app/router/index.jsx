@@ -20,9 +20,12 @@ import NewProjectPage from "@/modules/projects/pages/NewProjectPage";
 import InputsPage from "@/modules/inputs/pages/InputsPage";
 import InputRequestsPage from "@/modules/input-requests/pages/InputRequestsPage";
 import CreateInputRequestPage from "@/modules/input-requests/pages/CreateInputRequestPage";
+import InputTypesPage from "@/modules/input-types/pages/InputTypesPage";
+import UnitMeasuresPage from "@/modules/input-types/pages/UnitMeasuresPage";
 import FunctionsPage from "@/modules/functions/pages/FunctionsPage";
 import RolesPage from "@/modules/roles/pages/RolesPage";
 import UsersPage from "@/modules/users/pages/UsersPage";
+import GroupsPage from "@/modules/groups/pages/GroupsPage";
 
 function placeholder(title, description, section, accent) {
   return (
@@ -107,8 +110,20 @@ export const router = createBrowserRouter([
             element: placeholder("Parámetros", "Aquí pueden entrar catálogos maestros, configuraciones y reglas base del sistema.", "Gestión", "amber"),
           },
           {
+            path: "/Grupos",
+            element: <GroupsPage />,
+          },
+          {
             path: "/parametros/proman",
             element: <PromanCalculationPercentagesPage />,
+          },
+          {
+            path: "/Tipo de Insumo",
+            element: <InputTypesPage />,
+          },
+          {
+            path: "/Unidad de Medida",
+            element: <UnitMeasuresPage />,
           },
           {
             path: "/administracion",
