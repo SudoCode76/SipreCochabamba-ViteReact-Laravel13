@@ -26,6 +26,8 @@ import FunctionsPage from "@/modules/functions/pages/FunctionsPage";
 import RolesPage from "@/modules/roles/pages/RolesPage";
 import UsersPage from "@/modules/users/pages/UsersPage";
 import GroupsPage from "@/modules/groups/pages/GroupsPage";
+import SubgroupsPage from "@/modules/groups/pages/SubgroupsPage";
+import CalculationPercentagesPage from "@/modules/calculation-percentages/pages/CalculationPercentagesPage";
 
 function placeholder(title, description, section, accent) {
   return (
@@ -114,8 +116,76 @@ export const router = createBrowserRouter([
             element: <GroupsPage />,
           },
           {
+            path: "/Sub grupos",
+            element: <SubgroupsPage />,
+          },
+          {
+            path: "/%25%20Calculo",
+            element: <CalculationPercentagesPage />,
+          },
+          {
+            path: "/% Calculo",
+            element: <CalculationPercentagesPage />,
+          },
+          {
+            path: "/Calculo",
+            element: <CalculationPercentagesPage />,
+          },
+          {
             path: "/parametros/proman",
             element: <PromanCalculationPercentagesPage />,
+          },
+          {
+            path: "/Parametros Porcentajes Proman",
+            element: <PromanCalculationPercentagesPage />,
+          },
+          {
+            path: "/%25%20Calculo%20UPRE",
+            element: placeholder("Porcentajes UPRE", "Configuración de porcentajes para análisis UPRE.", "Parámetros", "sky"),
+          },
+          {
+            path: "/% Calculo UPRE",
+            element: placeholder("Porcentajes UPRE", "Configuración de porcentajes para análisis UPRE.", "Parámetros", "sky"),
+          },
+          {
+            path: "/Parametros Porcentajes Upre",
+            element: placeholder("Porcentajes UPRE", "Configuración de porcentajes para análisis UPRE.", "Parámetros", "sky"),
+          },
+          {
+            path: "/%25%20Calculo%20FPS",
+            element: placeholder("Porcentajes FPS", "Configuración de porcentajes para análisis FPS.", "Parámetros", "sky"),
+          },
+          {
+            path: "/% Calculo FPS",
+            element: placeholder("Porcentajes FPS", "Configuración de porcentajes para análisis FPS.", "Parámetros", "sky"),
+          },
+          {
+            path: "/Parametros Porcentajes Fps",
+            element: placeholder("Porcentajes FPS", "Configuración de porcentajes para análisis FPS.", "Parámetros", "sky"),
+          },
+          {
+            path: "/%25%20Calculo%20FNDR",
+            element: placeholder("Porcentajes FNDR", "Configuración de porcentajes para análisis FNDR.", "Parámetros", "sky"),
+          },
+          {
+            path: "/% Calculo FNDR",
+            element: placeholder("Porcentajes FNDR", "Configuración de porcentajes para análisis FNDR.", "Parámetros", "sky"),
+          },
+          {
+            path: "/Parametros Porcentajes Fndr",
+            element: placeholder("Porcentajes FNDR", "Configuración de porcentajes para análisis FNDR.", "Parámetros", "sky"),
+          },
+          {
+            path: "/%25%20OBRAS%20PUBLICAS",
+            element: placeholder("Porcentajes Obras Públicas", "Configuración de porcentajes para análisis Obras Públicas.", "Parámetros", "sky"),
+          },
+          {
+            path: "/% OBRAS PUBLICAS",
+            element: placeholder("Porcentajes Obras Públicas", "Configuración de porcentajes para análisis Obras Públicas.", "Parámetros", "sky"),
+          },
+          {
+            path: "/Parametros Porcentajes Obras Publicas",
+            element: placeholder("Porcentajes Obras Públicas", "Configuración de porcentajes para análisis Obras Públicas.", "Parámetros", "sky"),
           },
           {
             path: "/Tipo de Insumo",

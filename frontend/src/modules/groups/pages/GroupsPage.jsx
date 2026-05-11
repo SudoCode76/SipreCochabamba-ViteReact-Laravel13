@@ -53,7 +53,7 @@ export default function GroupsPage() {
     },
   });
 
-  const items = data?.data?.items ?? [];
+  const items = data?.data?.items ?? (Array.isArray(data?.data) ? data.data : []);
 
   const openNew = () => {
     setSelectedGroup({ codigo_grupo: "", nombre_grupo: "", estado: "AC" });
@@ -161,41 +161,48 @@ export default function GroupsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item, index) => (
-                      <tr key={item.id_grupo} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
-                        <td className="px-5 py-4 align-top text-foreground">{index + 1}</td>
-                        <td className="px-5 py-4 align-top text-foreground">{item.codigo_grupo}</td>
-                        <td className="px-5 py-4 align-top text-foreground">{item.nombre_grupo?.trim()}</td>
-                        <td className="px-5 py-4 align-top">
-                          <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClass[item.estado] || "bg-slate-500 text-white"}`}>
-                            {item.status_label || (item.estado === "AC" ? "ACTIVO" : "INACTIVO")}
-                          </Badge>
-                        </td>
-                        <td className="px-5 py-4 align-top text-center">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-lg">
-                              {item.available_actions?.edit && (
-                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openEdit(item)}>
-                                  <Pencil className="h-4 w-4 text-muted-foreground" />
-                                  <span>Editar</span>
-                                </DropdownMenuItem>
-                              )}
-                              {item.available_actions?.delete && (
-                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer text-destructive" onClick={() => openDelete(item)}>
-                                  <Trash2 className="h-4 w-4" />
-                                  <span>Eliminar</span>
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
-                    ))}
+                    {items.map((item, index) => {
+                      const code = item.codigo_grupo || item.codigo || item.code || "-";
+                      const name = item.nombre_grupo || item.nombre || item.description || "-";
+                      const status = item.estado || item.status || "DC";
+                      const statusLabelText = item.status_label || (status === "AC" ? "ACTIVO" : "INACTIVO");
+
+                      return (
+                        <tr key={item.id_grupo || item.id || index} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
+                          <td className="px-5 py-4 align-top text-foreground">{index + 1}</td>
+                          <td className="px-5 py-4 align-top text-foreground font-medium">{code}</td>
+                          <td className="px-5 py-4 align-top text-foreground">{name?.trim()}</td>
+                          <td className="px-5 py-4 align-top">
+                            <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClass[status] || "bg-slate-500 text-white"}`}>
+                              {statusLabelText}
+                            </Badge>
+                          </td>
+                          <td className="px-5 py-4 align-top text-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-lg">
+                                {item.available_actions?.edit && (
+                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openEdit(item)}>
+                                    <Pencil className="h-4 w-4 text-muted-foreground" />
+                                    <span>Editar</span>
+                                  </DropdownMenuItem>
+                                )}
+                                {item.available_actions?.delete && (
+                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer text-destructive" onClick={() => openDelete(item)}>
+                                    <Trash2 className="h-4 w-4" />
+                                    <span>Eliminar</span>
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {items.length === 0 && (
                       <tr>
                         <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
@@ -262,7 +269,7 @@ export default function GroupsPage() {
         document.body,
       )}
 
-      {deleteOpen && (
+      {deleteOpen && createPortal(
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-3xl border border-border/70 bg-background p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
@@ -289,7 +296,8 @@ export default function GroupsPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
