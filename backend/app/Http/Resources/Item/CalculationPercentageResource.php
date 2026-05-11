@@ -9,20 +9,31 @@ class CalculationPercentageResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $status = strtoupper((string) $this->estado);
+
         return [
+            'id' => $this->id_porcentaje,
+            'internal_id' => $this->id_porcentaje,
             'id_porcentaje' => $this->id_porcentaje,
+            'display_id' => $this->codigo,
+            'code' => $this->codigo,
             'codigo' => $this->codigo,
+            'description' => $this->descripcion,
             'descripcion' => $this->descripcion,
+            'percentage' => $this->porcentaje,
             'porcentaje' => $this->porcentaje,
+            'observation' => $this->observacion,
             'observacion' => $this->observacion,
-            'estado' => $this->estado,
-            'status_label' => match (strtoupper((string) $this->estado)) {
+            'status' => $status,
+            'estado' => $status,
+            'status_label' => match ($status) {
                 'AC' => 'ACTIVO',
                 'DC' => 'INACTIVO',
-                default => strtoupper((string) $this->estado),
+                default => $status,
             },
             'available_actions' => [
                 'edit' => true,
+                'select' => true,
             ],
         ];
     }

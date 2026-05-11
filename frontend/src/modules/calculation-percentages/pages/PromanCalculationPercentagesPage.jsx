@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronLeft,
@@ -52,6 +52,20 @@ function buildForm(item) {
   };
 }
 
+function buildRowKey(item, index) {
+  return [
+    item?.id,
+    item?.internal_id,
+    item?.id_porcentaje,
+    item?.display_id,
+    item?.code,
+    item?.codigo,
+    index,
+  ]
+    .filter((value) => value !== undefined && value !== null && value !== "")
+    .join("-");
+}
+
 export default function PromanCalculationPercentagesPage() {
   const queryClient = useQueryClient();
 
@@ -66,19 +80,17 @@ export default function PromanCalculationPercentagesPage() {
   const [formErrors, setFormErrors] = useState({});
   const [feedback, setFeedback] = useState(null);
 
-  const deferredSearchTerm = useDeferredValue(searchTerm.trim());
-
   const contextQuery = useQuery({
     queryKey: ["proman-calculation-context"],
     queryFn: promanCalculationPercentagesService.context,
   });
 
   const listQuery = useQuery({
-    queryKey: ["proman-calculation-percentages", { page, perPage, deferredSearchTerm, statusFilter }],
+    queryKey: ["proman-calculation-percentages", { page, perPage, searchTerm, statusFilter }],
     queryFn: () => promanCalculationPercentagesService.list({
       page,
       perPage,
-      search: deferredSearchTerm,
+      search: searchTerm.trim(),
       status: statusFilter,
     }),
     placeholderData: (previousData) => previousData,
@@ -323,6 +335,13 @@ export default function PromanCalculationPercentagesPage() {
                 <option value={50}>50</option>
               </select>
             </div>
+
+            {listQuery.isFetching && !listQuery.isLoading && (
+              <div className="xl:col-span-3 flex items-center gap-2 rounded-2xl border border-border/70 bg-background/80 px-4 py-3 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Buscando porcentajes PROMAN...
+              </div>
+            )}
           </div>
 
           {listQuery.isLoading && (
@@ -345,7 +364,7 @@ export default function PromanCalculationPercentagesPage() {
             <>
               <div className="hidden overflow-hidden rounded-[28px] border border-border/70 bg-background/90 lg:block">
                 <div className="overflow-x-auto">
-                  <table className="min-w-full border-collapse text-sm">
+                  <table className={cn("min-w-full border-collapse text-sm transition-opacity", listQuery.isFetching && "opacity-60") }>
                     <thead>
                       <tr className="border-b border-border/70 bg-muted/30 text-left">
                         <th className="px-5 py-4 font-semibold text-foreground">N°</th>
@@ -358,11 +377,11 @@ export default function PromanCalculationPercentagesPage() {
                     </thead>
                     <tbody>
                       {items.map((item, index) => (
-                        <tr key={item.id} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
+                        <tr key={buildRowKey(item, index)} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
                           <td className="px-5 py-4 align-top text-foreground">{(meta.from || 1) + index}</td>
                           <td className="px-5 py-4 align-top text-muted-foreground">{item.display_id || item.code || item.codigo || "-"}</td>
-                          <td className="px-5 py-4 align-top text-foreground">{item.description}</td>
-                          <td className="px-5 py-4 align-top text-muted-foreground">{item.percentage}</td>
+                          <td className="px-5 py-4 align-top text-foreground">{item.description || item.descripcion || "-"}</td>
+                          <td className="px-5 py-4 align-top text-muted-foreground">{item.percentage ?? item.porcentaje ?? "-"}</td>
                           <td className="px-5 py-4 align-top">
                             <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClassMap[item.status] || "bg-slate-500 text-white"}`}>
                               {item.status_label}
@@ -370,7 +389,7 @@ export default function PromanCalculationPercentagesPage() {
                           </td>
                           <td className="px-5 py-4 align-top text-right">
                             {item.available_actions?.edit ? (
-                              <Button variant="outline" className="rounded-full border-border/70" onClick={() => openEdit(item.id)}>
+                              <Button variant="outline" className="rounded-full border-border/70" onClick={() => openEdit(item.id || item.internal_id || item.id_porcentaje)}>
                                 <Pencil data-icon="inline-start" />
                                 Editar
                               </Button>
@@ -390,30 +409,30 @@ export default function PromanCalculationPercentagesPage() {
                 </div>
               </div>
 
-              <div className="grid gap-4 lg:hidden">
+              <div className={cn("grid gap-4 transition-opacity lg:hidden", listQuery.isFetching && "opacity-60")}>
                 {items.length === 0 ? (
                   <Card className="border border-border/70 bg-background/90">
                     <CardContent className="p-6 text-center text-muted-foreground">
                       No se encontraron porcentajes PROMAN para los filtros seleccionados.
                     </CardContent>
                   </Card>
-                ) : items.map((item) => (
-                  <Card key={item.id} className="border border-border/70 bg-background/90">
+                ) : items.map((item, index) => (
+                  <Card key={buildRowKey(item, index)} className="border border-border/70 bg-background/90">
                     <CardContent className="flex flex-col gap-4 p-5">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-medium text-foreground">{item.description}</p>
-                          <p className="text-sm text-muted-foreground">{item.code}</p>
+                          <p className="font-medium text-foreground">{item.description || item.descripcion || "-"}</p>
+                          <p className="text-sm text-muted-foreground">{item.display_id || item.code || item.codigo || "-"}</p>
                         </div>
                         <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClassMap[item.status] || "bg-slate-500 text-white"}`}>
                           {item.status_label}
                         </Badge>
                       </div>
                       <div className="grid gap-2 text-sm text-muted-foreground">
-                        <p><span className="font-medium text-foreground">Porcentaje:</span> {item.percentage}</p>
+                        <p><span className="font-medium text-foreground">Porcentaje:</span> {item.percentage ?? item.porcentaje ?? "-"}</p>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" className="rounded-full border-border/70" onClick={() => openEdit(item.id)}>
+                        <Button variant="outline" className="rounded-full border-border/70" onClick={() => openEdit(item.id || item.internal_id || item.id_porcentaje)}>
                           <Pencil data-icon="inline-start" />
                           Editar
                         </Button>

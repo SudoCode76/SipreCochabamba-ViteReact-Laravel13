@@ -54,40 +54,53 @@ class PromanCalculationPercentageApiTest extends TestCase
             'usuario' => 1,
         ]);
 
-        $this->getJson('/api/v1/calculation-percentages/proman')
+        $this->getJson('/api/v1/calculation-percentages/proman?search=IVA&status=INACTIVO&per_page=1')
             ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.meta.per_page', 1)
             ->assertJsonPath('data.items.0.id_porcentaje', 2)
+            ->assertJsonPath('data.items.0.id', 2)
+            ->assertJsonPath('data.items.0.internal_id', 2)
+            ->assertJsonPath('data.items.0.display_id', 'PROM-002')
+            ->assertJsonPath('data.items.0.code', 'PROM-002')
+            ->assertJsonPath('data.items.0.description', 'IVA')
+            ->assertJsonPath('data.items.0.percentage', 0)
             ->assertJsonPath('data.items.0.status_label', 'INACTIVO')
             ->assertJsonPath('data.items.0.available_actions.edit', true)
-            ->assertJsonPath('data.items.1.id_porcentaje', 1)
-            ->assertJsonPath('data.items.1.status_label', 'ACTIVO');
+            ->assertJsonPath('data.items.0.available_actions.select', true);
 
         $this->getJson('/api/v1/calculation-percentages/proman/context')
             ->assertOk()
             ->assertJsonPath('data.statuses.0.code', 'AC')
-            ->assertJsonPath('data.permissions.can_update', true);
+            ->assertJsonPath('data.permissions.can_update', true)
+            ->assertJsonPath('data.filters.0', 'search')
+            ->assertJsonPath('data.endpoints.list', '/api/v1/calculation-percentages/proman');
 
         $this->getJson('/api/v1/calculation-percentages/proman/2')
             ->assertOk()
             ->assertJsonPath('data.calculation_percentage.id_porcentaje', 2)
-            ->assertJsonPath('data.calculation_percentage.codigo', 'PROM-002');
+            ->assertJsonPath('data.calculation_percentage.id', 2)
+            ->assertJsonPath('data.calculation_percentage.display_id', 'PROM-002')
+            ->assertJsonPath('data.calculation_percentage.codigo', 'PROM-002')
+            ->assertJsonPath('data.calculation_percentage.code', 'PROM-002');
 
         $this->postJson('/api/v1/calculation-percentages/proman', [
-            'codigo' => 'PROM-003',
-            'descripcion' => 'CARGAS SOCIALES',
-            'porcentaje' => 57,
-            'observacion' => 'Obs 3',
-            'estado' => 'AC',
+            'code' => 'PROM-003',
+            'description' => 'CARGAS SOCIALES',
+            'percentage' => 57,
+            'observation' => 'Obs 3',
+            'status' => 'ACTIVO',
         ])->assertCreated()
             ->assertJsonPath('data.calculation_percentage.codigo', 'PROM-003')
+            ->assertJsonPath('data.calculation_percentage.description', 'CARGAS SOCIALES')
             ->assertJsonPath('data.calculation_percentage.status_label', 'ACTIVO');
 
         $this->putJson('/api/v1/calculation-percentages/proman/2', [
-            'codigo' => 'PROM-002A',
-            'descripcion' => 'IVA ACTUALIZADO',
-            'porcentaje' => 1.5,
-            'observacion' => 'Obs editada',
-            'estado' => 'AC',
+            'code' => 'PROM-002A',
+            'description' => 'IVA ACTUALIZADO',
+            'percentage' => 1.5,
+            'observation' => 'Obs editada',
+            'status' => 'ACTIVO',
         ])->assertOk()
             ->assertJsonPath('data.calculation_percentage.codigo', 'PROM-002A')
             ->assertJsonPath('data.calculation_percentage.descripcion', 'IVA ACTUALIZADO')

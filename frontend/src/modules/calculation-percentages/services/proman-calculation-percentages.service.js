@@ -7,11 +7,13 @@ export const promanCalculationPercentagesService = {
   },
 
   list: async ({ page = 1, perPage = 10, search = "", status = "" } = {}) => {
+    const normalizedSearch = search.trim().toUpperCase();
+
     const response = await apiClient.get("/v1/calculation-percentages/proman", {
       params: {
         page,
         per_page: perPage,
-        ...(search ? { search } : {}),
+        ...(normalizedSearch ? { search: normalizedSearch } : {}),
         ...(status ? { status } : {}),
       },
     });
