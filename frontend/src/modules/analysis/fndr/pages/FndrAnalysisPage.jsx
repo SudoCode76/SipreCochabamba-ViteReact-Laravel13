@@ -1,9 +1,6 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Loader2, TrendingUp, Search, MoreHorizontal, RefreshCw } from "lucide-react";
-import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Loader2, TrendingUp, Search, MoreHorizontal, RefreshCw, X } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
