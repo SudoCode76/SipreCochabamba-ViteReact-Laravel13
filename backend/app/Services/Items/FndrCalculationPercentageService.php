@@ -7,7 +7,7 @@ use App\Http\Requests\Item\UpdateCalculationPercentageRequest;
 use App\Models\FndrCalculationPercentage;
 use App\Models\User;
 use App\Services\AuditService;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\ValidationException;
 
 class FndrCalculationPercentageService
@@ -24,14 +24,46 @@ class FndrCalculationPercentageService
                 'can_create' => $user->isAdministrator(),
                 'can_update' => $user->isAdministrator(),
             ],
+            'filters' => ['search', 'description', 'code', 'status', 'page', 'per_page'],
+            'endpoints' => [
+                'list' => '/api/v1/calculation-percentages/fndr',
+                'show' => '/api/v1/calculation-percentages/fndr/{id}',
+                'create' => '/api/v1/calculation-percentages/fndr',
+                'update' => '/api/v1/calculation-percentages/fndr/{id}',
+            ],
         ];
     }
 
-    public function list(): Collection
+    public function list(array $filters = []): LengthAwarePaginator
     {
-        return FndrCalculationPercentage::query()
+        $query = FndrCalculationPercentage::query();
+
+        if (filled($filters['search'] ?? null)) {
+            $search = trim((string) $filters['search']);
+
+            $query->where(function ($query) use ($search): void {
+                $query->where('codigo', 'like', "%{$search}%")
+                    ->orWhere('descripcion', 'like', "%{$search}%")
+                    ->orWhere('observacion', 'like', "%{$search}%");
+            });
+        }
+
+        if (filled($filters['description'] ?? null)) {
+            $query->where('descripcion', 'like', '%'.trim((string) $filters['description']).'%');
+        }
+
+        if (filled($filters['code'] ?? null)) {
+            $query->where('codigo', 'like', '%'.trim((string) $filters['code']).'%');
+        }
+
+        if (filled($filters['status'] ?? null)) {
+            $query->where('estado', strtoupper(trim((string) $filters['status'])));
+        }
+
+        return $query
             ->orderByDesc('id_porcentaje')
-            ->get();
+            ->paginate((int) ($filters['per_page'] ?? 15))
+            ->withQueryString();
     }
 
     public function create(StoreCalculationPercentageRequest $request, User $user): FndrCalculationPercentage

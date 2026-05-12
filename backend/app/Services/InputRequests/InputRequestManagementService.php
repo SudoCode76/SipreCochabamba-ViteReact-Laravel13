@@ -37,7 +37,7 @@ class InputRequestManagementService
                 'estado_aprobacion' => $approvalStatus,
                 'usuario_aprobacion' => $approvalUserId,
                 'fecha_aprobacion' => $approvalDate,
-                'fecha_modificacion' => now(),
+                ...$this->modificationTimestampPayload(),
             ]);
 
             if ($approvalStatus === 'AP') {
@@ -117,7 +117,7 @@ class InputRequestManagementService
 
             $payload = [
                 'estado_aprobacion' => 'PD',
-                'fecha_modificacion' => now(),
+                ...$this->modificationTimestampPayload(),
             ];
 
             if (Schema::hasColumn($inputRequest->getTable(), 'observacion')) {
@@ -166,5 +166,16 @@ class InputRequestManagementService
     private function registerAudit(User $user, ?string $ip, string $process): void
     {
         app(AuditService::class)->record($user, $ip, $process);
+    }
+
+    private function modificationTimestampPayload(): array
+    {
+        $column = Schema::hasColumn('solicitud_insumo', 'ultima_modificacion')
+            ? 'ultima_modificacion'
+            : 'fecha_modificacion';
+
+        return [
+            $column => now(),
+        ];
     }
 }

@@ -54,40 +54,53 @@ class UpreCalculationPercentageApiTest extends TestCase
             'usuario' => 1,
         ]);
 
-        $this->getJson('/api/v1/calculation-percentages/upre')
+        $this->getJson('/api/v1/calculation-percentages/upre?search=IVA&status=INACTIVO&per_page=1')
             ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.meta.per_page', 1)
             ->assertJsonPath('data.items.0.id_porcentaje', 2)
+            ->assertJsonPath('data.items.0.id', 2)
+            ->assertJsonPath('data.items.0.internal_id', 2)
+            ->assertJsonPath('data.items.0.display_id', 'UPRE-002')
+            ->assertJsonPath('data.items.0.code', 'UPRE-002')
+            ->assertJsonPath('data.items.0.description', 'IVA')
+            ->assertJsonPath('data.items.0.percentage', 14.94)
             ->assertJsonPath('data.items.0.status_label', 'INACTIVO')
             ->assertJsonPath('data.items.0.available_actions.edit', true)
-            ->assertJsonPath('data.items.1.id_porcentaje', 1)
-            ->assertJsonPath('data.items.1.status_label', 'ACTIVO');
+            ->assertJsonPath('data.items.0.available_actions.select', true);
 
         $this->getJson('/api/v1/calculation-percentages/upre/context')
             ->assertOk()
             ->assertJsonPath('data.statuses.0.code', 'AC')
-            ->assertJsonPath('data.permissions.can_update', true);
+            ->assertJsonPath('data.permissions.can_update', true)
+            ->assertJsonPath('data.filters.0', 'search')
+            ->assertJsonPath('data.endpoints.list', '/api/v1/calculation-percentages/upre');
 
         $this->getJson('/api/v1/calculation-percentages/upre/2')
             ->assertOk()
             ->assertJsonPath('data.calculation_percentage.id_porcentaje', 2)
-            ->assertJsonPath('data.calculation_percentage.codigo', 'UPRE-002');
+            ->assertJsonPath('data.calculation_percentage.id', 2)
+            ->assertJsonPath('data.calculation_percentage.display_id', 'UPRE-002')
+            ->assertJsonPath('data.calculation_percentage.codigo', 'UPRE-002')
+            ->assertJsonPath('data.calculation_percentage.code', 'UPRE-002');
 
         $this->postJson('/api/v1/calculation-percentages/upre', [
-            'codigo' => 'UPRE-003',
-            'descripcion' => 'HERRAMIENTAS MENORES',
-            'porcentaje' => 5,
-            'observacion' => 'Obs 3',
-            'estado' => 'AC',
+            'code' => 'UPRE-003',
+            'description' => 'HERRAMIENTAS MENORES',
+            'percentage' => 5,
+            'observation' => 'Obs 3',
+            'status' => 'ACTIVO',
         ])->assertCreated()
             ->assertJsonPath('data.calculation_percentage.codigo', 'UPRE-003')
+            ->assertJsonPath('data.calculation_percentage.description', 'HERRAMIENTAS MENORES')
             ->assertJsonPath('data.calculation_percentage.status_label', 'ACTIVO');
 
         $this->putJson('/api/v1/calculation-percentages/upre/2', [
-            'codigo' => 'UPRE-002A',
-            'descripcion' => 'IVA ACTUALIZADO',
-            'porcentaje' => 15.5,
-            'observacion' => 'Obs editada',
-            'estado' => 'AC',
+            'code' => 'UPRE-002A',
+            'description' => 'IVA ACTUALIZADO',
+            'percentage' => 15.5,
+            'observation' => 'Obs editada',
+            'status' => 'ACTIVO',
         ])->assertOk()
             ->assertJsonPath('data.calculation_percentage.codigo', 'UPRE-002A')
             ->assertJsonPath('data.calculation_percentage.descripcion', 'IVA ACTUALIZADO')
