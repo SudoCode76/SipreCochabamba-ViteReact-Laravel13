@@ -29,11 +29,15 @@ class InputRequest extends Model
         'usuario_solicitante',
         'estado_aprobacion',
         'notificacion',
+        'observacion',
+        'usuario_aprobacion',
+        'fecha_aprobacion',
         'archivo',
         'archivo1',
         'archivo2',
         'fecha',
         'fecha_modificacion',
+        'ultima_modificacion',
     ];
 
     protected function casts(): array
@@ -43,8 +47,11 @@ class InputRequest extends Model
             'unidad_medida' => 'integer',
             'tipo' => 'integer',
             'usuario_solicitante' => 'integer',
+            'usuario_aprobacion' => 'integer',
             'fecha' => 'date',
+            'fecha_aprobacion' => 'date',
             'fecha_modificacion' => 'datetime',
+            'ultima_modificacion' => 'datetime',
         ];
     }
 

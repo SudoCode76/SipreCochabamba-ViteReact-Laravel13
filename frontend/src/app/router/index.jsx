@@ -24,6 +24,7 @@ import NewProjectPage from "@/modules/projects/pages/NewProjectPage";
 import InputsPage from "@/modules/inputs/pages/InputsPage";
 import InputRequestsPage from "@/modules/input-requests/pages/InputRequestsPage";
 import CreateInputRequestPage from "@/modules/input-requests/pages/CreateInputRequestPage";
+import ManageInputRequestsPage from "@/modules/input-requests/pages/ManageInputRequestsPage";
 import FunctionsPage from "@/modules/functions/pages/FunctionsPage";
 import RolesPage from "@/modules/roles/pages/RolesPage";
 import UsersPage from "@/modules/users/pages/UsersPage";
@@ -97,6 +98,10 @@ export const router = createBrowserRouter([
           {
             path: "/Crear Solicitud Insumo",
             element: <CreateInputRequestPage />,
+          },
+          {
+            path: "/Gestionar Solicitud",
+            element: <ManageInputRequestsPage />,
           },
           {
             path: "/Proyecto",

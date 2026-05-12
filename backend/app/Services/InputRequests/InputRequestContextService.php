@@ -30,7 +30,16 @@ class InputRequestContextService
                 'can_view' => $user->isAdministrator(),
                 'can_create' => $user->isAdministrator(),
                 'can_update' => $user->isAdministrator(),
+                'can_manage' => $user->isAdministrator(),
+                'can_revert' => $user->isAdministrator(),
                 'can_view_quotes' => $user->isAdministrator(),
+            ],
+            'endpoints' => [
+                'list' => '/api/v1/input-requests',
+                'show' => '/api/v1/input-requests/{id}',
+                'manage' => '/api/v1/solicitudes-insumo/{id}/gestion',
+                'revert' => '/api/v1/solicitudes-insumo/{id}/revertir',
+                'unit_measure_search' => '/api/v1/unidades-medida/search?q={query}',
             ],
         ];
     }
