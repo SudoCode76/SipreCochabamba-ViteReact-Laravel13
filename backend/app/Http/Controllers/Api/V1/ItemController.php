@@ -9,6 +9,7 @@ use App\Http\Requests\Item\ShowItemPriceAnalysisRequest;
 use App\Http\Requests\Item\StoreItemCompositionInputRequest;
 use App\Http\Requests\Item\StoreItemRequest;
 use App\Http\Requests\Item\UpdateItemCompositionInputRequest;
+use App\Http\Requests\Item\UpdateItemRequest;
 use App\Http\Resources\Item\ItemFndrListResource;
 use App\Models\Item;
 use App\Models\ItemInput;
@@ -20,6 +21,7 @@ use App\Services\Items\Fndr\ListFndrItemsService;
 use App\Services\Items\ItemCompositionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 class ItemController extends Controller
@@ -334,6 +336,66 @@ class ItemController extends Controller
                 ],
             ],
         ], 201);
+    }
+
+    public function update(Item $item, UpdateItemRequest $request): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para editar items.');
+        }
+
+        $item->item = strtoupper(trim($request->string('item')->toString()));
+        $item->precio = $request->filled('price') ? (float) $request->input('price') : null;
+
+        if ($request->filled('status')) {
+            $item->estado = strtoupper(trim((string) $request->input('status')));
+        }
+
+        if ($request->hasFile('specification_file')) {
+            $item->especificacion = $request->file('specification_file')->store('archivos/items/especificaciones', 'public');
+        } elseif ($request->filled('specification')) {
+            $item->especificacion = trim((string) $request->input('specification'));
+        }
+
+        if ($request->hasFile('sheet_file')) {
+            $item->ficha = $request->file('sheet_file')->store('archivos/items/fichas', 'public');
+        } elseif ($request->filled('sheet')) {
+            $item->ficha = trim((string) $request->input('sheet'));
+        }
+
+        $item->save();
+        $item->load(['groupCatalog', 'subgroupCatalog', 'unitMeasure']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Item actualizado correctamente.',
+            'data' => [
+                'item' => [
+                    'id_item' => $item->id_item,
+                    'name' => $item->item,
+                    'price' => $item->precio,
+                    'status' => $item->estado,
+                    'specification' => $item->especificacion,
+                    'specification_url' => $item->especificacion ? Storage::disk('public')->url($item->especificacion) : null,
+                    'sheet' => $item->ficha,
+                    'sheet_url' => $item->ficha ? Storage::disk('public')->url($item->ficha) : null,
+                    'group' => $item->groupCatalog ? [
+                        'id' => $item->groupCatalog->id_grupo,
+                        'name' => $item->groupCatalog->nombre_grupo,
+                    ] : null,
+                    'subgroup' => $item->subgroupCatalog ? [
+                        'id' => $item->subgroupCatalog->id_subgrupo,
+                        'description' => $item->subgroupCatalog->descripcion,
+                    ] : null,
+                    'unit_measure' => $item->unitMeasure ? [
+                        'id' => $item->unitMeasure->id_unidad_medida,
+                        'abbreviation' => $item->unitMeasure->abreviatura,
+                    ] : null,
+                ],
+            ],
+        ]);
     }
 
     public function priceAnalysis(ShowItemPriceAnalysisRequest $request, Item $item): JsonResponse

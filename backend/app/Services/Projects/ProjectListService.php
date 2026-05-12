@@ -21,7 +21,13 @@ class ProjectListService
                 $query->whereRaw('LOWER(TRIM(nombre_proyecto)) LIKE ?', ["%{$search}%"])
                     ->orWhereRaw('LOWER(TRIM(ubicacion)) LIKE ?', ["%{$search}%"])
                     ->orWhereRaw('LOWER(TRIM(observaciones)) LIKE ?', ["%{$search}%"])
-                    ->orWhereRaw('LOWER(TRIM(nombre_responsable)) LIKE ?', ["%{$search}%"]);
+                    ->orWhereRaw('LOWER(TRIM(nombre_responsable)) LIKE ?', ["%{$search}%"])
+                    ->orWhereRaw('LOWER(TRIM(CAST(responsable AS CHAR))) LIKE ?', ["%{$search}%"])
+                    ->orWhereRaw('LOWER(TRIM(CAST(solicitante AS CHAR))) LIKE ?', ["%{$search}%"])
+                    ->orWhereHas('requester', function ($query) use ($search): void {
+                        $query->whereRaw('LOWER(TRIM(funcionario)) LIKE ?', ["%{$search}%"])
+                            ->orWhereRaw('LOWER(TRIM(username)) LIKE ?', ["%{$search}%"]);
+                    });
             });
         }
 

@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Package, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { projectService } from "../services/project.service";
 
 const statusClass = {
@@ -56,8 +57,19 @@ export default function ProjectsPage() {
     setPage(1);
   };
 
+  const formatProjectNameLines = (value) => {
+    const words = String(value || "").trim().split(/\s+/).filter(Boolean);
+    const lines = [];
+
+    for (let i = 0; i < words.length; i += 2) {
+      lines.push(words.slice(i, i + 2).join(" "));
+    }
+
+    return lines.length ? lines : ["-"];
+  };
+
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+    <div className="flex flex-col gap-6">
       <Card className="border border-border/70 bg-white/86 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
         <CardHeader className="gap-4 border-b border-border/70 bg-muted/25">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -120,7 +132,7 @@ export default function ProjectsPage() {
 
           {!isLoading && !isError && (
             <div className="overflow-hidden rounded-[28px] border border-border/70 bg-background/90">
-              <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+              <div className="overflow-x-auto overflow-y-hidden">
                 <table className="min-w-full border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-border/70 bg-muted/30 text-left">
@@ -143,7 +155,11 @@ export default function ProjectsPage() {
                           {index + 1}
                         </td>
                         <td className="px-5 py-4 align-top text-foreground max-w-[250px]">
-                          <div className="truncate">{project.nombre_proyecto}</div>
+                          <div className="leading-7 whitespace-normal break-words">
+                            {formatProjectNameLines(project.nombre_proyecto).map((line, lineIndex) => (
+                              <div key={`${project.id_proyecto}-name-line-${lineIndex}`}>{line}</div>
+                            ))}
+                          </div>
                         </td>
                         <td className="px-5 py-4 align-top text-muted-foreground max-w-[180px]">
                           <div className="truncate">{project.ubicacion}</div>
@@ -171,9 +187,43 @@ export default function ProjectsPage() {
                           </Badge>
                         </td>
                         <td className="px-5 py-4 align-top text-center">
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full">
-                            •
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-72 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-lg">
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                <Pencil className="h-4 w-4 text-muted-foreground" />
+                                <span>Editar Proyecto</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                <ListPlus className="h-4 w-4 text-muted-foreground" />
+                                <span>Agregar Items al Proyecto</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                <Calculator className="h-4 w-4 text-muted-foreground" />
+                                <span>Presupuesto por Rubros</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                                <span>Recalcular Precio por Rubro</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                <PieChart className="h-4 w-4 text-muted-foreground" />
+                                <span>Resumen por Insidencia</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                                <span>Presupuesto General</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                <Layers className="h-4 w-4 text-muted-foreground" />
+                                <span>Desglose de Insumos del Proyecto</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </td>
                       </tr>
                     ))}

@@ -1660,9 +1660,16 @@ Campos principales por registro:
 - `usuario_solicitante`
 - `available_actions`
 
-Orden legacy respetado:
+Orden del listado administrativo base:
 
 - `descripcion ASC`
+
+Para la pantalla legacy `gestion-solicitud` tambien existen rutas operativas equivalentes con orden legacy por estado:
+
+- `GET /api/v1/solicitudes-insumo/gestion`
+- `GET /api/v1/solicitudes-insumo/{id}`
+- `POST /api/v1/solicitudes-insumo/{id}/gestion`
+- `POST /api/v1/solicitudes-insumo/{id}/revertir`
 
 Filtros soportados:
 
@@ -1680,10 +1687,17 @@ La API devuelve `available_actions` para que frontend no tenga que inferir regla
 
 - si `estado_aprobacion = PD`
   - `edit = true`
+  - `gestionar = true`
   - `view_quotes = true`
 - si `estado_aprobacion = AP` o `RC`
   - `edit = false`
+  - `revertir = true`
   - `view_quotes = true`
+
+Ademas expone `action_names` con:
+
+- `['gestionar']` si esta en `PD`
+- `['revertir']` si esta en `AP` o `RC`
 
 ### 14.2 Contexto de Solicitudes de Insumo
 
@@ -1697,6 +1711,10 @@ Devuelve:
 - unidades de medida activas
 - estados de aprobacion disponibles `PD`, `AP`, `RC`
 - permisos del usuario autenticado
+- endpoints auxiliares para:
+  - `manage`
+  - `revert`
+  - `unit_measure_search`
 
 ### 14.3 Crear Solicitud de Insumo
 
