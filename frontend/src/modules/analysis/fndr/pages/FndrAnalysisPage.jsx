@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Loader2, TrendingUp, Search, MoreHorizontal, RefreshCw } from "lucide-react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
+import { ChevronLeft, ChevronRight, Loader2, TrendingUp, Search, MoreHorizontal, RefreshCw, X } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
@@ -310,63 +313,55 @@ export default function FndrAnalysisPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={recalculateOpen} onOpenChange={setRecalculateOpen}>
-        <DialogContent className="max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Recalcular Precio: {recalculateItem?.name}</DialogTitle>
-            <DialogDescription>
-              Código: {recalculateItem?.codigo_item}
-            </DialogDescription>
-          </DialogHeader>
+      {recalculateOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-3xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Recalcular precio Item</CardTitle>
+                    <CardDescription>Recalcular Precios Unitarios por periodos de tiempo</CardDescription>
+                  </div>
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={() => setRecalculateOpen(false)}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
 
-          {recalculateStatus && (
-            <Alert variant={recalculateStatus.type === "error" ? "destructive" : "default"}>
-              <AlertDescription>{recalculateStatus.message}</AlertDescription>
-            </Alert>
-          )}
-
-          <form onSubmit={handleSubmitRecalculate}>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="fecha">Fecha de Referencia</Label>
-                <Input
-                  id="fecha"
-                  type="date"
-                  value={recalculateDate}
-                  onChange={(e) => setRecalculateDate(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-
-            <DialogFooter className="mt-4">
-              <Button
-                type="submit"
-                className="flex-1"
-                disabled={recalculateMutation.isPending}
-              >
-                {recalculateMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Procesando
-                  </>
-                ) : (
-                  "Aceptar"
+              <CardContent className="p-5 sm:p-6">
+                {recalculateStatus && (
+                  <Alert className="mb-4" variant={recalculateStatus.type === "error" ? "destructive" : "default"}>
+                    <AlertDescription>{recalculateStatus.message}</AlertDescription>
+                  </Alert>
                 )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={() => setRecalculateOpen(false)}
-                disabled={recalculateMutation.isPending}
-              >
-                Cancelar
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+
+                <form className="flex flex-col gap-5" onSubmit={handleSubmitRecalculate}>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="item_recalculate" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Item</Label>
+                    <Input id="item_recalculate" value={recalculateItem?.name ?? ""} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="fecha" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Seleccione Fecha de Impresion/calculo</Label>
+                    <Input id="fecha" type="date" value={recalculateDate} onChange={(e) => setRecalculateDate(e.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" required />
+                  </div>
+
+                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={recalculateMutation.isPending}>
+                    {recalculateMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Recalculando...
+                      </>
+                    ) : "Recalcular"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

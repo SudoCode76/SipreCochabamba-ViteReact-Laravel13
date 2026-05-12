@@ -47,7 +47,7 @@ export const navigationSections = [
     ],
   },
   {
-    title: "Prametros",
+    title: "Parametros",
     icon: FolderKanban,
     children: [
       { title: "Tipo de Insumo", path: "/parametros", icon: Package, accent: "emerald" },

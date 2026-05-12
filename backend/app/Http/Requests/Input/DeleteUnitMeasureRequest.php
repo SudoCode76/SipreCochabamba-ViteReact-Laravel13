@@ -14,7 +14,7 @@ class DeleteUnitMeasureRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'autorizacion' => ['required', 'string', 'max:100'],
+            'autorizacion' => ['nullable', 'string', 'max:100'],
         ];
     }
 }

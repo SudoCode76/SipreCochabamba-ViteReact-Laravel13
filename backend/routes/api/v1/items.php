@@ -17,6 +17,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/items/upre/context', [ItemController::class, 'upreContext']);
     Route::get('/items/upre', [ItemController::class, 'upreIndex']);
     Route::post('/items', [ItemController::class, 'store']);
+    Route::put('/items/{item}', [ItemController::class, 'update']);
     Route::get('/items/{item}/composition/context', [ItemController::class, 'compositionContext']);
     Route::get('/items/{item}/composition', [ItemController::class, 'composition']);
     Route::get('/items/{item}/materials', [ItemController::class, 'materials']);

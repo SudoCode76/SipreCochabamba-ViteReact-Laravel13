@@ -53,6 +53,8 @@ class ListFndrItemsService
                     'name' => $item->item,
                     'calculated_price' => round($this->priceAnalysisService->calculateCurrentPrice($item, $mode), 4),
                     'status' => $item->estado,
+                    'specification' => $item->especificacion,
+                    'sheet' => $item->ficha,
                     'group' => $item->groupCatalog ? [
                         'id' => $item->groupCatalog->id_grupo,
                         'name' => $item->groupCatalog->nombre_grupo,

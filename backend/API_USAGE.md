@@ -1662,6 +1662,321 @@ Campos principales por registro:
 
 Orden del listado administrativo base:
 
+- `id_tipo DESC`
+
+Conversion de estado para frontend:
+
+- `AC` -> `ACTIVO`
+- `DC` -> `INACTIVO`
+
+Acciones disponibles:
+
+```json
+{
+  "available_actions": {
+    "edit": true
+  }
+}
+```
+
+### 13.20.2 Contexto de Tipos de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/input-types/context`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- estados disponibles `AC` y `DC`
+- permisos del usuario autenticado
+
+### 13.20.3 Crear Tipo de Insumo
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/input-types`
+- Autenticacion: `Bearer token`
+
+Campos esperados:
+
+- `descripcion`
+- `estado`
+
+Validaciones minimas:
+
+- `descripcion` requerida
+- `estado` requerido
+
+Reglas funcionales mantenidas:
+
+- `descripcion` se limpia con `trim()`
+- si ya existe otro registro con la misma descripcion, no se inserta
+- en duplicado responde error funcional claro
+- si no es duplicado, inserta en `tipo_insumo`
+- registra auditoria
+
+### 13.20.4 Obtener Detalle de Tipo de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/input-types/{id}`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- `id_tipo`
+- `descripcion`
+- `estado`
+
+### 13.20.5 Editar Tipo de Insumo
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/input-types/{id}`
+- Autenticacion: `Bearer token`
+
+Campos esperados:
+
+- `descripcion`
+- `estado`
+
+Reglas funcionales mantenidas:
+
+- la nueva descripcion se limpia con `trim()`
+- si la descripcion cambia, valida duplicado contra `tipo_insumo.descripcion`
+- si la descripcion no cambia, actualiza directamente
+- registra auditoria
+
+### Ejemplo de error por duplicado
+
+```json
+{
+  "success": false,
+  "message": "Error de validacion.",
+  "errors": {
+    "descripcion": [
+      "Ya existe un tipo de insumo con la misma descripcion."
+    ]
+  }
+}
+```
+
+## 13.21 Unidades de Medida
+
+Estas APIs soportan la pantalla React `unidad-de-medida`.
+
+Es un modulo de parametrizacion sobre la tabla `unidad_medida`.
+
+### 13.21.1 Listar Unidades de Medida
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/unit-measures`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+Campos principales por registro:
+
+- `id_unidad_medida`
+- `descripcion`
+- `abreviatura`
+- `estado`
+- `status_label`
+- `available_actions`
+
+Regla legacy respetada:
+
+- el listado no devuelve registros con `estado = DP`
+- orden exacto: `id_unidad_medida DESC`
+
+Conversion de estado para frontend:
+
+- `AC` -> `ACTIVO`
+- `DC` -> `INACTIVO`
+
+Acciones disponibles:
+
+```json
+{
+  "available_actions": {
+    "edit": true,
+    "delete": true
+  }
+}
+```
+
+### 13.21.2 Contexto de Unidades de Medida
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/unit-measures/context`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- estados disponibles `AC` y `DC`
+- permisos del usuario autenticado
+
+### 13.21.3 Crear Unidad de Medida
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/unit-measures`
+- Autenticacion: `Bearer token`
+
+Campos esperados:
+
+- `descripcion`
+- `abreviatura`
+- `estado`
+
+Validaciones minimas:
+
+- `descripcion` requerida
+- `abreviatura` requerida
+- `estado` requerido
+
+Reglas funcionales mantenidas:
+
+- `descripcion` se limpia con `trim()`
+- `abreviatura` se limpia con `trim()`
+- `estado` se guarda en mayusculas
+- valida duplicado por `descripcion` con `estado != DP`
+- valida duplicado por `abreviatura` con `estado != DP`
+- si cualquiera existe, rechaza el alta
+- si no existe, inserta en `unidad_medida`
+- registra auditoria
+
+### 13.21.4 Obtener Detalle de Unidad de Medida
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/unit-measures/{id}`
+- Autenticacion: `Bearer token`
+
+Devuelve:
+
+- `id_unidad_medida`
+- `descripcion`
+- `abreviatura`
+- `estado`
+
+### 13.21.5 Editar Unidad de Medida
+
+- Metodo: `PUT`
+- URL: `http://localhost:8000/api/v1/unit-measures/{id}`
+- Autenticacion: `Bearer token`
+
+Campos esperados:
+
+- `descripcion`
+- `abreviatura`
+- `estado`
+
+Reglas funcionales mantenidas:
+
+- si cambia `descripcion`, valida duplicado contra `unidad_medida.descripcion` con `estado != DP`
+- si cambia `abreviatura`, valida duplicado contra `unidad_medida.abreviatura` con `estado != DP`
+- si no hay conflicto, actualiza registro
+- registra auditoria
+
+### 13.21.6 Eliminar Unidad de Medida con Autorizacion
+
+- Metodo: `DELETE`
+- URL: `http://localhost:8000/api/v1/unit-measures/{id}`
+- Autenticacion: `Bearer token`
+
+Body:
+
+```json
+{
+  "autorizacion": "AUTH-UM-1"
+}
+```
+
+Regla funcional mantenida:
+
+- no elimina directamente sin autorizacion aprobada
+- exige codigo de autorizacion valido
+- al eliminar, cambia a `estado = DP`
+- registra auditoria
+
+### 13.21.7 Solicitar Autorizacion de Eliminacion
+
+- Metodo: `POST`
+- URL: `http://localhost:8000/api/v1/unit-measures/{id}/delete-authorization-request`
+- Autenticacion: `Bearer token`
+
+La solicitud creada usa el flujo funcional de autorizaciones con:
+
+- `id_elemento`
+- `elemento`
+- `tipo_elemento = unidad_medida`
+- `tabla = unidad_medida`
+- `solicitante`
+- `estado = PE`
+
+### 13.21.8 Consultar Estado de Autorizacion
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/unit-measures/{id}/delete-authorization-status`
+- Autenticacion: `Bearer token`
+
+Responde si:
+
+- no existe autorizacion
+- existe autorizacion pendiente
+- existe autorizacion aprobada y usable
+
+### Ejemplo de error por duplicado
+
+```json
+{
+  "success": false,
+  "message": "Error de validacion.",
+  "errors": {
+    "abreviatura": [
+      "Ya existe una unidad de medida con la misma abreviatura."
+    ]
+  }
+}
+```
+
+## 14. Solicitudes de Insumo
+
+Estas APIs soportan la pantalla React `solicitud-insumo`.
+
+Trabajan sobre solicitudes previas al insumo aprobado final.
+
+### 14.1 Listar Solicitudes de Insumo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/input-requests`
+- Autenticacion: `Bearer token`
+- Restriccion: solo `ADMINISTRADOR`
+
+La respuesta sale enriquecida con joins sobre:
+
+- `tipo_insumo`
+- `unidad_medida`
+- `usuario`
+
+Campos principales por registro:
+
+- `id_solicitud`
+- `descripcion`
+- `precio`
+- `nombre_unidad_medida`
+- `abreviatura`
+- `nombre_tipo`
+- `fecha`
+- `nombre_completo`
+- `ubicacion`
+- `justificacion`
+- `estado_aprobacion`
+- `approval_status_label`
+- `notificacion`
+- `archivo`
+- `archivo1`
+- `archivo2`
+- `usuario_solicitante`
+- `available_actions`
+
+Orden del listado administrativo base:
+
 - `descripcion ASC`
 
 Para la pantalla legacy `gestion-solicitud` tambien existen rutas operativas equivalentes con orden legacy por estado:
@@ -4662,7 +4977,172 @@ En esta API nueva se normalizo la regla para validar unicidad dentro de `porcent
 - Autenticacion: `Bearer token`
 - Permiso actual: administrador
 
-Devuelve el detalle del porcentaje FPS para cargar el formulario de edicion.
+Body esperado:
+
+```json
+{
+  "codigo": "PROM-002A",
+  "descripcion": "IVA ACTUALIZADO",
+  "porcentaje": 1.5,
+  "observacion": "Obs editada",
+  "estado": "AC"
+}
+```
+
+Reglas funcionales:
+
+- backend compara contra el registro actual
+- si cambia `codigo`, revalida unicidad por `codigo` dentro de `porcentaje_calculo_proman`
+- si cambia `descripcion`, valida duplicado por `descripcion`
+- `porcentaje` sigue siendo requerido funcionalmente
+- registra auditoria al actualizar
+
+### 16.7 Composicion Operativa del Item
+
+Estas APIs permiten replicar los modales y pantallas operativas de composicion del item por bloque.
+
+#### Contexto del item
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/composition/context`
+
+Devuelve:
+
+- datos base del item
+- unidad
+- grupo
+- subgrupo
+- estado
+- precio actual
+- permisos funcionales
+- `available_actions`
+- metadata operativa como `can_edit`, `can_add_inputs`, `can_recalculate`
+
+#### Composicion completa
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/composition`
+
+Devuelve:
+
+- `materials`
+- `labor`
+- `machinery`
+- `totals.materials`
+- `totals.labor`
+- `totals.machinery`
+- `totals.global`
+
+#### Materiales
+
+- `GET /api/v1/items/{id}/materials`
+- `POST /api/v1/items/{id}/materials`
+- `PUT /api/v1/items/{id}/materials/{itemInputId}`
+- `DELETE /api/v1/items/{id}/materials/{itemInputId}`
+- `GET /api/v1/items/{id}/materials/total`
+
+Body minimo para agregar:
+
+```json
+{
+  "id_insumo": 1,
+  "cantidad": 2
+}
+```
+
+#### Mano de obra
+
+- `GET /api/v1/items/{id}/labor`
+- `POST /api/v1/items/{id}/labor`
+- `PUT /api/v1/items/{id}/labor/{itemInputId}`
+- `DELETE /api/v1/items/{id}/labor/{itemInputId}`
+- `GET /api/v1/items/{id}/labor/total`
+
+#### Maquinaria / herramienta
+
+- `GET /api/v1/items/{id}/machinery`
+- `POST /api/v1/items/{id}/machinery`
+- `PUT /api/v1/items/{id}/machinery/{itemInputId}`
+- `DELETE /api/v1/items/{id}/machinery/{itemInputId}`
+- `GET /api/v1/items/{id}/machinery/total`
+
+#### Total global del item
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/items/{id}/total`
+
+#### Regla aplicada al agregar duplicados
+
+Si el mismo insumo ya existe relacionado al item:
+
+- no se crea una fila duplicada nueva
+- se actualiza la relacion existente con la nueva `cantidad`
+- se mantiene una sola relacion activa por item + insumo
+
+#### Precio unitario y parcial
+
+- el precio unitario usado por defecto sale del `insumo` actual
+- `parcial = cantidad * precio_unitario`
+- en la implementacion actual la API permite editar `cantidad`
+- no se persiste un precio unitario manual por separado en `item_insumo`
+
+#### Restriccion por estado del item
+
+Si el item esta `DC`:
+
+- no permite agregar materiales
+- no permite agregar mano de obra
+- no permite agregar maquinaria
+- no permite recalcular
+- si permite consulta del contexto y composicion
+
+#### Busqueda de insumos para selects por tipo
+
+- Metodo: `GET`
+- URL: `http://localhost:8000/api/v1/search/inputs?type=1`
+
+Tipos esperados:
+
+- `1` material
+- `2` mano de obra
+- `3` maquinaria / herramienta
+
+La respuesta devuelve:
+
+- `id`
+- `text`
+- `precio`
+- `tipo`
+
+#### Analisis general del item sin modo explicito
+
+- `GET /api/v1/items/{id}/price-analysis`
+- `POST /api/v1/items/{id}/price-recalculation`
+- `POST /api/v1/items/{id}/breakdowns/recalculate`
+
+Para compatibilidad, si no se envia `mode`, backend usa `general` por defecto.
+
+### 16.8 Acciones disponibles por item
+
+Cada item listado y el contexto de composicion devuelven acciones explicitas.
+
+- si `status = AC`
+  - `edit = true`
+  - `materials = true`
+  - `labor = true`
+  - `machinery = true`
+  - `files = true`
+  - `price_analysis = true`
+  - `price_recalculation = true`
+  - `material_breakdown = true`
+  - `labor_breakdown = true`
+  - `tools_breakdown = true`
+  - `breakdown_recalculation = true`
+- si `status = DC`
+  - `edit = true`
+  - todas las demas acciones en `false`
+
+Tambien se devuelve `status_label`:
 
 ### 23.5 Editar Porcentaje de Calculo FPS
 
