@@ -1,15 +1,15 @@
 import apiClient from "@/lib/api/client";
 
-export const promanCalculationPercentagesService = {
+export const obrasCalculationPercentagesService = {
   context: async () => {
-    const response = await apiClient.get("/v1/calculation-percentages/proman/context");
+    const response = await apiClient.get("/v1/calculation-percentages/obras/context");
     return response.data;
   },
 
   list: async ({ page = 1, perPage = 10, search = "", status = "" } = {}) => {
     const normalizedSearch = search.trim().toUpperCase();
 
-    const response = await apiClient.get("/v1/calculation-percentages/proman", {
+    const response = await apiClient.get("/v1/calculation-percentages/obras", {
       params: {
         page,
         per_page: perPage,
@@ -21,17 +21,17 @@ export const promanCalculationPercentagesService = {
   },
 
   getById: async (calculationPercentageId) => {
-    const response = await apiClient.get(`/v1/calculation-percentages/proman/${calculationPercentageId}`);
+    const response = await apiClient.get(`/v1/calculation-percentages/obras/${calculationPercentageId}`);
     return response.data;
   },
 
   create: async (payload) => {
-    const response = await apiClient.post("/v1/calculation-percentages/proman", payload);
+    const response = await apiClient.post("/v1/calculation-percentages/obras", payload);
     return response.data;
   },
 
   update: async (calculationPercentageId, payload) => {
-    const response = await apiClient.put(`/v1/calculation-percentages/proman/${calculationPercentageId}`, payload);
+    const response = await apiClient.put(`/v1/calculation-percentages/obras/${calculationPercentageId}`, payload);
     return response.data;
   },
 };

@@ -37,6 +37,7 @@ class InputRequest extends Model
         'archivo2',
         'fecha',
         'fecha_modificacion',
+        'ultima_modificacion',
     ];
 
     protected function casts(): array
@@ -50,6 +51,7 @@ class InputRequest extends Model
             'fecha' => 'date',
             'fecha_aprobacion' => 'date',
             'fecha_modificacion' => 'datetime',
+            'ultima_modificacion' => 'datetime',
         ];
     }
 

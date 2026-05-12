@@ -5,8 +5,12 @@ import ProtectedRoute from "./ProtectedRoute";
 import ModulePlaceholder from "@/components/ModulePlaceholder";
 import ChangePasswordPage from "@/modules/auth/pages/ChangePasswordPage";
 import AuthorizationsPage from "@/modules/authorizations/pages/AuthorizationsPage";
+import FpsCalculationPercentagesPage from "@/modules/calculation-percentages/pages/FpsCalculationPercentagesPage";
 import LoginPage from "@/modules/auth/pages/LoginPage";
+import FndrCalculationPercentagesPage from "@/modules/calculation-percentages/pages/FndrCalculationPercentagesPage";
+import ObrasCalculationPercentagesPage from "@/modules/calculation-percentages/pages/ObrasCalculationPercentagesPage";
 import PromanCalculationPercentagesPage from "@/modules/calculation-percentages/pages/PromanCalculationPercentagesPage";
+import UpreCalculationPercentagesPage from "@/modules/calculation-percentages/pages/UpreCalculationPercentagesPage";
 import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
 import ItemsPage from "@/modules/items/pages/ItemsPage";
 import FndrAnalysisPage from "@/modules/analysis/fndr/pages/FndrAnalysisPage";
@@ -20,8 +24,7 @@ import NewProjectPage from "@/modules/projects/pages/NewProjectPage";
 import InputsPage from "@/modules/inputs/pages/InputsPage";
 import InputRequestsPage from "@/modules/input-requests/pages/InputRequestsPage";
 import CreateInputRequestPage from "@/modules/input-requests/pages/CreateInputRequestPage";
-import InputTypesPage from "@/modules/input-types/pages/InputTypesPage";
-import UnitMeasuresPage from "@/modules/input-types/pages/UnitMeasuresPage";
+import ManageInputRequestsPage from "@/modules/input-requests/pages/ManageInputRequestsPage";
 import FunctionsPage from "@/modules/functions/pages/FunctionsPage";
 import RolesPage from "@/modules/roles/pages/RolesPage";
 import UsersPage from "@/modules/users/pages/UsersPage";
@@ -100,6 +103,10 @@ export const router = createBrowserRouter([
             element: <CreateInputRequestPage />,
           },
           {
+            path: "/Gestionar Solicitud",
+            element: <ManageInputRequestsPage />,
+          },
+          {
             path: "/Proyecto",
             element: <ProjectsPage />,
           },
@@ -112,6 +119,16 @@ export const router = createBrowserRouter([
             element: placeholder("Parámetros", "Aquí pueden entrar catálogos maestros, configuraciones y reglas base del sistema.", "Gestión", "amber"),
           },
           {
+            path: "/parametros/fps",
+            element: <FpsCalculationPercentagesPage />,
+          },
+          {
+            path: "/parametros/upre",
+            element: <UpreCalculationPercentagesPage />,
+          },
+          {
+            path: "/parametros/fndr",
+            element: <FndrCalculationPercentagesPage />,
             path: "/Grupos",
             element: <GroupsPage />,
           },
@@ -148,6 +165,8 @@ export const router = createBrowserRouter([
             element: <PromanCalculationPercentagesPage />,
           },
           {
+            path: "/parametros/obras-publicas",
+            element: <ObrasCalculationPercentagesPage />,
             path: "/Parametros Porcentajes Proman",
             element: <PromanCalculationPercentagesPage />,
           },

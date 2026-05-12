@@ -10,6 +10,7 @@ class InputRequestResource extends JsonResource
     public function toArray(Request $request): array
     {
         $approvalStatus = (string) $this->estado_aprobacion;
+        $updatedAt = $this->ultima_modificacion ?? $this->fecha_modificacion;
 
         return [
             'id' => $this->id_solicitud,
@@ -38,7 +39,7 @@ class InputRequestResource extends JsonResource
             'archivo2' => $this->archivo2,
             'unidad_medida' => $this->unidad_medida,
             'tipo' => $this->tipo,
-            'fecha_modificacion' => $this->fecha_modificacion?->toIso8601String(),
+            'fecha_modificacion' => $updatedAt?->toIso8601String(),
             'available_actions' => [
                 'edit' => strtoupper(trim($approvalStatus)) === 'PD',
                 'gestionar' => strtoupper(trim($approvalStatus)) === 'PD',

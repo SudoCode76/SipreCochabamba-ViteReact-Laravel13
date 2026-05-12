@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ChevronLeft, ChevronRight, Loader2, TrendingUp, Search, MoreHorizontal, RefreshCw } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Loader2, TrendingUp, Search, MoreHorizontal, RefreshCw, X } from "lucide-react";
@@ -17,6 +19,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { itemsService } from "@/modules/dashboard/services/items.service";
 import apiClient from "@/lib/api/client";
 import {
@@ -57,10 +67,6 @@ export default function FndrAnalysisPage() {
     },
     onSuccess: () => {
       setRecalculateStatus({ type: "success", message: "Precio recalculado correctamente" });
-      setTimeout(() => {
-        setRecalculateOpen(false);
-        setRecalculateItem(null);
-      }, 500);
     },
     onError: (error) => {
       const message = error.response?.data?.message || "Error al recalcular el precio"

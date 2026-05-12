@@ -79,6 +79,7 @@ class PromanCalculationPercentageApiTest extends TestCase
         $this->getJson('/api/v1/calculation-percentages/proman/2')
             ->assertOk()
             ->assertJsonPath('data.calculation_percentage.id_porcentaje', 2)
+            ->assertJsonPath('data.calculation_percentage.id', 2)
             ->assertJsonPath('data.calculation_percentage.display_id', 'PROM-002')
             ->assertJsonPath('data.calculation_percentage.codigo', 'PROM-002')
             ->assertJsonPath('data.calculation_percentage.code', 'PROM-002');

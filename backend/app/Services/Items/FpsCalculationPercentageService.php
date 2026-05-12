@@ -7,7 +7,7 @@ use App\Http\Requests\Item\UpdateCalculationPercentageRequest;
 use App\Models\FpsCalculationPercentage;
 use App\Models\User;
 use App\Services\AuditService;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\ValidationException;
 
 class FpsCalculationPercentageService
@@ -24,14 +24,46 @@ class FpsCalculationPercentageService
                 'can_create' => $user->isAdministrator(),
                 'can_update' => $user->isAdministrator(),
             ],
+            'filters' => ['search', 'description', 'code', 'status', 'page', 'per_page'],
+            'endpoints' => [
+                'list' => '/api/v1/calculation-percentages/fps',
+                'show' => '/api/v1/calculation-percentages/fps/{id}',
+                'create' => '/api/v1/calculation-percentages/fps',
+                'update' => '/api/v1/calculation-percentages/fps/{id}',
+            ],
         ];
     }
 
-    public function list(): Collection
+    public function list(array $filters = []): LengthAwarePaginator
     {
-        return FpsCalculationPercentage::query()
+        $query = FpsCalculationPercentage::query();
+
+        if (filled($filters['search'] ?? null)) {
+            $search = trim((string) $filters['search']);
+
+            $query->where(function ($query) use ($search): void {
+                $query->where('codigo', 'like', "%{$search}%")
+                    ->orWhere('descripcion', 'like', "%{$search}%")
+                    ->orWhere('observacion', 'like', "%{$search}%");
+            });
+        }
+
+        if (filled($filters['description'] ?? null)) {
+            $query->where('descripcion', 'like', '%'.trim((string) $filters['description']).'%');
+        }
+
+        if (filled($filters['code'] ?? null)) {
+            $query->where('codigo', 'like', '%'.trim((string) $filters['code']).'%');
+        }
+
+        if (filled($filters['status'] ?? null)) {
+            $query->where('estado', strtoupper(trim((string) $filters['status'])));
+        }
+
+        return $query
             ->orderByDesc('id_porcentaje')
-            ->get();
+            ->paginate((int) ($filters['per_page'] ?? 15))
+            ->withQueryString();
     }
 
     public function create(StoreCalculationPercentageRequest $request, User $user): FpsCalculationPercentage
