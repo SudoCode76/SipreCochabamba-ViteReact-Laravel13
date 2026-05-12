@@ -9,6 +9,7 @@ use App\Models\InputRequest;
 use App\Models\User;
 use App\Services\AuditService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class InputRequestCrudService
 {
@@ -35,7 +36,7 @@ class InputRequestCrudService
                 'archivo1' => $files['archivo1'],
                 'archivo2' => $files['archivo2'],
                 'fecha' => $request->filled('date') ? $request->date('date')->toDateString() : now()->toDateString(),
-                'fecha_modificacion' => now(),
+                ...$this->modificationTimestampPayload(),
             ]);
 
             $this->registerQuoteHistory($inputRequest, $files);
@@ -70,7 +71,7 @@ class InputRequestCrudService
                 'archivo1' => $files['archivo1'],
                 'archivo2' => $files['archivo2'],
                 'fecha' => $request->filled('date') ? $request->date('date')->toDateString() : $inputRequest->fecha?->toDateString(),
-                'fecha_modificacion' => now(),
+                ...$this->modificationTimestampPayload(),
             ]);
 
             if ($this->shouldReplaceFiles($request)) {
@@ -118,5 +119,16 @@ class InputRequestCrudService
     private function registerAudit(User $user, ?string $ip, string $process): void
     {
         app(AuditService::class)->record($user, $ip, $process);
+    }
+
+    private function modificationTimestampPayload(): array
+    {
+        $column = Schema::hasColumn('solicitud_insumo', 'ultima_modificacion')
+            ? 'ultima_modificacion'
+            : 'fecha_modificacion';
+
+        return [
+            $column => now(),
+        ];
     }
 }
