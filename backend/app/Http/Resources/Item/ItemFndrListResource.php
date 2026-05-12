@@ -17,6 +17,8 @@ class ItemFndrListResource extends JsonResource
             'calculated_price' => $this['calculated_price'],
             'status' => $status,
             'status_label' => $this->statusLabel($status),
+            'specification' => $this['specification'] ?? null,
+            'sheet' => $this['sheet'] ?? null,
             'group' => $this['group'],
             'subgroup' => $this['subgroup'],
             'unit_measure' => $this['unit_measure'],

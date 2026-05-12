@@ -54,7 +54,7 @@ export const navigationSections = [
       { title: "Unidad de Medida", path: "/Unidad de Medida", icon: FolderKanban, accent: "sky" },
       { title: "Grupos", path: "/Grupos", icon: FolderKanban, accent: "sky" },
       { title: "Sub grupos", path: "/Sub grupos", icon: FolderKanban, accent: "sky" },
-      { title: "% Calculo", path: "/% Calculo", icon: FolderKanban, accent: "sky" },
+      { title: "% Calculo", path: "/Calculo", icon: FolderKanban, accent: "sky" },
       { title: "% Calculo UPRE", path: "/% Calculo UPRE", icon: FolderKanban, accent: "sky" },
       { title: "% Calculo FPS", path: "/% Calculo FPS", icon: FolderKanban, accent: "sky" },
       { title: "% Calculo FNDR", path: "/% Calculo FNDR", icon: FolderKanban, accent: "sky" },

@@ -116,11 +116,11 @@ export const router = createBrowserRouter([
             element: <GroupsPage />,
           },
           {
-            path: "/Sub grupos",
-            element: <SubgroupsPage />,
+            path: "/%25%20Calculo",
+            element: <CalculationPercentagesPage />,
           },
           {
-            path: "/%25%20Calculo",
+            path: "/%2520Calculo",
             element: <CalculationPercentagesPage />,
           },
           {
@@ -129,6 +129,18 @@ export const router = createBrowserRouter([
           },
           {
             path: "/Calculo",
+            element: <CalculationPercentagesPage />,
+          },
+          {
+            path: "/calculo",
+            element: <CalculationPercentagesPage />,
+          },
+          {
+            path: "/Sub grupos",
+            element: <SubgroupsPage />,
+          },
+          {
+            path: "/parametros-calculo",
             element: <CalculationPercentagesPage />,
           },
           {
@@ -214,6 +226,8 @@ export const router = createBrowserRouter([
           {
             path: "/autorizaciones",
             element: placeholder("Gestión de Autorizaciones", "Interfaz reservada para permisos específicos y revisiones sensibles.", "Administración", "amber"),
+          },
+          {
             path: "/administracion/usuarios",
             element: <UsersPage />,
           },
