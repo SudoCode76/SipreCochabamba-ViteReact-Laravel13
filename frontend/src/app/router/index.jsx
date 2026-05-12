@@ -25,6 +25,8 @@ import InputsPage from "@/modules/inputs/pages/InputsPage";
 import InputRequestsPage from "@/modules/input-requests/pages/InputRequestsPage";
 import CreateInputRequestPage from "@/modules/input-requests/pages/CreateInputRequestPage";
 import ManageInputRequestsPage from "@/modules/input-requests/pages/ManageInputRequestsPage";
+import InputTypesPage from "@/modules/input-types/pages/InputTypesPage";
+import UnitMeasuresPage from "@/modules/input-types/pages/UnitMeasuresPage";
 import FunctionsPage from "@/modules/functions/pages/FunctionsPage";
 import RolesPage from "@/modules/roles/pages/RolesPage";
 import UsersPage from "@/modules/users/pages/UsersPage";
@@ -129,6 +131,8 @@ export const router = createBrowserRouter([
           {
             path: "/parametros/fndr",
             element: <FndrCalculationPercentagesPage />,
+          },
+          {
             path: "/Grupos",
             element: <GroupsPage />,
           },
@@ -167,56 +171,58 @@ export const router = createBrowserRouter([
           {
             path: "/parametros/obras-publicas",
             element: <ObrasCalculationPercentagesPage />,
+          },
+          {
             path: "/Parametros Porcentajes Proman",
             element: <PromanCalculationPercentagesPage />,
           },
           {
             path: "/%25%20Calculo%20UPRE",
-            element: placeholder("Porcentajes UPRE", "Configuración de porcentajes para análisis UPRE.", "Parámetros", "sky"),
+            element: <UpreCalculationPercentagesPage />,
           },
           {
             path: "/% Calculo UPRE",
-            element: placeholder("Porcentajes UPRE", "Configuración de porcentajes para análisis UPRE.", "Parámetros", "sky"),
+            element: <UpreCalculationPercentagesPage />,
           },
           {
             path: "/Parametros Porcentajes Upre",
-            element: placeholder("Porcentajes UPRE", "Configuración de porcentajes para análisis UPRE.", "Parámetros", "sky"),
+            element: <UpreCalculationPercentagesPage />,
           },
           {
             path: "/%25%20Calculo%20FPS",
-            element: placeholder("Porcentajes FPS", "Configuración de porcentajes para análisis FPS.", "Parámetros", "sky"),
+            element: <FpsCalculationPercentagesPage />,
           },
           {
             path: "/% Calculo FPS",
-            element: placeholder("Porcentajes FPS", "Configuración de porcentajes para análisis FPS.", "Parámetros", "sky"),
+            element: <FpsCalculationPercentagesPage />,
           },
           {
             path: "/Parametros Porcentajes Fps",
-            element: placeholder("Porcentajes FPS", "Configuración de porcentajes para análisis FPS.", "Parámetros", "sky"),
+            element: <FpsCalculationPercentagesPage />,
           },
           {
             path: "/%25%20Calculo%20FNDR",
-            element: placeholder("Porcentajes FNDR", "Configuración de porcentajes para análisis FNDR.", "Parámetros", "sky"),
+            element: <FndrCalculationPercentagesPage />,
           },
           {
             path: "/% Calculo FNDR",
-            element: placeholder("Porcentajes FNDR", "Configuración de porcentajes para análisis FNDR.", "Parámetros", "sky"),
+            element: <FndrCalculationPercentagesPage />,
           },
           {
             path: "/Parametros Porcentajes Fndr",
-            element: placeholder("Porcentajes FNDR", "Configuración de porcentajes para análisis FNDR.", "Parámetros", "sky"),
+            element: <FndrCalculationPercentagesPage />,
           },
           {
             path: "/%25%20OBRAS%20PUBLICAS",
-            element: placeholder("Porcentajes Obras Públicas", "Configuración de porcentajes para análisis Obras Públicas.", "Parámetros", "sky"),
+            element: <ObrasCalculationPercentagesPage />,
           },
           {
             path: "/% OBRAS PUBLICAS",
-            element: placeholder("Porcentajes Obras Públicas", "Configuración de porcentajes para análisis Obras Públicas.", "Parámetros", "sky"),
+            element: <ObrasCalculationPercentagesPage />,
           },
           {
             path: "/Parametros Porcentajes Obras Publicas",
-            element: placeholder("Porcentajes Obras Públicas", "Configuración de porcentajes para análisis Obras Públicas.", "Parámetros", "sky"),
+            element: <ObrasCalculationPercentagesPage />,
           },
           {
             path: "/Tipo de Insumo",
