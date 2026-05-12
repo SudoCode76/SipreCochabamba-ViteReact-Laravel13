@@ -10,6 +10,7 @@ import LoginPage from "@/modules/auth/pages/LoginPage";
 import FndrCalculationPercentagesPage from "@/modules/calculation-percentages/pages/FndrCalculationPercentagesPage";
 import ObrasCalculationPercentagesPage from "@/modules/calculation-percentages/pages/ObrasCalculationPercentagesPage";
 import PromanCalculationPercentagesPage from "@/modules/calculation-percentages/pages/PromanCalculationPercentagesPage";
+import UpreCalculationPercentagesPage from "@/modules/calculation-percentages/pages/UpreCalculationPercentagesPage";
 import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
 import ItemsPage from "@/modules/items/pages/ItemsPage";
 import FndrAnalysisPage from "@/modules/analysis/fndr/pages/FndrAnalysisPage";
@@ -112,6 +113,10 @@ export const router = createBrowserRouter([
           {
             path: "/parametros/fps",
             element: <FpsCalculationPercentagesPage />,
+          },
+          {
+            path: "/parametros/upre",
+            element: <UpreCalculationPercentagesPage />,
           },
           {
             path: "/parametros/fndr",
