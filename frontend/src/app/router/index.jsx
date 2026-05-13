@@ -21,6 +21,7 @@ import PromanAnalysisPage from "@/modules/analysis/proman/pages/PromanAnalysisPa
 import PriceRecalculationPage from "@/modules/analysis/pages/PriceRecalculationPage";
 import ProjectsPage from "@/modules/projects/pages/ProjectsPage";
 import NewProjectPage from "@/modules/projects/pages/NewProjectPage";
+import EditProjectPage from "@/modules/projects/pages/EditProjectPage";
 import InputsPage from "@/modules/inputs/pages/InputsPage";
 import InputRequestsPage from "@/modules/input-requests/pages/InputRequestsPage";
 import CreateInputRequestPage from "@/modules/input-requests/pages/CreateInputRequestPage";
@@ -115,6 +116,10 @@ export const router = createBrowserRouter([
           {
             path: "/Nuevo proyecto",
             element: <NewProjectPage />,
+          },
+          {
+            path: "/Proyecto/:projectId/editar",
+            element: <EditProjectPage />,
           },
           {
             path: "/parametros",

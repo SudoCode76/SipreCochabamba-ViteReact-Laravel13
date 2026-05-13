@@ -1,12 +1,16 @@
 import { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers } from "lucide-react";
+import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, X } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import ProjectEditForm from "../components/ProjectEditForm";
+import ProjectItemsForm from "../components/ProjectItemsForm";
 import { projectService } from "../services/project.service";
 
 const statusClass = {
@@ -21,10 +25,15 @@ const approvalClass = {
 };
 
 export default function ProjectsPage() {
+  const navigate = useNavigate();
   const [perPage, setPerPage] = useState(15);
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editProject, setEditProject] = useState(null);
+  const [itemsOpen, setItemsOpen] = useState(false);
+  const [itemsProject, setItemsProject] = useState(null);
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
     queryKey: ["projects", { page, perPage, search }],
@@ -55,6 +64,26 @@ export default function ProjectsPage() {
   const handlePerPageChange = (event) => {
     setPerPage(Number(event.target.value));
     setPage(1);
+  };
+
+  const openEdit = (project) => {
+    setEditProject(project);
+    setEditOpen(true);
+  };
+
+  const closeEdit = () => {
+    setEditOpen(false);
+    setEditProject(null);
+  };
+
+  const openItems = (project) => {
+    setItemsProject(project);
+    setItemsOpen(true);
+  };
+
+  const closeItems = () => {
+    setItemsOpen(false);
+    setItemsProject(null);
   };
 
   const formatProjectNameLines = (value) => {
@@ -194,11 +223,14 @@ export default function ProjectsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-72 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-lg">
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
+                                onClick={() => openEdit(project)}
+                              >
                                 <Pencil className="h-4 w-4 text-muted-foreground" />
                                 <span>Editar Proyecto</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openItems(project)}>
                                 <ListPlus className="h-4 w-4 text-muted-foreground" />
                                 <span>Agregar Items al Proyecto</span>
                               </DropdownMenuItem>
@@ -282,6 +314,74 @@ export default function ProjectsPage() {
           )}
         </CardContent>
       </Card>
+
+      {editOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-3xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Editar Proyecto</CardTitle>
+                    <CardDescription>
+                      {editProject?.nombre_proyecto ? `Proyecto: ${editProject.nombre_proyecto}` : "Actualiza la información base del proyecto seleccionado."}
+                    </CardDescription>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeEdit}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 sm:p-6">
+                {editProject && (
+                  <ProjectEditForm
+                    projectId={editProject.id_proyecto}
+                    onCancel={closeEdit}
+                    onSuccess={closeEdit}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {itemsOpen && createPortal(
+        <div className="fixed inset-0 z-[80] overflow-y-auto bg-slate-950/30 p-4 backdrop-blur-[1px]">
+          <div className="mr-auto flex min-h-full w-full max-w-5xl items-start justify-start py-4 xl:py-8">
+            <Card className="w-full border border-border/70 bg-white shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-white">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Agregar Items al Proyecto</CardTitle>
+                    <CardDescription>
+                      {itemsProject?.nombre_proyecto ? `Proyecto: ${itemsProject.nombre_proyecto}` : "Selecciona, edita y ordena los items del proyecto."}
+                    </CardDescription>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeItems}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 sm:p-6">
+                {itemsProject && (
+                  <ProjectItemsForm
+                    projectId={itemsProject.id_proyecto}
+                    onCancel={closeItems}
+                    onSuccess={closeItems}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

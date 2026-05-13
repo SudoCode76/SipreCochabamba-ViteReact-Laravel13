@@ -42,7 +42,7 @@ class UpdateProjectRequest extends FormRequest
             'longitud' => ['nullable', 'string', 'max:50'],
             'responsable' => ['required', 'integer', 'exists:usuario,id_usuario'],
             'solicitante' => ['required', 'integer', 'exists:usuario,id_usuario'],
-            'observaciones' => ['required', 'string', 'max:500'],
+            'observaciones' => ['nullable', 'string', 'max:500'],
             'estado' => ['required', 'string', 'size:2', 'in:AC,DC'],
             'aprobado' => ['required', 'string', 'size:2', 'in:PD,RV,AP'],
             'fecha_aprob' => ['nullable', 'date'],
