@@ -19,8 +19,12 @@ use App\Services\Items\Fndr\FndrPermissionService;
 use App\Services\Items\Fndr\FndrPriceAnalysisService;
 use App\Services\Items\Fndr\ListFndrItemsService;
 use App\Services\Items\ItemCompositionService;
+use App\Services\Items\LegacyUnitPriceAnalysisPdfService;
+use App\Services\Items\LegacyUnitPriceAnalysisService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Request as HttpRequest;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
@@ -33,6 +37,8 @@ class ItemController extends Controller
         private readonly FndrPriceAnalysisService $fndrPriceAnalysisService,
         private readonly FndrPermissionService $fndrPermissionService,
         private readonly ItemCompositionService $itemCompositionService,
+        private readonly LegacyUnitPriceAnalysisService $legacyUnitPriceAnalysisService,
+        private readonly LegacyUnitPriceAnalysisPdfService $legacyUnitPriceAnalysisPdfService,
     ) {}
 
     public function fndrContext(Request $request): JsonResponse
@@ -418,6 +424,32 @@ class ItemController extends Controller
             'message' => 'Analisis de precio '.strtoupper($mode).' obtenido correctamente.',
             'data' => $analysis,
         ]);
+    }
+
+    public function legacyUnitPriceAnalysis(HttpRequest $request, Item $item): JsonResponse
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view_price_analysis']) {
+            return $this->forbiddenResponse('No tiene permisos para ver el analisis de precios unitarios del item.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Analisis de precios unitarios obtenido correctamente.',
+            'data' => $this->legacyUnitPriceAnalysisService->build($item),
+        ]);
+    }
+
+    public function legacyUnitPriceAnalysisPdf(HttpRequest $request, Item $item): Response
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view_price_analysis']) {
+            abort(403, 'No tiene permisos para ver el analisis de precios unitarios del item.');
+        }
+
+        return $this->legacyUnitPriceAnalysisPdfService->stream($item);
     }
 
     public function priceRecalculation(RecalculateItemPriceRequest $request, Item $item): JsonResponse
