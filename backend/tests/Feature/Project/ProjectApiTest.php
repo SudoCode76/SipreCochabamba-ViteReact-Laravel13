@@ -175,6 +175,25 @@ class ProjectApiTest extends TestCase
             ->assertJsonCount(2, 'data.items');
     }
 
+    public function test_can_create_project_without_optional_coordinates_and_observations(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->postJson('/api/v1/projects', [
+            'nombre_proyecto' => 'proyecto sin coordenadas',
+            'fecha' => '2026-04-30',
+            'ubicacion' => 'ubicacion base',
+            'responsable' => 1,
+            'solicitante' => 1,
+            'estado' => 'AC',
+            'aprobado' => 'PD',
+        ])->assertCreated()
+            ->assertJsonPath('data.project.nombre_proyecto', 'PROYECTO SIN COORDENADAS')
+            ->assertJsonPath('data.project.latitud', null)
+            ->assertJsonPath('data.project.longitud', null)
+            ->assertJsonPath('data.project.observaciones', null);
+    }
+
     public function test_can_calculate_project_budgets_and_reports(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

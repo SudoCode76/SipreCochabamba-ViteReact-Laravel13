@@ -22,6 +22,7 @@ import PriceRecalculationPage from "@/modules/analysis/pages/PriceRecalculationP
 import ProjectsPage from "@/modules/projects/pages/ProjectsPage";
 import NewProjectPage from "@/modules/projects/pages/NewProjectPage";
 import EditProjectPage from "@/modules/projects/pages/EditProjectPage";
+import ProjectItemsPage from "@/modules/projects/pages/ProjectItemsPage";
 import InputsPage from "@/modules/inputs/pages/InputsPage";
 import InputRequestsPage from "@/modules/input-requests/pages/InputRequestsPage";
 import CreateInputRequestPage from "@/modules/input-requests/pages/CreateInputRequestPage";
@@ -120,6 +121,10 @@ export const router = createBrowserRouter([
           {
             path: "/Proyecto/:projectId/editar",
             element: <EditProjectPage />,
+          },
+          {
+            path: "/Proyecto/:projectId/items",
+            element: <ProjectItemsPage />,
           },
           {
             path: "/parametros",

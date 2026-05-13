@@ -52,10 +52,17 @@ export default function NewProjectPage() {
     setSaving(true);
 
     try {
-      await apiClient.post("/v1/projects", formData);
+      await apiClient.post("/v1/projects", {
+        ...formData,
+        latitud: formData.latitud?.trim() || null,
+        longitud: formData.longitud?.trim() || null,
+        observaciones: formData.observaciones?.trim() || null,
+      });
       navigate("/Proyecto");
     } catch (err) {
-      setError(err.response?.data?.message || "Error al crear el proyecto");
+      const fieldErrors = err.response?.data?.errors;
+      const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
+      setError(firstFieldError || err.response?.data?.message || "Error al crear el proyecto");
     } finally {
       setSaving(false);
     }

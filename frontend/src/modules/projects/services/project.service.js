@@ -23,6 +23,11 @@ export const projectService = {
     return response.data;
   },
 
+  budgetRecalculation: async (projectId, payload) => {
+    const response = await apiClient.post(`/v1/projects/${projectId}/budget-recalculation`, payload);
+    return response.data;
+  },
+
   items: async (projectId, format = "PCA") => {
     const response = await apiClient.get(`/v1/projects/${projectId}/items`, {
       params: { format },
