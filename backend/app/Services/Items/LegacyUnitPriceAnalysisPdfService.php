@@ -18,9 +18,9 @@ class LegacyUnitPriceAnalysisPdfService
         $analysis = $document['raw'];
 
         $pdf = new LegacyUnitPriceAnalysisPdf(
-            'L',
+            'P',
             defined('PDF_UNIT') ? PDF_UNIT : 'mm',
-            defined('PDF_PAGE_FORMAT') ? PDF_PAGE_FORMAT : 'A4',
+            'A4',
             true,
             'UTF-8',
             false,
@@ -56,7 +56,7 @@ class LegacyUnitPriceAnalysisPdfService
         $pdf->SetAutoPageBreak(true, defined('PDF_MARGIN_BOTTOM') ? PDF_MARGIN_BOTTOM : 25);
         $pdf->setImageScale(defined('PDF_IMAGE_SCALE_RATIO') ? PDF_IMAGE_SCALE_RATIO : 1.25);
         $pdf->setFontSubsetting(true);
-        $pdf->AddPage('L', 'A4');
+        $pdf->AddPage('P', 'A4');
         $pdf->SetDisplayMode('real');
         $pdf->SetAutoPageBreak(true, 10);
         $pdf->SetFont('dejavusans', '', 7, '', true);
@@ -93,6 +93,20 @@ class LegacyUnitPriceAnalysisPdfService
         $acumB = 0.0;
         $acumC = 0.0;
 
+        $wNo = '6.06%';
+        $wDescription = '42.42%';
+        $wUnit = '9.09%';
+        $wQuantity = '9.09%';
+        $wUnitPrice = '16.67%';
+        $wPartial = '16.67%';
+        $wSection = '5.30%';
+        $wSectionContent = '94.70%';
+        $wSubtotalLabel = '61.06%';
+        $wMergedDescription = '51.91%';
+        $wPercent = '9.16%';
+        $wAdoptedLabel = '83.33%';
+        $wItemName = '61.36%';
+
         $html = '';
         $html .= '
  <style>
@@ -114,32 +128,32 @@ class LegacyUnitPriceAnalysisPdfService
   }
  </style>';
 
-        $html .= '<table>
+        $html .= '<table width="100%">
  <thead>
  <tr class="head">
-  <th width="35" height="20">ITEM:</th>
-  <th colspan="3"> '.$item.'</th>
-  <th align="right">UNIDAD:</th>
-  <th> '.$unit.' </th>
+  <th width="'.$wSection.'" height="20">ITEM:</th>
+  <th width="'.$wItemName.'"> '.$item.'</th>
+  <th width="'.$wUnitPrice.'" align="right">UNIDAD:</th>
+  <th width="'.$wPartial.'"> '.$unit.' </th>
  </tr>
  </thead>
  </table>
 
- <table cellpadding="6px">
+ <table width="100%" cellpadding="6px">
  <thead>
      <tr bgcolor="#55827e">
-        <th width="40"><font color="#fcfdfd">Nº P</font></th>
-        <th width="280"><font color="#fcfdfd">Insumo/Parametro</font></th>
-        <th width="60"><font color="#fcfdfd">Unid.</font></th>
-        <th width="60" align="right"><font color="#fcfdfd">Cant.</font></th>
-        <th width="110" align="right"><font color="#fcfdfd">Unit.(Bs)</font></th>
-        <th width="110" align="right"><font color="#fcfdfd">Parcial(Bs)</font></th>
+        <th width="'.$wNo.'"><font color="#fcfdfd">Nº P</font></th>
+        <th width="'.$wDescription.'"><font color="#fcfdfd">Insumo/Parametro</font></th>
+        <th width="'.$wUnit.'"><font color="#fcfdfd">Unid.</font></th>
+        <th width="'.$wQuantity.'" align="right"><font color="#fcfdfd">Cant.</font></th>
+        <th width="'.$wUnitPrice.'" align="right"><font color="#fcfdfd">Unit.(Bs)</font></th>
+        <th width="'.$wPartial.'" align="right"><font color="#fcfdfd">Parcial(Bs)</font></th>
      </tr>
  </thead>
  <tbody>
    <tr bgcolor="#ccebe8">
-   <th width="35"><b>A</b></th>
-   <th colspan="5" width="98%"><b>MATERIALES</b></th>
+   <th width="'.$wSection.'"><b>A</b></th>
+   <th width="'.$wSectionContent.'"><b>MATERIALES</b></th>
     </tr>';
 
         $numero = 1;
@@ -147,26 +161,26 @@ class LegacyUnitPriceAnalysisPdfService
             $parcialRaw = (float) $material['quantity'] * (float) $material['unit_price'];
             $acumA += $parcialRaw;
             $html .= '<tr>
-        <td width="40">'.$numero.'</td>
-        <td width="280">'.htmlentities((string) $material['description']).'</td>
-        <td width="60">'.($material['unit_measure']['abbreviation'] ?? '').'</td>
-        <td width="60" align="right">'.$this->legacyNumber((float) $material['quantity'], 4).'</td>
-        <td width="110" align="right">'.$this->legacyNumber((float) $material['unit_price'], 2).'</td>
-        <td width="110" align="right">'.$this->legacyNumber($parcialRaw, 2).'</td>
+        <td width="'.$wNo.'">'.$numero.'</td>
+        <td width="'.$wDescription.'">'.htmlentities((string) $material['description']).'</td>
+        <td width="'.$wUnit.'">'.($material['unit_measure']['abbreviation'] ?? '').'</td>
+        <td width="'.$wQuantity.'" align="right">'.$this->legacyNumber((float) $material['quantity'], 4).'</td>
+        <td width="'.$wUnitPrice.'" align="right">'.$this->legacyNumber((float) $material['unit_price'], 2).'</td>
+        <td width="'.$wPartial.'" align="right">'.$this->legacyNumber($parcialRaw, 2).'</td>
       </tr>';
             $numero++;
         }
 
         $a = $this->legacyNumber($acumA, 2);
         $html .= '<tr bgcolor="#ccebe8">
-      <td width="35"><b>D</b></td>
-        <td colspan="3"><b>TOTAL MATERIALES</b></td>
-        <td><b> (A)=</b></td>
-        <td align="right"><b>'.$a.'</b></td>
+      <td width="'.$wSection.'"><b>D</b></td>
+        <td width="'.$wSubtotalLabel.'"><b>TOTAL MATERIALES</b></td>
+        <td width="'.$wUnitPrice.'"><b> (A)=</b></td>
+        <td width="'.$wPartial.'" align="right"><b>'.$a.'</b></td>
       </tr>
       <tr>
-      <td width="35" align="right">B</td>
-      <td colspan="5">MANO DE OBRA</td>
+      <td width="'.$wSection.'" align="right">B</td>
+      <td width="'.$wSectionContent.'">MANO DE OBRA</td>
       </tr>';
 
         $numero = 1;
@@ -174,22 +188,22 @@ class LegacyUnitPriceAnalysisPdfService
             $parcialRaw = (float) $laborRow['quantity'] * (float) $laborRow['unit_price'];
             $acumB += $parcialRaw;
             $html .= '<tr>
-        <td width="40">'.$numero.'</td>
-        <td width="280">'.htmlentities((string) $laborRow['description']).'</td>
-        <td width="60">'.($laborRow['unit_measure']['abbreviation'] ?? '').'</td>
-        <td width="60" align="right">'.$this->legacyNumber((float) $laborRow['quantity'], 4).'</td>
-        <td width="110" align="right">'.$this->legacyNumber((float) $laborRow['unit_price'], 2).'</td>
-        <td width="110" align="right">'.$this->legacyNumber($parcialRaw, 2).'</td>
+        <td width="'.$wNo.'">'.$numero.'</td>
+        <td width="'.$wDescription.'">'.htmlentities((string) $laborRow['description']).'</td>
+        <td width="'.$wUnit.'">'.($laborRow['unit_measure']['abbreviation'] ?? '').'</td>
+        <td width="'.$wQuantity.'" align="right">'.$this->legacyNumber((float) $laborRow['quantity'], 4).'</td>
+        <td width="'.$wUnitPrice.'" align="right">'.$this->legacyNumber((float) $laborRow['unit_price'], 2).'</td>
+        <td width="'.$wPartial.'" align="right">'.$this->legacyNumber($parcialRaw, 2).'</td>
         </tr>';
             $numero++;
         }
 
         $b = $this->legacyNumber($acumB, 2);
         $html .= '<tr bgcolor="#ccebe8">
-        <td width="35"><b>E</b></td>
-        <td colspan="3"><b>SUBTOTAL MANO DE OBRA</b></td>
-        <td><b> (B)=</b></td>
-        <td align="right"><b>'.$b.'</b></td>
+        <td width="'.$wSection.'"><b>E</b></td>
+        <td width="'.$wSubtotalLabel.'"><b>SUBTOTAL MANO DE OBRA</b></td>
+        <td width="'.$wUnitPrice.'"><b> (B)=</b></td>
+        <td width="'.$wPartial.'" align="right"><b>'.$b.'</b></td>
     </tr>';
 
         $resolved = $this->resolveLegacyPercentages($percentages);
@@ -219,28 +233,28 @@ class LegacyUnitPriceAnalysisPdfService
         $gF = $this->legacyNumber($g, 2);
 
         $html .= '<tr>
-              <td width="35">F</td>
-                <td colspan="2">'.$resolved['descripcion_porcentaje_cs'].'</td>
-                <td align="right">'.$resolved['porcentaje_cs'].'%</td>
-                 <td>(E)=</td>
-                <td align="right">'.$montoCsF.'</td>
+              <td width="'.$wSection.'">F</td>
+                <td width="'.$wMergedDescription.'">'.$resolved['descripcion_porcentaje_cs'].'</td>
+                <td width="'.$wPercent.'" align="right">'.$resolved['porcentaje_cs'].'%</td>
+                 <td width="'.$wUnitPrice.'">(E)=</td>
+                <td width="'.$wPartial.'" align="right">'.$montoCsF.'</td>
             </tr>
            <tr>
-              <td width="35">O</td>
-                <td colspan="2">'.$resolved['descripcion_iva'].'</td>
-                <td align="right">'.$resolved['porcentaje_iva'].'%</td>
-                 <td>(E+F)=</td>
-                <td align="right">'.$oF.'</td>
+              <td width="'.$wSection.'">O</td>
+                <td width="'.$wMergedDescription.'">'.$resolved['descripcion_iva'].'</td>
+                <td width="'.$wPercent.'" align="right">'.$resolved['porcentaje_iva'].'%</td>
+                 <td width="'.$wUnitPrice.'">(E+F)=</td>
+                <td width="'.$wPartial.'" align="right">'.$oF.'</td>
             </tr>
              <tr bgcolor="#ccebe8">
-                <td width="35"><b>G</b></td>
-                <td colspan="3"><b>TOTAL MANO DE OBRA</b></td>
-                <td><b> (E+F+O)=</b></td>
-                <td align="right"><b>'.$gF.'</b></td>
+                <td width="'.$wSection.'"><b>G</b></td>
+                <td width="'.$wSubtotalLabel.'"><b>TOTAL MANO DE OBRA</b></td>
+                <td width="'.$wUnitPrice.'"><b> (E+F+O)=</b></td>
+                <td width="'.$wPartial.'" align="right"><b>'.$gF.'</b></td>
              </tr>
              <tr>
-              <td width="35" align="right">C</td>
-              <td colspan="5">EQUIPO, MAQUINARIA Y HERRAMIENTA</td>
+              <td width="'.$wSection.'" align="right">C</td>
+              <td width="'.$wSectionContent.'">EQUIPO, MAQUINARIA Y HERRAMIENTA</td>
              </tr>';
 
         $numero = 1;
@@ -248,12 +262,12 @@ class LegacyUnitPriceAnalysisPdfService
             $parcialRaw = (float) $tool['quantity'] * (float) $tool['unit_price'];
             $acumC += $parcialRaw;
             $html .= '<tr>
-                      <td width="40">'.$numero.'</td>
-                      <td width="280">'.htmlentities((string) $tool['description']).'</td>
-                      <td width="60">'.($tool['unit_measure']['abbreviation'] ?? '').'</td>
-                      <td width="60" align="right">'.$this->legacyNumber((float) $tool['quantity'], 4).'</td>
-                      <td width="110" align="right">'.$this->legacyNumber((float) $tool['unit_price'], 2).'</td>
-                      <td width="110" align="right">'.$this->legacyNumber($parcialRaw, 2).'</td>
+                      <td width="'.$wNo.'">'.$numero.'</td>
+                      <td width="'.$wDescription.'">'.htmlentities((string) $tool['description']).'</td>
+                      <td width="'.$wUnit.'">'.($tool['unit_measure']['abbreviation'] ?? '').'</td>
+                      <td width="'.$wQuantity.'" align="right">'.$this->legacyNumber((float) $tool['quantity'], 4).'</td>
+                      <td width="'.$wUnitPrice.'" align="right">'.$this->legacyNumber((float) $tool['unit_price'], 2).'</td>
+                      <td width="'.$wPartial.'" align="right">'.$this->legacyNumber($parcialRaw, 2).'</td>
                       </tr>';
             $numero++;
         }
@@ -279,62 +293,62 @@ class LegacyUnitPriceAnalysisPdfService
         $txt = 'SON: BOLIVIANOS  '.$lit.' ';
 
         $html .= '<tr>
-              <td width="35">H</td>
-                <td colspan="2">'.$resolved['descripcion_hm'].'</td>
-                <td align="right">'.$resolved['porcentaje_hm'].'%</td>
-                 <td>(G)=</td>
-                <td align="right">'.$hF.'</td>
+              <td width="'.$wSection.'">H</td>
+                <td width="'.$wMergedDescription.'">'.$resolved['descripcion_hm'].'</td>
+                <td width="'.$wPercent.'" align="right">'.$resolved['porcentaje_hm'].'%</td>
+                 <td width="'.$wUnitPrice.'">(G)=</td>
+                <td width="'.$wPartial.'" align="right">'.$hF.'</td>
             </tr>
             <tr bgcolor="#ccebe8">
-                <td width="35"><b>I</b></td>
-                <td colspan="3"><b>TOTAL HERRAMIENTAS Y EQUIPO</b></td>
-                <td><b> (C+H)=</b></td>
-                <td align="right"><b>'.$iF.'</b></td>
+                <td width="'.$wSection.'"><b>I</b></td>
+                <td width="'.$wSubtotalLabel.'"><b>TOTAL HERRAMIENTAS Y EQUIPO</b></td>
+                <td width="'.$wUnitPrice.'"><b> (C+H)=</b></td>
+                <td width="'.$wPartial.'" align="right"><b>'.$iF.'</b></td>
            </tr>
             <tr bgcolor="#ccebe8">
-                <td width="35"><b>J</b></td>
-                <td colspan="3"><b>SUBTOTAL</b></td>
-                <td><b> (D+G+I)=</b></td>
-                <td align="right"><b>'.$jF.'</b></td>
+                <td width="'.$wSection.'"><b>J</b></td>
+                <td width="'.$wSubtotalLabel.'"><b>SUBTOTAL</b></td>
+                <td width="'.$wUnitPrice.'"><b> (D+G+I)=</b></td>
+                <td width="'.$wPartial.'" align="right"><b>'.$jF.'</b></td>
            </tr>
             <tr>
-              <td width="35">L</td>
-                <td colspan="2">'.$resolved['descripcion_adm'].'</td>
-                <td align="right">'.$resolved['porcentaje_adm'].'%</td>
-                 <td>(E)=</td>
-                <td align="right">'.$lF.'</td>
+              <td width="'.$wSection.'">L</td>
+                <td width="'.$wMergedDescription.'">'.$resolved['descripcion_adm'].'</td>
+                <td width="'.$wPercent.'" align="right">'.$resolved['porcentaje_adm'].'%</td>
+                 <td width="'.$wUnitPrice.'">(E)=</td>
+                <td width="'.$wPartial.'" align="right">'.$lF.'</td>
             </tr>
              <tr>
-              <td width="35">M</td>
-                <td colspan="2">'.$resolved['descripcion_util'].'</td>
-                <td align="right">'.$resolved['porcentaje_util'].'%</td>
-                 <td>(J+L)=</td>
-                <td align="right">'.$mF.'</td>
+              <td width="'.$wSection.'">M</td>
+                <td width="'.$wMergedDescription.'">'.$resolved['descripcion_util'].'</td>
+                <td width="'.$wPercent.'" align="right">'.$resolved['porcentaje_util'].'%</td>
+                 <td width="'.$wUnitPrice.'">(J+L)=</td>
+                <td width="'.$wPartial.'" align="right">'.$mF.'</td>
             </tr>
             <tr bgcolor="#ccebe8">
-                <td width="35"><b>N</b></td>
-                <td colspan="3"><b>PARCIAL</b></td>
-                <td><b> (J+L+M)=</b></td>
-                <td align="right"><b>'.$nF.'</b></td>
+                <td width="'.$wSection.'"><b>N</b></td>
+                <td width="'.$wSubtotalLabel.'"><b>PARCIAL</b></td>
+                <td width="'.$wUnitPrice.'"><b> (J+L+M)=</b></td>
+                <td width="'.$wPartial.'" align="right"><b>'.$nF.'</b></td>
            </tr>
            <tr>
-              <td width="35">M</td>
-                <td colspan="2">'.$resolved['descripcion_it'].'</td>
-                <td align="right">'.$resolved['porcentaje_it'].'%</td>
-                 <td>(N)=</td>
-                <td align="right">'.$pF.'</td>
+              <td width="'.$wSection.'">M</td>
+                <td width="'.$wMergedDescription.'">'.$resolved['descripcion_it'].'</td>
+                <td width="'.$wPercent.'" align="right">'.$resolved['porcentaje_it'].'%</td>
+                 <td width="'.$wUnitPrice.'">(N)=</td>
+                <td width="'.$wPartial.'" align="right">'.$pF.'</td>
             </tr>
             <tr bgcolor="#ccebe8" nobr="true">
-                <td width="35"><b>Q</b></td>
-                <td colspan="3"><b>TOTAL PRECIO UNITARIO</b></td>
-                <td><b> ((N+P)=</b></td>
-                <td align="right"><b>'.$qF.'</b></td>
+                <td width="'.$wSection.'"><b>Q</b></td>
+                <td width="'.$wSubtotalLabel.'"><b>TOTAL PRECIO UNITARIO</b></td>
+                <td width="'.$wUnitPrice.'"><b> ((N+P)=</b></td>
+                <td width="'.$wPartial.'" align="right"><b>'.$qF.'</b></td>
            </tr>
-             <tr bgcolor="#ccebe8" nobr="true">
-                <td colspan="5"><b>PRECIO ADOPTADO</b></td>
-                <td align="right"><b>'.$pa.'</b></td>
+            <tr bgcolor="#ccebe8" nobr="true">
+                <td width="'.$wAdoptedLabel.'"><b>PRECIO ADOPTADO</b></td>
+                <td width="'.$wPartial.'" align="right"><b>'.$pa.'</b></td>
            </tr>
-           <tr><td colspan="5"><b>'.$txt.'</b></td></tr>
+           <tr><td width="'.$wAdoptedLabel.'"><b>'.$txt.'</b></td></tr>
            </tbody></table><br/>';
 
         return [$html, null];
