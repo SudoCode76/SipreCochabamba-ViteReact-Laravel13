@@ -41,10 +41,16 @@ export default function InputsPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [quoteOpen, setQuoteOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedInput, setSelectedInput] = useState(null);
   const [createError, setCreateError] = useState(null);
   const [editError, setEditError] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+  const [quoteError, setQuoteError] = useState(null);
+  const [viewSearch, setViewSearch] = useState("");
+  const [viewPerPage, setViewPerPage] = useState(25);
   const [createForm, setCreateForm] = useState({
     descripcion: "",
     precio: "",
@@ -81,12 +87,39 @@ export default function InputsPage() {
     enabled: createOpen || editOpen,
   });
 
+  const { data: quoteHistoryData, isLoading: quoteHistoryLoading } = useQuery({
+    queryKey: ["input-quote-history", selectedInput?.id_insumo],
+    queryFn: async () => {
+      const response = await apiClient.get(`/v1/inputs/${selectedInput.id_insumo}/quotes/history`);
+      return response.data;
+    },
+    enabled: viewOpen && Boolean(selectedInput?.id_insumo),
+  });
+
   const items = data?.data?.items ?? [];
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
   const inputTypes = contextData?.data?.types ?? [];
   const unitMeasures = contextData?.data?.unit_measures ?? [];
   const statuses = contextData?.data?.statuses ?? [];
+  const quoteHistoryItems = quoteHistoryData?.data?.items ?? [];
+
+  const filteredQuoteHistory = quoteHistoryItems.filter((quote) => {
+    const term = viewSearch.trim().toLowerCase();
+
+    if (!term) {
+      return true;
+    }
+
+    return [
+      quote.fecha,
+      quote.archivo,
+      quote.archivo1,
+      quote.archivo2,
+    ].some((value) => String(value ?? "").toLowerCase().includes(term));
+  });
+
+  const visibleQuoteHistory = filteredQuoteHistory.slice(0, viewPerPage);
 
   const createMutation = useMutation({
     mutationFn: async (payload) => {
@@ -107,6 +140,28 @@ export default function InputsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inputs"] });
       closeEdit();
+    },
+  });
+
+  const quoteMutation = useMutation({
+    mutationFn: async ({ id, payload }) => {
+      const response = await apiClient.post(`/v1/inputs/${id}/quotes`, payload, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      closeQuote();
+    },
+  });
+
+  const deleteAuthorizationMutation = useMutation({
+    mutationFn: (id) => inputsService.requestDeleteAuthorization(id),
+    onSuccess: () => {
+      closeDelete();
+      alert("Solicitud de autorizacion enviada correctamente.");
     },
   });
 
@@ -159,7 +214,21 @@ export default function InputsPage() {
 
   const handleView = (item) => {
     setSelectedInput(item);
+    setViewSearch("");
+    setViewPerPage(25);
     setViewOpen(true);
+  };
+
+  const handleOpenQuote = (item) => {
+    setSelectedInput(item);
+    setQuoteError(null);
+    setQuoteOpen(true);
+  };
+
+  const handleOpenDelete = (item) => {
+    setSelectedInput(item);
+    setDeleteError(null);
+    setDeleteOpen(true);
   };
 
   const closeCreate = () => {
@@ -191,6 +260,25 @@ export default function InputsPage() {
       estado: "AC",
       cod: "",
     });
+  };
+
+  const closeDelete = () => {
+    setDeleteOpen(false);
+    setDeleteError(null);
+    setSelectedInput(null);
+  };
+
+  const closeQuote = () => {
+    setQuoteOpen(false);
+    setQuoteError(null);
+    setSelectedInput(null);
+  };
+
+  const closeView = () => {
+    setViewOpen(false);
+    setViewSearch("");
+    setViewPerPage(25);
+    setSelectedInput(null);
   };
 
   const handleCreateChange = (field, value) => {
@@ -253,8 +341,68 @@ export default function InputsPage() {
     }
   };
 
+  const handleQuoteSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!selectedInput?.id_insumo) {
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    const payload = new FormData();
+    const valido = formData.get("valido");
+    const propuesto1 = formData.get("propuesto_1");
+    const propuesto2 = formData.get("propuesto_2");
+
+    if (valido instanceof File && valido.size > 0) {
+      payload.append("valido", valido);
+    }
+
+    if (propuesto1 instanceof File && propuesto1.size > 0) {
+      payload.append("propuesto_1", propuesto1);
+    }
+
+    if (propuesto2 instanceof File && propuesto2.size > 0) {
+      payload.append("propuesto_2", propuesto2);
+    }
+
+    if (![valido, propuesto1, propuesto2].some((file) => file instanceof File && file.size > 0)) {
+      setQuoteError("Adjunta al menos un archivo de cotización.");
+      return;
+    }
+
+    setQuoteError(null);
+
+    try {
+      await quoteMutation.mutateAsync({
+        id: selectedInput.id_insumo,
+        payload,
+      });
+    } catch (err) {
+      const fieldErrors = err.response?.data?.errors;
+      const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
+      setQuoteError(firstFieldError || err.response?.data?.message || "No se pudo registrar la cotización.");
+    }
+  };
+
+  const handleRequestDeleteAuthorization = async () => {
+    if (!selectedInput?.id_insumo) {
+      return;
+    }
+
+    setDeleteError(null);
+
+    try {
+      await deleteAuthorizationMutation.mutateAsync(selectedInput.id_insumo);
+    } catch (err) {
+      const fieldErrors = err.response?.data?.errors;
+      const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
+      setDeleteError(firstFieldError || err.response?.data?.message || "No se pudo solicitar la autorizacion de eliminación.");
+    }
+  };
+
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+    <div className={`flex flex-col gap-6 animate-in fade-in duration-500 ${createOpen || editOpen || deleteOpen || quoteOpen || viewOpen ? "blur-sm" : ""}`}>
       <Card className="border border-border/70 bg-white/86 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
         <CardHeader className="gap-4 border-b border-border/70 bg-muted/25">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -385,7 +533,7 @@ export default function InputsPage() {
                                 <Pencil className="h-4 w-4 text-muted-foreground" />
                                 <span>Editar insumo</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleOpenQuote(item)}>
                                 <FileText className="h-4 w-4 text-muted-foreground" />
                                 <span>Adjuntar cotizacion</span>
                               </DropdownMenuItem>
@@ -397,7 +545,7 @@ export default function InputsPage() {
                                 <span>Ver cotizacion actual</span>
                               </DropdownMenuItem>
                               <DropdownMenuSeparator className="my-1 bg-border/50" />
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleOpenDelete(item)}>
                                 <Power className="h-4 w-4 text-muted-foreground" />
                                 <span>Eliminar</span>
                               </DropdownMenuItem>
@@ -617,6 +765,121 @@ export default function InputsPage() {
         document.body,
       )}
 
+      {quoteOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-4xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Adjuntar Cotizacion</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Adjunta los archivos de cotización del insumo.
+                    </p>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeQuote}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 sm:p-6">
+                <form className="flex flex-col gap-6" onSubmit={handleQuoteSubmit}>
+                  {quoteError && (
+                    <Alert variant="destructive" className="rounded-2xl">
+                      <AlertDescription>{quoteError}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="quote_input_name" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Insumo</Label>
+                    <Input id="quote_input_name" value={selectedInput?.descripcion ?? ""} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled />
+                  </div>
+
+                  <div className="grid gap-6 md:grid-cols-3">
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="quote_valido" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cotización Válida</Label>
+                      <Input id="quote_valido" name="valido" type="file" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="quote_propuesto_1" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cotización Propuesta 1</Label>
+                      <Input id="quote_propuesto_1" name="propuesto_1" type="file" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="quote_propuesto_2" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cotización Propuesta 2</Label>
+                      <Input id="quote_propuesto_2" name="propuesto_2" type="file" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                    </div>
+                  </div>
+
+                  <DialogFooter className="mt-2 justify-center gap-2 sm:justify-center">
+                    <Button type="button" variant="outline" className="min-w-36 rounded-full" onClick={closeQuote}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit" className="min-w-36 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={quoteMutation.isPending}>
+                      {quoteMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                          Guardando...
+                        </>
+                      ) : "Guardar"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {deleteOpen && createPortal(
+        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-3xl rounded-sm bg-white px-6 py-12 shadow-2xl sm:px-10 sm:py-16">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="absolute right-4 top-4 rounded-full text-muted-foreground"
+              onClick={closeDelete}
+            >
+              <X className="size-5" />
+            </Button>
+
+            <div className="mx-auto flex max-w-xl flex-col items-center text-center">
+              <div className="flex size-24 items-center justify-center rounded-full bg-[#ff4338] text-white shadow-[0_12px_30px_rgba(255,67,56,0.28)]">
+                <X className="size-12 stroke-[3]" />
+              </div>
+
+              <div className="mt-16 w-full text-left text-foreground">
+                <p className="text-[2rem] leading-none">Usted va a eliminar el insumo :</p>
+                <p className="mt-4 text-2xl font-medium text-[#111827]">{selectedInput?.descripcion ?? ""}</p>
+              </div>
+
+              {deleteError && (
+                <Alert variant="destructive" className="mt-6 w-full rounded-md text-left">
+                  <AlertDescription>{deleteError}</AlertDescription>
+                </Alert>
+              )}
+
+              <div className="mt-10 flex w-full justify-start">
+                <Button
+                  type="button"
+                  className="h-auto rounded-none bg-[#f2554f] px-6 py-4 text-xl font-normal text-black hover:bg-[#e24b46]"
+                  onClick={handleRequestDeleteAuthorization}
+                  disabled={deleteAuthorizationMutation.isPending}
+                >
+                  {deleteAuthorizationMutation.isPending && <Loader2 className="mr-2 size-5 animate-spin" />}
+                  Solicitar Autorizacion
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {createOpen && createPortal(
         <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
           <div className="w-full max-w-3xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
@@ -788,59 +1051,123 @@ export default function InputsPage() {
         document.body,
       )}
 
-      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
-        <DialogContent className="max-w-lg rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Detalles del Insumo</DialogTitle>
-            <DialogDescription>
-              ID: {selectedInput?.id_insumo}
-            </DialogDescription>
-          </DialogHeader>
+      {viewOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-5xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Ver Cotizacion Actual</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Consulta las cotizaciones registradas del insumo.
+                    </p>
+                  </div>
 
-          {selectedInput && (
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Descripción:</span>
-                <span className="font-medium">{selectedInput.descripcion}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tipo:</span>
-                <span>{selectedInput.nombre_tipo}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Precio:</span>
-                <span className="font-medium">{Number(selectedInput.precio).toFixed(2)} Bs.</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Unidad:</span>
-                <span>{selectedInput.nombre_unidad_medida} ({selectedInput.abreviatura})</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Fecha Cotización:</span>
-                <span>{selectedInput.fecha_cotiz}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Estado:</span>
-                <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClass[selectedInput.estado] || "bg-slate-500 text-white"}`}>
-                  {selectedInput.estado === "AC" ? "HABILITADO" : "INHABILITADO"}
-                </Badge>
-              </div>
-              {selectedInput.observacion && (
-                <div className="pt-2">
-                  <span className="text-muted-foreground">Observación:</span>
-                  <p className="mt-1 text-sm">{selectedInput.observacion}</p>
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeView}>
+                    <X />
+                  </Button>
                 </div>
-              )}
-            </div>
-          )}
+              </CardHeader>
 
-          <DialogFooter className="mt-4">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => setViewOpen(false)}>
-              Cerrar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="view_input_name" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Insumo</Label>
+                  <Input id="view_input_name" value={selectedInput?.descripcion ?? ""} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled />
+                </div>
+
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="flex items-end gap-3">
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Mostrar</span>
+                      <div className="relative">
+                        <select
+                          className="h-12 min-w-32 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20"
+                          value={viewPerPage}
+                          onChange={(event) => setViewPerPage(Number(event.target.value))}
+                        >
+                          <option value={10}>10</option>
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                        </select>
+                        <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex w-full max-w-sm flex-col gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Buscar</span>
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar cotización..."
+                        className="h-12 rounded-2xl border-border/80 bg-background/90 pl-11"
+                        value={viewSearch}
+                        onChange={(event) => setViewSearch(event.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-[28px] border border-border/70 bg-background/90">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-border/70 bg-muted/30 text-left">
+                          <th className="px-5 py-4 font-semibold text-foreground">N°</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Fecha</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Propuesta oficial</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Propuesta Alternativa 1</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Propuesta Alternativa 2</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {quoteHistoryLoading && (
+                          <tr>
+                            <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
+                              <Loader2 className="mr-2 inline size-4 animate-spin" /> Cargando cotizaciones...
+                            </td>
+                          </tr>
+                        )}
+                        {!quoteHistoryLoading && visibleQuoteHistory.map((quote, index) => (
+                          <tr key={quote.id_cotizacion} className={index < visibleQuoteHistory.length - 1 ? "border-b border-border/60" : ""}>
+                            <td className="px-5 py-4 align-top text-foreground">{index + 1}</td>
+                            <td className="px-5 py-4 align-top text-muted-foreground">{quote.fecha ?? "-"}</td>
+                            <td className="px-5 py-4 align-top">
+                              {quote.archivo ? <a href={`/storage/${quote.archivo}`} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline">Ver archivo</a> : <span className="text-muted-foreground">Sin archivo</span>}
+                            </td>
+                            <td className="px-5 py-4 align-top">
+                              {quote.archivo1 ? <a href={`/storage/${quote.archivo1}`} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline">Ver archivo</a> : <span className="text-muted-foreground">Sin archivo</span>}
+                            </td>
+                            <td className="px-5 py-4 align-top">
+                              {quote.archivo2 ? <a href={`/storage/${quote.archivo2}`} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline">Ver archivo</a> : <span className="text-muted-foreground">Sin archivo</span>}
+                            </td>
+                          </tr>
+                        ))}
+                        {!quoteHistoryLoading && visibleQuoteHistory.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
+                              No hay cotizaciones registradas.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex flex-col gap-4 px-5 py-4 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
+                    <p>Mostrando {visibleQuoteHistory.length} de {filteredQuoteHistory.length} cotizaciones</p>
+                    <Button type="button" variant="outline" className="rounded-full" onClick={closeView}>
+                      Cerrar
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

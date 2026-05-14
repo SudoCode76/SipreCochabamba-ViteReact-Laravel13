@@ -11,4 +11,8 @@ export const inputsService = {
     });
     return response.data;
   },
+  requestDeleteAuthorization: async (id, payload = {}) => {
+    const response = await apiClient.post(`/v1/inputs/${id}/delete-authorization-request`, payload);
+    return response.data;
+  },
 };
