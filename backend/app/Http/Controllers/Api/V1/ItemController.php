@@ -13,12 +13,13 @@ use App\Http\Requests\Item\UpdateItemRequest;
 use App\Http\Resources\Item\ItemFndrListResource;
 use App\Models\Item;
 use App\Models\ItemInput;
-use App\Services\Items\Fndr\BuildFndrItemContextService;
-use App\Services\Items\Fndr\CreateItemService;
-use App\Services\Items\Fndr\FndrPermissionService;
-use App\Services\Items\Fndr\FndrPriceAnalysisService;
-use App\Services\Items\Fndr\ListFndrItemsService;
+use App\Services\Items\Analysis\BuildItemAnalysisContextService;
+use App\Services\Items\Analysis\CreateAnalysisItemService;
+use App\Services\Items\Analysis\ItemAnalysisPermissionService;
+use App\Services\Items\Analysis\ItemPriceAnalysisService;
+use App\Services\Items\Analysis\ListAnalysisItemsService;
 use App\Services\Items\ItemCompositionService;
+use App\Services\Items\LaborBreakdownPdfService;
 use App\Services\Items\LegacyUnitPriceAnalysisPdfService;
 use App\Services\Items\LegacyUnitPriceAnalysisService;
 use App\Services\Items\MaterialBreakdownPdfService;
@@ -32,20 +33,21 @@ use InvalidArgumentException;
 class ItemController extends Controller
 {
     public function __construct(
-        private readonly BuildFndrItemContextService $buildFndrItemContextService,
-        private readonly ListFndrItemsService $listFndrItemsService,
-        private readonly CreateItemService $createItemService,
-        private readonly FndrPriceAnalysisService $fndrPriceAnalysisService,
-        private readonly FndrPermissionService $fndrPermissionService,
+        private readonly BuildItemAnalysisContextService $buildItemAnalysisContextService,
+        private readonly ListAnalysisItemsService $listAnalysisItemsService,
+        private readonly CreateAnalysisItemService $createAnalysisItemService,
+        private readonly ItemPriceAnalysisService $itemPriceAnalysisService,
+        private readonly ItemAnalysisPermissionService $itemAnalysisPermissionService,
         private readonly ItemCompositionService $itemCompositionService,
         private readonly LegacyUnitPriceAnalysisService $legacyUnitPriceAnalysisService,
         private readonly LegacyUnitPriceAnalysisPdfService $legacyUnitPriceAnalysisPdfService,
         private readonly MaterialBreakdownPdfService $materialBreakdownPdfService,
+        private readonly LaborBreakdownPdfService $laborBreakdownPdfService,
     ) {}
 
     public function fndrContext(Request $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'fndr');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'fndr');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para acceder a la pantalla FNDR.');
@@ -54,13 +56,13 @@ class ItemController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Contexto FNDR obtenido correctamente.',
-            'data' => $this->buildFndrItemContextService->execute($request->user(), 'fndr'),
+            'data' => $this->buildItemAnalysisContextService->execute($request->user(), 'fndr'),
         ]);
     }
 
     public function context(Request $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para acceder a la pantalla de items.');
@@ -69,13 +71,13 @@ class ItemController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Contexto de items obtenido correctamente.',
-            'data' => $this->buildFndrItemContextService->execute($request->user(), 'general'),
+            'data' => $this->buildItemAnalysisContextService->execute($request->user(), 'general'),
         ]);
     }
 
     public function upreContext(Request $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'upre');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'upre');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para acceder a la pantalla UPRE.');
@@ -84,13 +86,13 @@ class ItemController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Contexto UPRE obtenido correctamente.',
-            'data' => $this->buildFndrItemContextService->execute($request->user(), 'upre'),
+            'data' => $this->buildItemAnalysisContextService->execute($request->user(), 'upre'),
         ]);
     }
 
     public function fpsContext(Request $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'fps');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'fps');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para acceder a la pantalla FPS.');
@@ -99,13 +101,13 @@ class ItemController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Contexto FPS obtenido correctamente.',
-            'data' => $this->buildFndrItemContextService->execute($request->user(), 'fps'),
+            'data' => $this->buildItemAnalysisContextService->execute($request->user(), 'fps'),
         ]);
     }
 
     public function obrasContext(Request $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'obras');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'obras');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para acceder a la pantalla OBRAS.');
@@ -114,13 +116,13 @@ class ItemController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Contexto OBRAS obtenido correctamente.',
-            'data' => $this->buildFndrItemContextService->execute($request->user(), 'obras'),
+            'data' => $this->buildItemAnalysisContextService->execute($request->user(), 'obras'),
         ]);
     }
 
     public function promanContext(Request $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'proman');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'proman');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para acceder a la pantalla PROMAN.');
@@ -129,20 +131,20 @@ class ItemController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Contexto PROMAN obtenido correctamente.',
-            'data' => $this->buildFndrItemContextService->execute($request->user(), 'proman'),
+            'data' => $this->buildItemAnalysisContextService->execute($request->user(), 'proman'),
         ]);
     }
 
     public function fndrIndex(IndexFndrItemRequest $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'fndr');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'fndr');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para listar items FNDR.');
         }
 
         try {
-            $items = $this->listFndrItemsService->execute($request->validated(), 'fndr');
+            $items = $this->listAnalysisItemsService->execute($request->validated(), 'fndr');
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
@@ -163,14 +165,14 @@ class ItemController extends Controller
 
     public function index(IndexFndrItemRequest $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para listar items.');
         }
 
         try {
-            $items = $this->listFndrItemsService->execute($request->validated(), 'general');
+            $items = $this->listAnalysisItemsService->execute($request->validated(), 'general');
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
@@ -191,14 +193,14 @@ class ItemController extends Controller
 
     public function upreIndex(IndexFndrItemRequest $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'upre');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'upre');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para listar items UPRE.');
         }
 
         try {
-            $items = $this->listFndrItemsService->execute($request->validated(), 'upre');
+            $items = $this->listAnalysisItemsService->execute($request->validated(), 'upre');
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
@@ -219,14 +221,14 @@ class ItemController extends Controller
 
     public function fpsIndex(IndexFndrItemRequest $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'fps');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'fps');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para listar items FPS.');
         }
 
         try {
-            $items = $this->listFndrItemsService->execute($request->validated(), 'fps');
+            $items = $this->listAnalysisItemsService->execute($request->validated(), 'fps');
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
@@ -247,14 +249,14 @@ class ItemController extends Controller
 
     public function obrasIndex(IndexFndrItemRequest $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'obras');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'obras');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para listar items OBRAS.');
         }
 
         try {
-            $items = $this->listFndrItemsService->execute($request->validated(), 'obras');
+            $items = $this->listAnalysisItemsService->execute($request->validated(), 'obras');
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
@@ -275,14 +277,14 @@ class ItemController extends Controller
 
     public function promanIndex(IndexFndrItemRequest $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'proman');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'proman');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para listar items PROMAN.');
         }
 
         try {
-            $items = $this->listFndrItemsService->execute($request->validated(), 'proman');
+            $items = $this->listAnalysisItemsService->execute($request->validated(), 'proman');
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
@@ -303,13 +305,13 @@ class ItemController extends Controller
 
     public function store(StoreItemRequest $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_create']) {
             return $this->forbiddenResponse('No tiene permisos para crear items.');
         }
 
-        $item = $this->createItemService->execute($request, $request->user());
+        $item = $this->createAnalysisItemService->execute($request, $request->user());
         $item->load(['groupCatalog', 'subgroupCatalog', 'unitMeasure', 'creator']);
 
         return response()->json([
@@ -348,7 +350,7 @@ class ItemController extends Controller
 
     public function update(Item $item, UpdateItemRequest $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para editar items.');
@@ -409,14 +411,14 @@ class ItemController extends Controller
     public function priceAnalysis(ShowItemPriceAnalysisRequest $request, Item $item): JsonResponse
     {
         $mode = strtolower((string) $request->input('mode', 'general'));
-        $permissions = $this->fndrPermissionService->resolve($request->user(), $mode);
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), $mode);
 
         if (! $permissions['can_view_price_analysis']) {
             return $this->forbiddenResponse('No tiene permisos para ver el analisis '.strtoupper($mode).' del item.');
         }
 
         try {
-            $analysis = $this->fndrPriceAnalysisService->buildCurrent($item, $mode);
+            $analysis = $this->itemPriceAnalysisService->buildCurrent($item, $mode);
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
@@ -430,7 +432,7 @@ class ItemController extends Controller
 
     public function legacyUnitPriceAnalysis(HttpRequest $request, Item $item): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_view_price_analysis']) {
             return $this->forbiddenResponse('No tiene permisos para ver el analisis de precios unitarios del item.');
@@ -445,7 +447,7 @@ class ItemController extends Controller
 
     public function legacyUnitPriceAnalysisPdf(HttpRequest $request, Item $item): Response
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_view_price_analysis']) {
             abort(403, 'No tiene permisos para ver el analisis de precios unitarios del item.');
@@ -457,14 +459,14 @@ class ItemController extends Controller
     public function priceRecalculation(RecalculateItemPriceRequest $request, Item $item): JsonResponse
     {
         $mode = strtolower((string) $request->input('mode', 'general'));
-        $permissions = $this->fndrPermissionService->resolve($request->user(), $mode);
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), $mode);
 
         if (! $permissions['can_recalculate']) {
             return $this->forbiddenResponse('No tiene permisos para recalcular el analisis '.strtoupper($mode).' del item.');
         }
 
         try {
-            $analysis = $this->fndrPriceAnalysisService->buildRecalculated($item, $request->date('fecha'), $mode);
+            $analysis = $this->itemPriceAnalysisService->buildRecalculated($item, $request->date('fecha'), $mode);
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
@@ -478,7 +480,7 @@ class ItemController extends Controller
 
     public function compositionContext(Item $item, Request $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para acceder a la composicion del item.');
@@ -493,7 +495,7 @@ class ItemController extends Controller
 
     public function composition(Item $item, Request $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para consultar la composicion del item.');
@@ -513,7 +515,7 @@ class ItemController extends Controller
 
     public function materialsPdf(Item $item, Request $request): Response
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_view']) {
             abort(403, 'No tiene permisos para consultar el desglose de materiales del item.');
@@ -545,6 +547,17 @@ class ItemController extends Controller
     public function labor(Item $item, Request $request): JsonResponse
     {
         return $this->compositionListResponse($item, 2, $request, 'Mano de obra del item obtenida correctamente.');
+    }
+
+    public function laborPdf(Item $item, Request $request): Response
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view_price_analysis']) {
+            abort(403, 'No tiene permisos para consultar el desglose de mano de obra del item.');
+        }
+
+        return $this->laborBreakdownPdfService->stream($item);
     }
 
     public function storeLabor(Item $item, StoreItemCompositionInputRequest $request): JsonResponse
@@ -594,7 +607,7 @@ class ItemController extends Controller
 
     public function globalTotal(Item $item, Request $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para consultar el total global del item.');
@@ -611,14 +624,14 @@ class ItemController extends Controller
 
     public function breakdownRecalculation(Item $item, Request $request): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_recalculate']) {
             return $this->forbiddenResponse('No tiene permisos para recalcular desgloses del item.');
         }
 
         try {
-            $analysis = $this->fndrPriceAnalysisService->buildCurrent($item, 'general');
+            $analysis = $this->itemPriceAnalysisService->buildCurrent($item, 'general');
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
@@ -632,7 +645,7 @@ class ItemController extends Controller
 
     private function compositionListResponse(Item $item, int $type, Request $request, string $message): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para consultar la composicion del item.');
@@ -649,7 +662,7 @@ class ItemController extends Controller
 
     private function compositionStoreResponse(Item $item, int $type, StoreItemCompositionInputRequest $request, string $message): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_create']) {
             return $this->forbiddenResponse('No tiene permisos para modificar la composicion del item.');
@@ -682,7 +695,7 @@ class ItemController extends Controller
 
     private function compositionUpdateResponse(Item $item, ItemInput $itemInput, int $type, UpdateItemCompositionInputRequest $request, string $message): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_create']) {
             return $this->forbiddenResponse('No tiene permisos para modificar la composicion del item.');
@@ -714,7 +727,7 @@ class ItemController extends Controller
 
     private function compositionDeleteResponse(Item $item, ItemInput $itemInput, int $type, Request $request, string $message): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_create']) {
             return $this->forbiddenResponse('No tiene permisos para modificar la composicion del item.');
@@ -740,7 +753,7 @@ class ItemController extends Controller
 
     private function compositionTotalResponse(Item $item, int $type, Request $request, string $message): JsonResponse
     {
-        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
         if (! $permissions['can_view']) {
             return $this->forbiddenResponse('No tiene permisos para consultar la composicion del item.');

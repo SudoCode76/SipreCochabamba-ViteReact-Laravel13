@@ -164,4 +164,11 @@ export const itemsService = {
     });
     return response.data;
   },
+
+  downloadLaborBreakdownPdf: async (itemId) => {
+    const response = await apiClient.get(`/v1/items/${itemId}/labor/pdf`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
 };

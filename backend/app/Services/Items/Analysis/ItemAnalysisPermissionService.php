@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Services\Items\Fndr;
+namespace App\Services\Items\Analysis;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 
-class FndrPermissionService
+class ItemAnalysisPermissionService
 {
     public function resolve(User $user, string $mode = 'fndr'): array
     {

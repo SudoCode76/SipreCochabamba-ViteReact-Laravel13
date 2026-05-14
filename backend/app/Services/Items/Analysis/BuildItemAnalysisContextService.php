@@ -1,16 +1,16 @@
 <?php
 
-namespace App\Services\Items\Fndr;
+namespace App\Services\Items\Analysis;
 
 use App\Models\GroupCatalog;
 use App\Models\SubgroupCatalog;
 use App\Models\UnitMeasure;
 use App\Models\User;
 
-class BuildFndrItemContextService
+class BuildItemAnalysisContextService
 {
     public function __construct(
-        private readonly FndrPermissionService $permissionService,
+        private readonly ItemAnalysisPermissionService $permissionService,
     ) {}
 
     public function execute(User $user, string $mode = 'fndr'): array

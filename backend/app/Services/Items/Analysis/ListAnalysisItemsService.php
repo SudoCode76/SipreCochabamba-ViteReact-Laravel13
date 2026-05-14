@@ -1,15 +1,15 @@
 <?php
 
-namespace App\Services\Items\Fndr;
+namespace App\Services\Items\Analysis;
 
 use App\Models\Item;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Str;
 
-class ListFndrItemsService
+class ListAnalysisItemsService
 {
     public function __construct(
-        private readonly FndrPriceAnalysisService $priceAnalysisService,
+        private readonly ItemPriceAnalysisService $priceAnalysisService,
     ) {}
 
     public function execute(array $filters, string $mode = 'fndr'): LengthAwarePaginator
