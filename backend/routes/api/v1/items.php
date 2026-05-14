@@ -21,6 +21,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/items/{item}/composition/context', [ItemController::class, 'compositionContext']);
     Route::get('/items/{item}/composition', [ItemController::class, 'composition']);
     Route::get('/items/{item}/materials', [ItemController::class, 'materials']);
+    Route::get('/items/{item}/materials/pdf', [ItemController::class, 'materialsPdf']);
     Route::post('/items/{item}/materials', [ItemController::class, 'storeMaterial']);
     Route::get('/items/{item}/materials/total', [ItemController::class, 'materialsTotal']);
     Route::put('/items/{item}/materials/{itemInput}', [ItemController::class, 'updateMaterial']);

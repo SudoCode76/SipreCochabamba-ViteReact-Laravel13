@@ -21,6 +21,7 @@ use App\Services\Items\Fndr\ListFndrItemsService;
 use App\Services\Items\ItemCompositionService;
 use App\Services\Items\LegacyUnitPriceAnalysisPdfService;
 use App\Services\Items\LegacyUnitPriceAnalysisService;
+use App\Services\Items\MaterialBreakdownPdfService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Request as HttpRequest;
@@ -39,6 +40,7 @@ class ItemController extends Controller
         private readonly ItemCompositionService $itemCompositionService,
         private readonly LegacyUnitPriceAnalysisService $legacyUnitPriceAnalysisService,
         private readonly LegacyUnitPriceAnalysisPdfService $legacyUnitPriceAnalysisPdfService,
+        private readonly MaterialBreakdownPdfService $materialBreakdownPdfService,
     ) {}
 
     public function fndrContext(Request $request): JsonResponse
@@ -507,6 +509,17 @@ class ItemController extends Controller
     public function materials(Item $item, Request $request): JsonResponse
     {
         return $this->compositionListResponse($item, 1, $request, 'Materiales del item obtenidos correctamente.');
+    }
+
+    public function materialsPdf(Item $item, Request $request): Response
+    {
+        $permissions = $this->fndrPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            abort(403, 'No tiene permisos para consultar el desglose de materiales del item.');
+        }
+
+        return $this->materialBreakdownPdfService->stream($item);
     }
 
     public function storeMaterial(Item $item, StoreItemCompositionInputRequest $request): JsonResponse

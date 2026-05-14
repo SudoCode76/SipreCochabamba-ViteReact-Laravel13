@@ -25,11 +25,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const statusLabel = {
-  AC: "HABILITADO",
-  DC: "INHABILITADO",
-};
-
 const statusClass = {
   AC: "bg-emerald-600 text-white",
   DC: "bg-rose-600 text-white",
@@ -359,6 +354,60 @@ export default function ItemsPage() {
       setReportFeedback({
         type: "error",
         message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el analisis de precios unitarios.",
+      });
+    } finally {
+      setReportLoadingItemId(null);
+    }
+  };
+
+  const handleOpenMaterialBreakdownPdf = async (item) => {
+    if (!item?.id_item) return;
+
+    setReportFeedback(null);
+    setReportLoadingItemId(item.id_item);
+
+    const reportWindow = window.open("", "_blank");
+
+    if (reportWindow) {
+      reportWindow.document.title = "Generando PDF";
+      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando desglose de materiales...</p>";
+    }
+
+    try {
+      const pdfResponse = await itemsService.downloadMaterialBreakdownPdf(item.id_item);
+      const pdfBlob = pdfResponse instanceof Blob
+        ? pdfResponse
+        : new Blob([pdfResponse], { type: "application/pdf" });
+
+      if (pdfBlob.size === 0) {
+        throw new Error("El PDF se recibio vacio.");
+      }
+
+      const contentType = String(pdfBlob.type || "").toLowerCase();
+      if (contentType && !contentType.includes("pdf")) {
+        throw new Error("La respuesta no corresponde a un PDF valido.");
+      }
+
+      const blobUrl = URL.createObjectURL(pdfBlob);
+
+      if (reportWindow) {
+        reportWindow.location.replace(blobUrl);
+      } else {
+        const fallbackWindow = window.open(blobUrl, "_blank");
+        if (!fallbackWindow) {
+          window.location.href = blobUrl;
+        }
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (mutationError) {
+      if (reportWindow) {
+        reportWindow.close();
+      }
+
+      setReportFeedback({
+        type: "error",
+        message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el desglose de materiales.",
       });
     } finally {
       setReportLoadingItemId(null);
@@ -755,7 +804,10 @@ export default function ItemsPage() {
                                   </DropdownMenuItem>
 
                                   <DropdownMenuSeparator className="my-1 bg-border/50" />
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                  <DropdownMenuItem
+                                    className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
+                                    onClick={() => handleOpenMaterialBreakdownPdf(item)}
+                                  >
                                     <BarChart3 className="h-4 w-4 text-muted-foreground" />
                                     <span>Desglose Materiales</span>
                                   </DropdownMenuItem>

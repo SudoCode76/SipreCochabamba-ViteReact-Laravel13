@@ -157,4 +157,11 @@ export const itemsService = {
     });
     return response.data;
   },
+
+  downloadMaterialBreakdownPdf: async (itemId) => {
+    const response = await apiClient.get(`/v1/items/${itemId}/materials/pdf`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
 };
