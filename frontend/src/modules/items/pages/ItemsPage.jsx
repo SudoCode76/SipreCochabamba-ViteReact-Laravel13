@@ -41,6 +41,8 @@ export default function ItemsPage() {
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [reportLoadingItemId, setReportLoadingItemId] = useState(null);
+  const [reportFeedback, setReportFeedback] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [materialsOpen, setMaterialsOpen] = useState(false);
@@ -309,6 +311,60 @@ export default function ItemsPage() {
     setPage(1);
   };
 
+  const handleOpenUnitPriceAnalysisPdf = async (item) => {
+    if (!item?.id_item) return;
+
+    setReportFeedback(null);
+    setReportLoadingItemId(item.id_item);
+
+    const reportWindow = window.open("", "_blank");
+
+    if (reportWindow) {
+      reportWindow.document.title = "Generando PDF";
+      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando analisis de precios unitarios...</p>";
+    }
+
+    try {
+      const pdfResponse = await itemsService.downloadLegacyUnitPriceAnalysisPdf(item.id_item);
+      const pdfBlob = pdfResponse instanceof Blob
+        ? pdfResponse
+        : new Blob([pdfResponse], { type: "application/pdf" });
+
+      if (pdfBlob.size === 0) {
+        throw new Error("El PDF se recibio vacio.");
+      }
+
+      const contentType = String(pdfBlob.type || "").toLowerCase();
+      if (contentType && !contentType.includes("pdf")) {
+        throw new Error("La respuesta no corresponde a un PDF valido.");
+      }
+
+      const blobUrl = URL.createObjectURL(pdfBlob);
+
+      if (reportWindow) {
+        reportWindow.location.replace(blobUrl);
+      } else {
+        const fallbackWindow = window.open(blobUrl, "_blank");
+        if (!fallbackWindow) {
+          window.location.href = blobUrl;
+        }
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (mutationError) {
+      if (reportWindow) {
+        reportWindow.close();
+      }
+
+      setReportFeedback({
+        type: "error",
+        message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el analisis de precios unitarios.",
+      });
+    } finally {
+      setReportLoadingItemId(null);
+    }
+  };
+
   const handleEditSubmit = async (event) => {
     event.preventDefault();
     if (!editItem?.id_item) return;
@@ -551,6 +607,12 @@ export default function ItemsPage() {
         </CardHeader>
 
         <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
+          {reportFeedback && (
+            <Alert variant="destructive" className="rounded-2xl">
+              <AlertDescription>{reportFeedback.message}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex items-end gap-3">
               <div className="flex flex-col gap-2">
@@ -683,9 +745,9 @@ export default function ItemsPage() {
                                   </DropdownMenuItem>
 
                                   <DropdownMenuSeparator className="my-1 bg-border/50" />
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleOpenUnitPriceAnalysisPdf(item)} disabled={reportLoadingItemId === item.id_item}>
                                     <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                                    <span>Análisis de Precio</span>
+                                    <span>{reportLoadingItemId === item.id_item ? "Generando PDF..." : "Análisis de precios unitarios"}</span>
                                   </DropdownMenuItem>
                                   <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openRecalculate(item)}>
                                     <RefreshCw className="h-4 w-4 text-muted-foreground" />

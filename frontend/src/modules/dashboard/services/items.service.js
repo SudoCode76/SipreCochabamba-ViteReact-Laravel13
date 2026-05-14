@@ -150,4 +150,11 @@ export const itemsService = {
     const response = await apiClient.post(`/v1/items/${itemId}/breakdowns/recalculate`, payload);
     return response.data;
   },
+
+  downloadLegacyUnitPriceAnalysisPdf: async (itemId) => {
+    const response = await apiClient.get(`/v1/items/${itemId}/analisis-precios-unitarios/pdf`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
 };

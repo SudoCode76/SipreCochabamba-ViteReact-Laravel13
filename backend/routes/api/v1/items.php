@@ -38,5 +38,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/items/{item}/total', [ItemController::class, 'globalTotal']);
     Route::post('/items/{item}/breakdowns/recalculate', [ItemController::class, 'breakdownRecalculation']);
     Route::get('/items/{item}/price-analysis', [ItemController::class, 'priceAnalysis']);
+    Route::get('/items/{item}/analisis-precios-unitarios', [ItemController::class, 'legacyUnitPriceAnalysis']);
+    Route::get('/items/{item}/analisis-precios-unitarios/pdf', [ItemController::class, 'legacyUnitPriceAnalysisPdf']);
     Route::post('/items/{item}/price-recalculation', [ItemController::class, 'priceRecalculation']);
 });
