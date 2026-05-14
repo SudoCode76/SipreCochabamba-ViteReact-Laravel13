@@ -13,9 +13,9 @@ class LegacyUnitPriceAnalysisPdfService
         private readonly LegacyUnitPriceAnalysisService $legacyUnitPriceAnalysisService,
     ) {}
 
-    public function stream(Item $item): Response
+    public function stream(Item $item, string $mode = 'general'): Response
     {
-        $document = $this->legacyUnitPriceAnalysisService->build($item);
+        $document = $this->legacyUnitPriceAnalysisService->build($item, $mode);
         $analysis = $document['raw'];
 
         $pdf = MunicipalReportPdfFactory::make('Análisis de Precios Unitarios');

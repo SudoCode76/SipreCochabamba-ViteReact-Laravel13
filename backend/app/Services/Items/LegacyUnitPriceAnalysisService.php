@@ -11,9 +11,9 @@ class LegacyUnitPriceAnalysisService
         private readonly ItemPriceAnalysisService $priceAnalysisService,
     ) {}
 
-    public function build(Item $item): array
+    public function build(Item $item, string $mode = 'general'): array
     {
-        $analysis = $this->priceAnalysisService->buildCurrent($item, 'general');
+        $analysis = $this->priceAnalysisService->buildCurrent($item, $mode);
 
         return [
             'header' => [

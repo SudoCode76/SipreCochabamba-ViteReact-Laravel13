@@ -449,15 +449,16 @@ class ItemController extends Controller
         ]);
     }
 
-    public function legacyUnitPriceAnalysisPdf(HttpRequest $request, Item $item): Response
+    public function legacyUnitPriceAnalysisPdf(ShowItemPriceAnalysisRequest $request, Item $item): Response
     {
-        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+        $mode = strtolower((string) $request->input('mode', 'general'));
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), $mode);
 
         if (! $permissions['can_view_price_analysis']) {
             abort(403, 'No tiene permisos para ver el analisis de precios unitarios del item.');
         }
 
-        return $this->legacyUnitPriceAnalysisPdfService->stream($item);
+        return $this->legacyUnitPriceAnalysisPdfService->stream($item, $mode);
     }
 
     public function priceRecalculation(RecalculateItemPriceRequest $request, Item $item): JsonResponse

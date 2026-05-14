@@ -153,8 +153,9 @@ export const itemsService = {
     return response.data;
   },
 
-  downloadLegacyUnitPriceAnalysisPdf: async (itemId) => {
+  downloadLegacyUnitPriceAnalysisPdf: async (itemId, mode = "general") => {
     const response = await apiClient.get(`/v1/items/${itemId}/analisis-precios-unitarios/pdf`, {
+      params: { mode },
       responseType: "blob",
     });
     return response.data;

@@ -93,7 +93,9 @@ class FndrItemApiTest extends TestCase
             ->assertJsonPath('data.items.0.group.id', 1)
             ->assertJsonPath('data.items.0.subgroup.id', 1)
             ->assertJsonPath('data.items.0.unit_measure.id', 1)
-            ->assertJsonPath('data.items.0.calculated_price', 62.2994);
+            ->assertJsonPath('data.items.0.calculated_price', 62.3)
+            ->assertJsonPath('data.items.0.calculated_price_label', '62,30')
+            ->assertJsonPath('data.items.0.precio_calculado', '62,30');
 
         $this->getJson('/api/v1/items/fndr?search=SEGUNDO&per_page=10')
             ->assertOk()
@@ -104,6 +106,82 @@ class FndrItemApiTest extends TestCase
             ->assertJsonPath('data.items.0.available_actions.materials', false)
             ->assertJsonPath('data.items.0.available_actions.files', false)
             ->assertJsonPath('data.items.0.available_actions.breakdown_recalculation', false);
+    }
+
+    public function test_fndr_list_calculated_price_matches_legacy_list_rules_without_log_duplication(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->seedGeneralPercentages();
+        $this->seedFndrPercentages();
+
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material 1', 'estado' => 'DC']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 2, 'precio' => 5, 'descripcion' => 'Mano 1', 'estado' => 'DC']);
+        $this->createInput(['id_insumo' => 3, 'tipo' => 3, 'precio' => 4, 'descripcion' => 'Herramienta 1', 'estado' => 'DC']);
+
+        $this->createItemRecord(['precio' => 999]);
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 3]);
+        $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
+
+        $this->createInputLog(['id_log' => 1, 'id_insumo' => 2, 'precio' => 100, 'tipo' => 2, 'descripcion' => 'Mano 1', 'fecha' => '2026-04-01']);
+        $this->createInputLog(['id_log' => 2, 'id_insumo' => 2, 'precio' => 200, 'tipo' => 2, 'descripcion' => 'Mano 1', 'fecha' => '2026-05-01']);
+        $this->createInputLog(['id_log' => 3, 'id_insumo' => 3, 'precio' => 300, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-04-01']);
+        $this->createInputLog(['id_log' => 4, 'id_insumo' => 3, 'precio' => 400, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-05-01']);
+
+        $this->getJson('/api/v1/items/fndr?per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.calculated_price', 62.3)
+            ->assertJsonPath('data.items.0.calculated_price_label', '62,30')
+            ->assertJsonPath('data.items.0.precio_calculado', '62,30');
+    }
+
+    public function test_fndr_list_calculated_price_label_uses_legacy_thousands_format(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->seedFndrPercentages();
+
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 1000, 'descripcion' => 'Material 1']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 2, 'precio' => 500, 'descripcion' => 'Mano 1']);
+        $this->createInput(['id_insumo' => 3, 'tipo' => 3, 'precio' => 400, 'descripcion' => 'Herramienta 1']);
+
+        $this->createItemRecord();
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 20]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 30]);
+        $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 10]);
+
+        $this->getJson('/api/v1/items/fndr?per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.calculated_price', 62299.42)
+            ->assertJsonPath('data.items.0.calculated_price_label', '62.299,42')
+            ->assertJsonPath('data.items.0.precio_calculado', '62.299,42');
+    }
+
+    public function test_fndr_list_returns_legacy_message_when_required_percentages_are_missing(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material 1']);
+        $this->createItemRecord();
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
+
+        $message = 'uno de los parametros de porcentaje no esta configurado adecuadamente';
+
+        $this->getJson('/api/v1/items/fndr?per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.calculated_price', null)
+            ->assertJsonPath('data.items.0.calculated_price_label', $message)
+            ->assertJsonPath('data.items.0.precio_calculado', $message);
     }
 
     public function test_store_item_enforces_group_subgroup_item_duplicate_rule(): void

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Item;
 
+use App\Models\Item;
+use App\Services\Items\LegacyUnitPriceAnalysisService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\InteractsWithLegacyAuth;
@@ -53,6 +55,35 @@ class LegacyUnitPriceAnalysisPdfTest extends TestCase
         $response->assertOk();
         $response->assertHeader('content-type', 'application/pdf');
         $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_legacy_unit_price_analysis_pdf_supports_fndr_mode(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->seedAnalysisFixture();
+        $this->seedFndrPercentages();
+
+        $response = $this->get('/api/v1/items/1/analisis-precios-unitarios/pdf?mode=fndr');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="analisis_de_precios_unitarios.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_legacy_unit_price_analysis_service_uses_fndr_percentages_when_requested(): void
+    {
+        $this->seedAnalysisFixture();
+        $this->seedFndrPercentages();
+
+        $service = app(LegacyUnitPriceAnalysisService::class);
+        $general = $service->build(Item::query()->findOrFail(1), 'general');
+        $fndr = $service->build(Item::query()->findOrFail(1), 'fndr');
+
+        $this->assertSame(63.8266, $general['totals']['total_price']);
+        $this->assertSame(62.2994, $fndr['totals']['total_price']);
+        $this->assertNotSame($general['totals']['total_price'], $fndr['totals']['total_price']);
     }
 
     private function seedAnalysisFixture(): void
