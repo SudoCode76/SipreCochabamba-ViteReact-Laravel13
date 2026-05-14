@@ -150,6 +150,9 @@ class ItemCompositionApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
         $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 3]);
         $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
+        $this->createInputLog(['id_log' => 1, 'id_insumo' => 1, 'precio' => 8, 'tipo' => 1, 'descripcion' => 'Material 1', 'fecha' => '2026-04-01']);
+        $this->createInputLog(['id_log' => 2, 'id_insumo' => 2, 'precio' => 4, 'tipo' => 2, 'descripcion' => 'Labor 1', 'fecha' => '2026-04-01']);
+        $this->createInputLog(['id_log' => 3, 'id_insumo' => 3, 'precio' => 3, 'tipo' => 3, 'descripcion' => 'Tool 1', 'fecha' => '2026-04-01']);
 
         $this->getJson('/api/v1/search/inputs?type=2&search=labor')
             ->assertOk()
@@ -167,8 +170,14 @@ class ItemCompositionApiTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('data.meta.mode', 'general');
 
-        $this->postJson('/api/v1/items/1/breakdowns/recalculate')
-            ->assertOk()
-            ->assertJsonPath('data.meta.mode', 'general');
+        $response = $this->postJson('/api/v1/items/1/breakdowns/recalculate', [
+            'fecha' => '2026-04-30',
+            'tipo_desglose' => 'materiales',
+        ]);
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="desgloce_recalculado.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
     }
 }

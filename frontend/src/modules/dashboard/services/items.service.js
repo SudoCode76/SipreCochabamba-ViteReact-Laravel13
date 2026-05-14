@@ -147,7 +147,9 @@ export const itemsService = {
   },
 
   recalculateBreakdowns: async ({ itemId, payload }) => {
-    const response = await apiClient.post(`/v1/items/${itemId}/breakdowns/recalculate`, payload);
+    const response = await apiClient.post(`/v1/items/${itemId}/breakdowns/recalculate`, payload, {
+      responseType: "blob",
+    });
     return response.data;
   },
 
@@ -167,6 +169,13 @@ export const itemsService = {
 
   downloadLaborBreakdownPdf: async (itemId) => {
     const response = await apiClient.get(`/v1/items/${itemId}/labor/pdf`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  downloadMachineryBreakdownPdf: async (itemId) => {
+    const response = await apiClient.get(`/v1/items/${itemId}/machinery/pdf`, {
       responseType: "blob",
     });
     return response.data;

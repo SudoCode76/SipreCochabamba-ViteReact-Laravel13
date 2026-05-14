@@ -18,10 +18,12 @@ use App\Services\Items\Analysis\CreateAnalysisItemService;
 use App\Services\Items\Analysis\ItemAnalysisPermissionService;
 use App\Services\Items\Analysis\ItemPriceAnalysisService;
 use App\Services\Items\Analysis\ListAnalysisItemsService;
+use App\Services\Items\HistoricalBreakdownPdfService;
 use App\Services\Items\ItemCompositionService;
 use App\Services\Items\LaborBreakdownPdfService;
 use App\Services\Items\LegacyUnitPriceAnalysisPdfService;
 use App\Services\Items\LegacyUnitPriceAnalysisService;
+use App\Services\Items\MachineryBreakdownPdfService;
 use App\Services\Items\MaterialBreakdownPdfService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,6 +45,8 @@ class ItemController extends Controller
         private readonly LegacyUnitPriceAnalysisPdfService $legacyUnitPriceAnalysisPdfService,
         private readonly MaterialBreakdownPdfService $materialBreakdownPdfService,
         private readonly LaborBreakdownPdfService $laborBreakdownPdfService,
+        private readonly MachineryBreakdownPdfService $machineryBreakdownPdfService,
+        private readonly HistoricalBreakdownPdfService $historicalBreakdownPdfService,
     ) {}
 
     public function fndrContext(Request $request): JsonResponse
@@ -585,6 +589,17 @@ class ItemController extends Controller
         return $this->compositionListResponse($item, 3, $request, 'Maquinaria del item obtenida correctamente.');
     }
 
+    public function machineryPdf(Item $item, Request $request): Response
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view_price_analysis']) {
+            abort(403, 'No tiene permisos para consultar el desglose de maquinaria y herramientas del item.');
+        }
+
+        return $this->machineryBreakdownPdfService->stream($item);
+    }
+
     public function storeMachinery(Item $item, StoreItemCompositionInputRequest $request): JsonResponse
     {
         return $this->compositionStoreResponse($item, 3, $request, 'Maquinaria agregada correctamente al item.');
@@ -622,7 +637,7 @@ class ItemController extends Controller
         ]);
     }
 
-    public function breakdownRecalculation(Item $item, Request $request): JsonResponse
+    public function breakdownRecalculation(Item $item, Request $request): Response|JsonResponse
     {
         $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
@@ -630,17 +645,23 @@ class ItemController extends Controller
             return $this->forbiddenResponse('No tiene permisos para recalcular desgloses del item.');
         }
 
+        $validated = $request->validate([
+            'fecha' => ['required', 'date'],
+            'tipo' => ['nullable'],
+            'tipo_desglose' => ['nullable'],
+        ]);
+
+        $type = $validated['tipo'] ?? $validated['tipo_desglose'] ?? null;
+
+        if ($type === null || $type === '') {
+            return $this->validationFailureResponse('El tipo de desglose es obligatorio.');
+        }
+
         try {
-            $analysis = $this->itemPriceAnalysisService->buildCurrent($item, 'general');
+            return $this->historicalBreakdownPdfService->stream($item, $type, $request->date('fecha'));
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Desgloses del item recalculados correctamente.',
-            'data' => $analysis,
-        ]);
     }
 
     private function compositionListResponse(Item $item, int $type, Request $request, string $message): JsonResponse

@@ -33,6 +33,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::put('/items/{item}/labor/{itemInput}', [ItemController::class, 'updateLabor']);
     Route::delete('/items/{item}/labor/{itemInput}', [ItemController::class, 'deleteLabor']);
     Route::get('/items/{item}/machinery', [ItemController::class, 'machinery']);
+    Route::get('/items/{item}/machinery/pdf', [ItemController::class, 'machineryPdf']);
     Route::post('/items/{item}/machinery', [ItemController::class, 'storeMachinery']);
     Route::get('/items/{item}/machinery/total', [ItemController::class, 'machineryTotal']);
     Route::put('/items/{item}/machinery/{itemInput}', [ItemController::class, 'updateMachinery']);
