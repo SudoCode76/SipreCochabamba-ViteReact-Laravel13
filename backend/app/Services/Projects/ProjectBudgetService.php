@@ -4,7 +4,7 @@ namespace App\Services\Projects;
 
 use App\Models\Project;
 use App\Models\ProjectItem;
-use App\Services\Items\Fndr\FndrPriceAnalysisService;
+use App\Services\Items\Analysis\ItemPriceAnalysisService;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +13,7 @@ class ProjectBudgetService
 {
     public function __construct(
         private readonly ProjectItemIncidencePriceService $incidencePriceService,
-        private readonly FndrPriceAnalysisService $priceAnalysisService,
+        private readonly ItemPriceAnalysisService $priceAnalysisService,
     ) {}
 
     public function budgetByGroup(Project $project): array

@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Services\Items\Fndr;
+namespace App\Services\Items\Analysis;
 
 use App\Http\Requests\Item\StoreItemRequest;
 use App\Models\Item;
 use App\Models\User;
 
-class CreateItemService
+class CreateAnalysisItemService
 {
     public function execute(StoreItemRequest $request, User $user): Item
     {

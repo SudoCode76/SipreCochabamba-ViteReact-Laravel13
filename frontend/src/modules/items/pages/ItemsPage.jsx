@@ -25,11 +25,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const statusLabel = {
-  AC: "HABILITADO",
-  DC: "INHABILITADO",
-};
-
 const statusClass = {
   AC: "bg-emerald-600 text-white",
   DC: "bg-rose-600 text-white",
@@ -365,6 +360,168 @@ export default function ItemsPage() {
     }
   };
 
+  const handleOpenMaterialBreakdownPdf = async (item) => {
+    if (!item?.id_item) return;
+
+    setReportFeedback(null);
+    setReportLoadingItemId(item.id_item);
+
+    const reportWindow = window.open("", "_blank");
+
+    if (reportWindow) {
+      reportWindow.document.title = "Generando PDF";
+      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando desglose de materiales...</p>";
+    }
+
+    try {
+      const pdfResponse = await itemsService.downloadMaterialBreakdownPdf(item.id_item);
+      const pdfBlob = pdfResponse instanceof Blob
+        ? pdfResponse
+        : new Blob([pdfResponse], { type: "application/pdf" });
+
+      if (pdfBlob.size === 0) {
+        throw new Error("El PDF se recibio vacio.");
+      }
+
+      const contentType = String(pdfBlob.type || "").toLowerCase();
+      if (contentType && !contentType.includes("pdf")) {
+        throw new Error("La respuesta no corresponde a un PDF valido.");
+      }
+
+      const blobUrl = URL.createObjectURL(pdfBlob);
+
+      if (reportWindow) {
+        reportWindow.location.replace(blobUrl);
+      } else {
+        const fallbackWindow = window.open(blobUrl, "_blank");
+        if (!fallbackWindow) {
+          window.location.href = blobUrl;
+        }
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (mutationError) {
+      if (reportWindow) {
+        reportWindow.close();
+      }
+
+      setReportFeedback({
+        type: "error",
+        message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el desglose de materiales.",
+      });
+    } finally {
+      setReportLoadingItemId(null);
+    }
+  };
+
+  const handleOpenLaborBreakdownPdf = async (item) => {
+    if (!item?.id_item) return;
+
+    setReportFeedback(null);
+    setReportLoadingItemId(item.id_item);
+
+    const reportWindow = window.open("", "_blank");
+
+    if (reportWindow) {
+      reportWindow.document.title = "Generando PDF";
+      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando desglose de mano de obra...</p>";
+    }
+
+    try {
+      const pdfResponse = await itemsService.downloadLaborBreakdownPdf(item.id_item);
+      const pdfBlob = pdfResponse instanceof Blob
+        ? pdfResponse
+        : new Blob([pdfResponse], { type: "application/pdf" });
+
+      if (pdfBlob.size === 0) {
+        throw new Error("El PDF se recibio vacio.");
+      }
+
+      const contentType = String(pdfBlob.type || "").toLowerCase();
+      if (contentType && !contentType.includes("pdf")) {
+        throw new Error("La respuesta no corresponde a un PDF valido.");
+      }
+
+      const blobUrl = URL.createObjectURL(pdfBlob);
+
+      if (reportWindow) {
+        reportWindow.location.replace(blobUrl);
+      } else {
+        const fallbackWindow = window.open(blobUrl, "_blank");
+        if (!fallbackWindow) {
+          window.location.href = blobUrl;
+        }
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (mutationError) {
+      if (reportWindow) {
+        reportWindow.close();
+      }
+
+      setReportFeedback({
+        type: "error",
+        message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el desglose de mano de obra.",
+      });
+    } finally {
+      setReportLoadingItemId(null);
+    }
+  };
+
+  const handleOpenMachineryBreakdownPdf = async (item) => {
+    if (!item?.id_item) return;
+
+    setReportFeedback(null);
+    setReportLoadingItemId(item.id_item);
+
+    const reportWindow = window.open("", "_blank");
+
+    if (reportWindow) {
+      reportWindow.document.title = "Generando PDF";
+      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando desglose de herramientas...</p>";
+    }
+
+    try {
+      const pdfResponse = await itemsService.downloadMachineryBreakdownPdf(item.id_item);
+      const pdfBlob = pdfResponse instanceof Blob
+        ? pdfResponse
+        : new Blob([pdfResponse], { type: "application/pdf" });
+
+      if (pdfBlob.size === 0) {
+        throw new Error("El PDF se recibio vacio.");
+      }
+
+      const contentType = String(pdfBlob.type || "").toLowerCase();
+      if (contentType && !contentType.includes("pdf")) {
+        throw new Error("La respuesta no corresponde a un PDF valido.");
+      }
+
+      const blobUrl = URL.createObjectURL(pdfBlob);
+
+      if (reportWindow) {
+        reportWindow.location.replace(blobUrl);
+      } else {
+        const fallbackWindow = window.open(blobUrl, "_blank");
+        if (!fallbackWindow) {
+          window.location.href = blobUrl;
+        }
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (mutationError) {
+      if (reportWindow) {
+        reportWindow.close();
+      }
+
+      setReportFeedback({
+        type: "error",
+        message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el desglose de herramientas.",
+      });
+    } finally {
+      setReportLoadingItemId(null);
+    }
+  };
+
   const handleEditSubmit = async (event) => {
     event.preventDefault();
     if (!editItem?.id_item) return;
@@ -559,16 +716,60 @@ export default function ItemsPage() {
     event.preventDefault();
     if (!breakdownItem?.id_item || !breakdownDate || !breakdownType) return;
 
+    setReportFeedback(null);
+    setReportLoadingItemId(breakdownItem.id_item);
+
+    const reportWindow = window.open("", "_blank");
+
+    if (reportWindow) {
+      reportWindow.document.title = "Generando PDF";
+      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando desglose historico...</p>";
+    }
+
     try {
-      await breakdownMutation.mutateAsync({
+      const pdfResponse = await breakdownMutation.mutateAsync({
         itemId: breakdownItem.id_item,
         payload: {
           fecha: breakdownDate,
           tipo_desglose: breakdownType,
         },
       });
+      const pdfBlob = pdfResponse instanceof Blob
+        ? pdfResponse
+        : new Blob([pdfResponse], { type: "application/pdf" });
+
+      if (pdfBlob.size === 0) {
+        throw new Error("El PDF se recibio vacio.");
+      }
+
+      const contentType = String(pdfBlob.type || "").toLowerCase();
+      if (contentType && !contentType.includes("pdf")) {
+        throw new Error("La respuesta no corresponde a un PDF valido.");
+      }
+
+      const blobUrl = URL.createObjectURL(pdfBlob);
+
+      if (reportWindow) {
+        reportWindow.location.replace(blobUrl);
+      } else {
+        const fallbackWindow = window.open(blobUrl, "_blank");
+        if (!fallbackWindow) {
+          window.location.href = blobUrl;
+        }
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
     } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudieron recalcular los desgloses.");
+      if (reportWindow) {
+        reportWindow.close();
+      }
+
+      setReportFeedback({
+        type: "error",
+        message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el desglose historico.",
+      });
+    } finally {
+      setReportLoadingItemId(null);
     }
   };
 
@@ -598,9 +799,6 @@ export default function ItemsPage() {
               </div>
               <div>
                 <CardTitle className="text-2xl tracking-[-0.04em]">Items</CardTitle>
-                <CardDescription>
-                  Catálogo de items con búsqueda y paginación.
-                </CardDescription>
               </div>
             </div>
           </div>
@@ -755,17 +953,28 @@ export default function ItemsPage() {
                                   </DropdownMenuItem>
 
                                   <DropdownMenuSeparator className="my-1 bg-border/50" />
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                  <DropdownMenuItem
+                                    className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
+                                    onClick={() => handleOpenMaterialBreakdownPdf(item)}
+                                  >
                                     <BarChart3 className="h-4 w-4 text-muted-foreground" />
                                     <span>Desglose Materiales</span>
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                  <DropdownMenuItem
+                                    className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
+                                    onClick={() => handleOpenLaborBreakdownPdf(item)}
+                                    disabled={reportLoadingItemId === item.id_item}
+                                  >
                                     <Users className="h-4 w-4 text-muted-foreground" />
-                                    <span>Desglose M.O.</span>
+                                    <span>{reportLoadingItemId === item.id_item ? "Generando PDF..." : "Desglose M.O."}</span>
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                  <DropdownMenuItem
+                                    className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
+                                    onClick={() => handleOpenMachineryBreakdownPdf(item)}
+                                    disabled={reportLoadingItemId === item.id_item}
+                                  >
                                     <Hammer className="h-4 w-4 text-muted-foreground" />
-                                    <span>Desglose Herramientas</span>
+                                    <span>{reportLoadingItemId === item.id_item ? "Generando PDF..." : "Desglose Herramientas"}</span>
                                   </DropdownMenuItem>
                                   <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openBreakdown(item)}>
                                     <RefreshCw className="h-4 w-4 text-muted-foreground" />

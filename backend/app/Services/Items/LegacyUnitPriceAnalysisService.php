@@ -3,17 +3,17 @@
 namespace App\Services\Items;
 
 use App\Models\Item;
-use App\Services\Items\Fndr\FndrPriceAnalysisService;
+use App\Services\Items\Analysis\ItemPriceAnalysisService;
 
 class LegacyUnitPriceAnalysisService
 {
     public function __construct(
-        private readonly FndrPriceAnalysisService $priceAnalysisService,
+        private readonly ItemPriceAnalysisService $priceAnalysisService,
     ) {}
 
-    public function build(Item $item): array
+    public function build(Item $item, string $mode = 'general'): array
     {
-        $analysis = $this->priceAnalysisService->buildCurrent($item, 'general');
+        $analysis = $this->priceAnalysisService->buildCurrent($item, $mode);
 
         return [
             'header' => [

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Items\Fndr;
+namespace App\Services\Items\Analysis;
 
 use App\Models\FndrCalculationPercentage;
 use App\Models\FpsCalculationPercentage;
@@ -16,7 +16,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
-class FndrPriceAnalysisService
+class ItemPriceAnalysisService
 {
     public function buildCurrent(Item $item, string $mode = 'fndr'): array
     {

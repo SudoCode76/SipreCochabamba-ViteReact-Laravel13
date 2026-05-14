@@ -147,12 +147,36 @@ export const itemsService = {
   },
 
   recalculateBreakdowns: async ({ itemId, payload }) => {
-    const response = await apiClient.post(`/v1/items/${itemId}/breakdowns/recalculate`, payload);
+    const response = await apiClient.post(`/v1/items/${itemId}/breakdowns/recalculate`, payload, {
+      responseType: "blob",
+    });
     return response.data;
   },
 
-  downloadLegacyUnitPriceAnalysisPdf: async (itemId) => {
+  downloadLegacyUnitPriceAnalysisPdf: async (itemId, mode = "general") => {
     const response = await apiClient.get(`/v1/items/${itemId}/analisis-precios-unitarios/pdf`, {
+      params: { mode },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  downloadMaterialBreakdownPdf: async (itemId) => {
+    const response = await apiClient.get(`/v1/items/${itemId}/materials/pdf`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  downloadLaborBreakdownPdf: async (itemId) => {
+    const response = await apiClient.get(`/v1/items/${itemId}/labor/pdf`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  downloadMachineryBreakdownPdf: async (itemId) => {
+    const response = await apiClient.get(`/v1/items/${itemId}/machinery/pdf`, {
       responseType: "blob",
     });
     return response.data;

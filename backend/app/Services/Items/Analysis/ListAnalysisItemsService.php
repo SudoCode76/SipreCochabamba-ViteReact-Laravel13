@@ -1,15 +1,16 @@
 <?php
 
-namespace App\Services\Items\Fndr;
+namespace App\Services\Items\Analysis;
 
 use App\Models\Item;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Str;
 
-class ListFndrItemsService
+class ListAnalysisItemsService
 {
     public function __construct(
-        private readonly FndrPriceAnalysisService $priceAnalysisService,
+        private readonly ItemPriceAnalysisService $priceAnalysisService,
+        private readonly ItemAnalysisListPriceService $itemAnalysisListPriceService,
     ) {}
 
     public function execute(array $filters, string $mode = 'fndr'): LengthAwarePaginator
@@ -48,10 +49,13 @@ class ListFndrItemsService
 
         $items->setCollection(
             $items->getCollection()->map(function (Item $item) use ($mode): array {
+                $calculatedPrice = $this->calculatedPrice($item, $mode);
+
                 return [
                     'id_item' => $item->id_item,
                     'name' => $item->item,
-                    'calculated_price' => round($this->priceAnalysisService->calculateCurrentPrice($item, $mode), 4),
+                    'calculated_price' => $calculatedPrice['value'],
+                    'calculated_price_label' => $calculatedPrice['label'],
                     'status' => $item->estado,
                     'specification' => $item->especificacion,
                     'sheet' => $item->ficha,
@@ -75,5 +79,19 @@ class ListFndrItemsService
         );
 
         return $items;
+    }
+
+    private function calculatedPrice(Item $item, string $mode): array
+    {
+        if (strtolower($mode) === 'fndr') {
+            return $this->itemAnalysisListPriceService->resolve($item, $mode);
+        }
+
+        $price = round($this->priceAnalysisService->calculateCurrentPrice($item, $mode), 4);
+
+        return [
+            'value' => $price,
+            'label' => number_format($price, 2, ',', '.'),
+        ];
     }
 }
