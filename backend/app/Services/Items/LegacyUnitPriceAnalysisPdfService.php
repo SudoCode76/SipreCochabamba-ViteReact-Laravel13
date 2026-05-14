@@ -3,7 +3,8 @@
 namespace App\Services\Items;
 
 use App\Models\Item;
-use App\Support\Pdf\LegacyUnitPriceAnalysisPdf;
+use App\Support\Pdf\LegacyPdfFormat;
+use App\Support\Pdf\MunicipalReportPdfFactory;
 use Illuminate\Http\Response;
 
 class LegacyUnitPriceAnalysisPdfService
@@ -17,49 +18,7 @@ class LegacyUnitPriceAnalysisPdfService
         $document = $this->legacyUnitPriceAnalysisService->build($item);
         $analysis = $document['raw'];
 
-        $pdf = new LegacyUnitPriceAnalysisPdf(
-            'P',
-            defined('PDF_UNIT') ? PDF_UNIT : 'mm',
-            'A4',
-            true,
-            'UTF-8',
-            false,
-        );
-
-        $pdf->SetHeaderData(
-            defined('PDF_HEADER_LOGO') ? PDF_HEADER_LOGO : '',
-            defined('PDF_HEADER_LOGO_WIDTH') ? PDF_HEADER_LOGO_WIDTH : 0,
-            (defined('PDF_HEADER_TITLE') ? PDF_HEADER_TITLE : '').' 001',
-            defined('PDF_HEADER_STRING') ? PDF_HEADER_STRING : '',
-            [0, 64, 25],
-            [0, 64, 128],
-        );
-        $pdf->setFooterFont([
-            defined('PDF_FONT_NAME_DATA') ? PDF_FONT_NAME_DATA : 'helvetica',
-            '',
-            defined('PDF_FONT_SIZE_DATA') ? PDF_FONT_SIZE_DATA : 8,
-        ]);
-        $pdf->setFooterData([0, 64, 0], [0, 64, 128]);
-        $pdf->SetDefaultMonospacedFont(defined('PDF_FONT_MONOSPACED') ? PDF_FONT_MONOSPACED : 'courier');
-        $pdf->SetMargins(
-            defined('PDF_MARGIN_LEFT') ? PDF_MARGIN_LEFT : 15,
-            defined('PDF_MARGIN_TOP') ? PDF_MARGIN_TOP : 27,
-            defined('PDF_MARGIN_RIGHT') ? PDF_MARGIN_RIGHT : 15,
-        );
-        $pdf->SetMargins(
-            defined('PDF_MARGIN_LEFT') ? PDF_MARGIN_LEFT : 15,
-            35,
-            defined('PDF_MARGIN_RIGHT') ? PDF_MARGIN_RIGHT : 15,
-        );
-        $pdf->SetHeaderMargin(defined('PDF_MARGIN_HEADER') ? PDF_MARGIN_HEADER : 5);
-        $pdf->SetFooterMargin(defined('PDF_MARGIN_FOOTER') ? PDF_MARGIN_FOOTER : 10);
-        $pdf->SetAutoPageBreak(true, defined('PDF_MARGIN_BOTTOM') ? PDF_MARGIN_BOTTOM : 25);
-        $pdf->setImageScale(defined('PDF_IMAGE_SCALE_RATIO') ? PDF_IMAGE_SCALE_RATIO : 1.25);
-        $pdf->setFontSubsetting(true);
-        $pdf->AddPage('P', 'A4');
-        $pdf->SetDisplayMode('real');
-        $pdf->SetAutoPageBreak(true, 10);
-        $pdf->SetFont('dejavusans', '', 7, '', true);
+        $pdf = MunicipalReportPdfFactory::make('Análisis de Precios Unitarios');
         $pdf->SetFont('dejavusans', '', 8, '', true);
 
         [$html, $missingParametersHtml] = $this->buildLegacyHtml($analysis);
@@ -72,12 +31,7 @@ class LegacyUnitPriceAnalysisPdfService
             $pdf->SetFont('dejavusans', '', 10, '', true);
         }
 
-        $content = $pdf->Output('analisis_de_precios_unitarios.pdf', 'S');
-
-        return response($content, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="analisis_de_precios_unitarios.pdf"',
-        ]);
+        return MunicipalReportPdfFactory::inlineResponse($pdf, 'analisis_de_precios_unitarios.pdf');
     }
 
     private function buildLegacyHtml(array $analysis): array
@@ -164,14 +118,14 @@ class LegacyUnitPriceAnalysisPdfService
         <td width="'.$wNo.'">'.$numero.'</td>
         <td width="'.$wDescription.'">'.htmlentities((string) $material['description']).'</td>
         <td width="'.$wUnit.'">'.($material['unit_measure']['abbreviation'] ?? '').'</td>
-        <td width="'.$wQuantity.'" align="right">'.$this->legacyNumber((float) $material['quantity'], 4).'</td>
-        <td width="'.$wUnitPrice.'" align="right">'.$this->legacyNumber((float) $material['unit_price'], 2).'</td>
-        <td width="'.$wPartial.'" align="right">'.$this->legacyNumber($parcialRaw, 2).'</td>
+        <td width="'.$wQuantity.'" align="right">'.LegacyPdfFormat::number((float) $material['quantity'], 4).'</td>
+        <td width="'.$wUnitPrice.'" align="right">'.LegacyPdfFormat::number((float) $material['unit_price'], 2).'</td>
+        <td width="'.$wPartial.'" align="right">'.LegacyPdfFormat::number($parcialRaw, 2).'</td>
       </tr>';
             $numero++;
         }
 
-        $a = $this->legacyNumber($acumA, 2);
+        $a = LegacyPdfFormat::number($acumA, 2);
         $html .= '<tr bgcolor="#ccebe8">
       <td width="'.$wSection.'"><b>D</b></td>
         <td width="'.$wSubtotalLabel.'"><b>TOTAL MATERIALES</b></td>
@@ -191,14 +145,14 @@ class LegacyUnitPriceAnalysisPdfService
         <td width="'.$wNo.'">'.$numero.'</td>
         <td width="'.$wDescription.'">'.htmlentities((string) $laborRow['description']).'</td>
         <td width="'.$wUnit.'">'.($laborRow['unit_measure']['abbreviation'] ?? '').'</td>
-        <td width="'.$wQuantity.'" align="right">'.$this->legacyNumber((float) $laborRow['quantity'], 4).'</td>
-        <td width="'.$wUnitPrice.'" align="right">'.$this->legacyNumber((float) $laborRow['unit_price'], 2).'</td>
-        <td width="'.$wPartial.'" align="right">'.$this->legacyNumber($parcialRaw, 2).'</td>
+        <td width="'.$wQuantity.'" align="right">'.LegacyPdfFormat::number((float) $laborRow['quantity'], 4).'</td>
+        <td width="'.$wUnitPrice.'" align="right">'.LegacyPdfFormat::number((float) $laborRow['unit_price'], 2).'</td>
+        <td width="'.$wPartial.'" align="right">'.LegacyPdfFormat::number($parcialRaw, 2).'</td>
         </tr>';
             $numero++;
         }
 
-        $b = $this->legacyNumber($acumB, 2);
+        $b = LegacyPdfFormat::number($acumB, 2);
         $html .= '<tr bgcolor="#ccebe8">
         <td width="'.$wSection.'"><b>E</b></td>
         <td width="'.$wSubtotalLabel.'"><b>SUBTOTAL MANO DE OBRA</b></td>
@@ -225,12 +179,12 @@ class LegacyUnitPriceAnalysisPdfService
         }
 
         $montoCs = ($acumB * $resolved['porcentaje_cs']) / 100;
-        $montoCsF = $this->legacyNumber($montoCs, 2);
+        $montoCsF = LegacyPdfFormat::number($montoCs, 2);
         $suma = $acumB + $montoCs;
         $o = $suma * $resolved['porcentaje_iva'] / 100;
         $oF = number_format((float) $o, 2, '.', ',');
         $g = $acumB + $montoCs + $o;
-        $gF = $this->legacyNumber($g, 2);
+        $gF = LegacyPdfFormat::number($g, 2);
 
         $html .= '<tr>
               <td width="'.$wSection.'">F</td>
@@ -265,31 +219,31 @@ class LegacyUnitPriceAnalysisPdfService
                       <td width="'.$wNo.'">'.$numero.'</td>
                       <td width="'.$wDescription.'">'.htmlentities((string) $tool['description']).'</td>
                       <td width="'.$wUnit.'">'.($tool['unit_measure']['abbreviation'] ?? '').'</td>
-                      <td width="'.$wQuantity.'" align="right">'.$this->legacyNumber((float) $tool['quantity'], 4).'</td>
-                      <td width="'.$wUnitPrice.'" align="right">'.$this->legacyNumber((float) $tool['unit_price'], 2).'</td>
-                      <td width="'.$wPartial.'" align="right">'.$this->legacyNumber($parcialRaw, 2).'</td>
+                      <td width="'.$wQuantity.'" align="right">'.LegacyPdfFormat::number((float) $tool['quantity'], 4).'</td>
+                      <td width="'.$wUnitPrice.'" align="right">'.LegacyPdfFormat::number((float) $tool['unit_price'], 2).'</td>
+                      <td width="'.$wPartial.'" align="right">'.LegacyPdfFormat::number($parcialRaw, 2).'</td>
                       </tr>';
             $numero++;
         }
 
         $h = $g * $resolved['porcentaje_hm'] / 100;
-        $hF = $this->legacyNumber($h, 2);
+        $hF = LegacyPdfFormat::number($h, 2);
         $i = $acumC + $h;
-        $iF = $this->legacyNumber($i, 2);
+        $iF = LegacyPdfFormat::number($i, 2);
         $j = $acumA + $g + $i;
-        $jF = $this->legacyNumber($j, 2);
+        $jF = LegacyPdfFormat::number($j, 2);
         $l = $j * $resolved['porcentaje_adm'] / 100;
-        $lF = $this->legacyNumber($l, 2);
+        $lF = LegacyPdfFormat::number($l, 2);
         $m = ($j + $l) * $resolved['porcentaje_util'] / 100;
-        $mF = $this->legacyNumber($m, 2);
+        $mF = LegacyPdfFormat::number($m, 2);
         $n = (float) $j + (float) $l + (float) $m;
         $nF = number_format((float) $n, 2, '.', ',');
         $p = $n * $resolved['porcentaje_it'] / 100;
-        $pF = $this->legacyNumber($p, 2);
+        $pF = LegacyPdfFormat::number($p, 2);
         $q = (float) $n + (float) $p;
-        $qF = $this->legacyNumber($q, 2);
-        $pa = $this->legacyNumber($q, 2);
-        $lit = $this->convertir($pa);
+        $qF = LegacyPdfFormat::number($q, 2);
+        $pa = LegacyPdfFormat::number($q, 2);
+        $lit = LegacyPdfFormat::literalFromLegacyNumber($pa);
         $txt = 'SON: BOLIVIANOS  '.$lit.' ';
 
         $html .= '<tr>
@@ -398,238 +352,5 @@ class LegacyUnitPriceAnalysisPdfService
         );
 
         return $resolved;
-    }
-
-    private function legacyNumber(float $value, int $decimals): string
-    {
-        return number_format((float) $value, $decimals, ',', '.');
-    }
-
-    private function unidad(int $numero): string
-    {
-        return match ($numero) {
-            9 => 'NUEVE',
-            8 => 'OCHO',
-            7 => 'SIETE',
-            6 => 'SEIS',
-            5 => 'CINCO',
-            4 => 'CUATRO',
-            3 => 'TRES',
-            2 => 'DOS',
-            1 => 'UNO',
-            default => 'CERO',
-        };
-    }
-
-    private function decena(int $numero): string
-    {
-        if ($numero >= 90 && $numero <= 99) {
-            $texto = 'NOVENTA ';
-            if ($numero > 90) {
-                $texto .= 'Y '.$this->unidad($numero - 90);
-            }
-
-            return $texto;
-        }
-        if ($numero >= 80 && $numero <= 89) {
-            $texto = 'OCHENTA ';
-            if ($numero > 80) {
-                $texto .= 'Y '.$this->unidad($numero - 80);
-            }
-
-            return $texto;
-        }
-        if ($numero >= 70 && $numero <= 79) {
-            $texto = 'SETENTA ';
-            if ($numero > 70) {
-                $texto .= 'Y '.$this->unidad($numero - 70);
-            }
-
-            return $texto;
-        }
-        if ($numero >= 60 && $numero <= 69) {
-            $texto = 'SESENTA ';
-            if ($numero > 60) {
-                $texto .= 'Y '.$this->unidad($numero - 60);
-            }
-
-            return $texto;
-        }
-        if ($numero >= 50 && $numero <= 59) {
-            $texto = 'CINCUENTA ';
-            if ($numero > 50) {
-                $texto .= 'Y '.$this->unidad($numero - 50);
-            }
-
-            return $texto;
-        }
-        if ($numero >= 40 && $numero <= 49) {
-            $texto = 'CUARENTA ';
-            if ($numero > 40) {
-                $texto .= 'Y '.$this->unidad($numero - 40);
-            }
-
-            return $texto;
-        }
-        if ($numero >= 30 && $numero <= 39) {
-            $texto = 'TREINTA ';
-            if ($numero > 30) {
-                $texto .= 'Y '.$this->unidad($numero - 30);
-            }
-
-            return $texto;
-        }
-        if ($numero >= 20 && $numero <= 29) {
-            return $numero === 20 ? 'VEINTE ' : 'VEINTI'.$this->unidad($numero - 20);
-        }
-        if ($numero >= 10 && $numero <= 19) {
-            return match ($numero) {
-                10 => 'DIEZ ',
-                11 => 'ONCE ',
-                12 => 'DOCE ',
-                13 => 'TRECE ',
-                14 => 'CATORCE ',
-                15 => 'QUINCE ',
-                16 => 'DIECISEIS ',
-                17 => 'DIECISIETE ',
-                18 => 'DIECIOCHO ',
-                default => 'DIECINUEVE ',
-            };
-        }
-
-        return $this->unidad($numero);
-    }
-
-    private function centena(int $numero): string
-    {
-        if ($numero >= 900 && $numero <= 999) {
-            return 'NOVECIENTOS '.($numero > 900 ? $this->decena($numero - 900) : '');
-        }
-        if ($numero >= 800 && $numero <= 899) {
-            return 'OCHOCIENTOS '.($numero > 800 ? $this->decena($numero - 800) : '');
-        }
-        if ($numero >= 700 && $numero <= 799) {
-            return 'SETECIENTOS '.($numero > 700 ? $this->decena($numero - 700) : '');
-        }
-        if ($numero >= 600 && $numero <= 699) {
-            return 'SEISCIENTOS '.($numero > 600 ? $this->decena($numero - 600) : '');
-        }
-        if ($numero >= 500 && $numero <= 599) {
-            return 'QUINIENTOS '.($numero > 500 ? $this->decena($numero - 500) : '');
-        }
-        if ($numero >= 400 && $numero <= 499) {
-            return 'CUATROCIENTOS '.($numero > 400 ? $this->decena($numero - 400) : '');
-        }
-        if ($numero >= 300 && $numero <= 399) {
-            return 'TRESCIENTOS '.($numero > 300 ? $this->decena($numero - 300) : '');
-        }
-        if ($numero >= 200 && $numero <= 299) {
-            return 'DOSCIENTOS '.($numero > 200 ? $this->decena($numero - 200) : '');
-        }
-        if ($numero >= 100 && $numero <= 199) {
-            return $numero === 100 ? 'CIEN ' : 'CIENTO '.$this->decena($numero - 100);
-        }
-
-        return $this->decena($numero);
-    }
-
-    private function miles(int $numero): string
-    {
-        if ($numero >= 1000 && $numero < 2000) {
-            return 'MIL '.$this->centena($numero % 1000);
-        }
-        if ($numero >= 2000 && $numero < 10000) {
-            return $this->unidad((int) floor($numero / 1000)).' MIL '.$this->centena($numero % 1000);
-        }
-
-        return $this->centena($numero);
-    }
-
-    private function decmiles(int $numero): string
-    {
-        if ($numero === 10000) {
-            return 'DIEZ MIL';
-        }
-        if ($numero > 10000 && $numero < 20000) {
-            return $this->decena((int) floor($numero / 1000)).'MIL '.$this->centena($numero % 1000);
-        }
-        if ($numero >= 20000 && $numero < 100000) {
-            return $this->decena((int) floor($numero / 1000)).' MIL '.$this->miles($numero % 1000);
-        }
-
-        return $this->miles($numero);
-    }
-
-    private function cienmiles(int $numero): string
-    {
-        if ($numero === 100000) {
-            return 'CIEN MIL';
-        }
-        if ($numero >= 100000 && $numero < 1000000) {
-            return $this->centena((int) floor($numero / 1000)).' MIL '.$this->centena($numero % 1000);
-        }
-
-        return $this->decmiles($numero);
-    }
-
-    private function millon(int $numero): string
-    {
-        if ($numero >= 1000000 && $numero < 2000000) {
-            return 'UN MILLON '.$this->cienmiles($numero % 1000000);
-        }
-        if ($numero >= 2000000 && $numero < 10000000) {
-            return $this->unidad((int) floor($numero / 1000000)).' MILLONES '.$this->cienmiles($numero % 1000000);
-        }
-
-        return $this->cienmiles($numero);
-    }
-
-    private function decmillon(int $numero): string
-    {
-        if ($numero === 10000000) {
-            return 'DIEZ MILLONES';
-        }
-        if ($numero > 10000000 && $numero < 20000000) {
-            return $this->decena((int) floor($numero / 1000000)).'MILLONES '.$this->cienmiles($numero % 1000000);
-        }
-        if ($numero >= 20000000 && $numero < 100000000) {
-            return $this->decena((int) floor($numero / 1000000)).' MILLONES '.$this->millon($numero % 1000000);
-        }
-
-        return $this->millon($numero);
-    }
-
-    private function cienmillon(int $numero): string
-    {
-        if ($numero === 100000000) {
-            return 'CIEN MILLONES';
-        }
-        if ($numero >= 100000000 && $numero < 1000000000) {
-            return $this->centena((int) floor($numero / 1000000)).' MILLONES '.$this->millon($numero % 1000000);
-        }
-
-        return $this->decmillon($numero);
-    }
-
-    private function milmillon(int $numero): string
-    {
-        if ($numero >= 1000000000 && $numero < 2000000000) {
-            return 'MIL '.$this->cienmillon($numero % 1000000000);
-        }
-        if ($numero >= 2000000000 && $numero < 10000000000) {
-            return $this->unidad((int) floor($numero / 1000000000)).' MIL '.$this->cienmillon($numero % 1000000000);
-        }
-
-        return $this->cienmillon($numero);
-    }
-
-    private function convertir(string $numero): string
-    {
-        $num = str_replace('.', '', $numero);
-        $cents = substr($num, strlen($num) - 2, strlen($num) - 1);
-        $num = (int) $num;
-        $numf = $this->milmillon($num);
-
-        return ' '.$numf.' CON '.$cents.'/100';
     }
 }

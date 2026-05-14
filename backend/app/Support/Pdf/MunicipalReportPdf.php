@@ -2,8 +2,15 @@
 
 namespace App\Support\Pdf;
 
-class LegacyUnitPriceAnalysisPdf extends \TCPDF
+class MunicipalReportPdf extends \TCPDF
 {
+    public function __construct(
+        private readonly string $reportTitle,
+        mixed ...$tcpdfArgs,
+    ) {
+        parent::__construct(...$tcpdfArgs);
+    }
+
     public function Header(): void
     {
         date_default_timezone_set('America/La_Paz');
@@ -26,7 +33,7 @@ class LegacyUnitPriceAnalysisPdf extends \TCPDF
         $this->Cell($titleWidth, 4, 'DIRECCION DE PROYECTOS', 0, 1, 'L', 0, '', 3);
         $this->Cell($titleWidth, 4, 'COCHABAMBA-BOLIVIA', 0, 1, 'L', 0, '', 3);
         $this->SetFont('helvetica', 'B', 11, '', true);
-        $this->Cell($titleWidth, 8, 'Análisis de Precios Unitarios', 0, 1, 'C', 0, '', 3);
+        $this->Cell($titleWidth, 8, $this->reportTitle, 0, 1, 'C', 0, '', 3);
 
         $this->top_margin = $this->GetY() + 100;
         $this->writeHTML('', true, false, true, false, '');
