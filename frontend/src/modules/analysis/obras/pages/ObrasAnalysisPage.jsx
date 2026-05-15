@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Loader2, TrendingUp, Search, MoreHorizontal, RefreshCw, X } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
@@ -26,22 +25,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const statusLabel = {
-  AC: "HABILITADO",
-  DC: "INHABILITADO",
-};
-
 const statusClass = {
   AC: "bg-emerald-600 text-white",
   DC: "bg-rose-600 text-white",
 };
 
 export default function ObrasAnalysisPage() {
-  const navigate = useNavigate();
   const [perPage, setPerPage] = useState(10);
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [reportLoadingItemId, setReportLoadingItemId] = useState(null);
+  const [reportFeedback, setReportFeedback] = useState(null);
   const [recalculateOpen, setRecalculateOpen] = useState(false);
   const [recalculateItem, setRecalculateItem] = useState(null);
   const [recalculateDate, setRecalculateDate] = useState("");
@@ -111,6 +106,60 @@ export default function ObrasAnalysisPage() {
     setPage(1);
   };
 
+  const handleOpenUnitPriceAnalysisPdf = async (item) => {
+    if (!item?.id_item) return;
+
+    setReportFeedback(null);
+    setReportLoadingItemId(item.id_item);
+
+    const reportWindow = window.open("", "_blank");
+
+    if (reportWindow) {
+      reportWindow.document.title = "Generando PDF";
+      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando analisis de precios unitarios Obras Publicas...</p>";
+    }
+
+    try {
+      const pdfResponse = await itemsService.downloadLegacyUnitPriceAnalysisPdf(item.id_item, "obras");
+      const pdfBlob = pdfResponse instanceof Blob
+        ? pdfResponse
+        : new Blob([pdfResponse], { type: "application/pdf" });
+
+      if (pdfBlob.size === 0) {
+        throw new Error("El PDF se recibio vacio.");
+      }
+
+      const contentType = String(pdfBlob.type || "").toLowerCase();
+      if (contentType && !contentType.includes("pdf")) {
+        throw new Error("La respuesta no corresponde a un PDF valido.");
+      }
+
+      const blobUrl = URL.createObjectURL(pdfBlob);
+
+      if (reportWindow) {
+        reportWindow.location.replace(blobUrl);
+      } else {
+        const fallbackWindow = window.open(blobUrl, "_blank");
+        if (!fallbackWindow) {
+          window.location.assign(blobUrl);
+        }
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (mutationError) {
+      if (reportWindow) {
+        reportWindow.close();
+      }
+
+      setReportFeedback({
+        type: "error",
+        message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el analisis de precios unitarios Obras Publicas.",
+      });
+    } finally {
+      setReportLoadingItemId(null);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       <Card className="border border-border/70 bg-white/86 shadow-[0_24px_90px_rgba(15,23,42,0.08)] backdrop-blur">
@@ -128,6 +177,12 @@ export default function ObrasAnalysisPage() {
         </CardHeader>
 
         <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
+          {reportFeedback && (
+            <Alert variant="destructive" className="rounded-2xl">
+              <AlertDescription>{reportFeedback.message}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex items-end gap-3">
               <div className="flex flex-col gap-2">
@@ -230,9 +285,13 @@ export default function ObrasAnalysisPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-lg">
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
+                                onClick={() => handleOpenUnitPriceAnalysisPdf(item)}
+                                disabled={reportLoadingItemId === item.id_item}
+                              >
                                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                                <span>Análisis de Precio</span>
+                                <span>{reportLoadingItemId === item.id_item ? "Generando PDF..." : "Análisis de Precio"}</span>
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"

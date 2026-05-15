@@ -49,7 +49,7 @@ class ItemPriceAnalysisService
 
         $components = $useHistoricalLogs
             ? $this->loadHistoricalComponents($item, $date)
-            : $this->loadCurrentComponents($item);
+            : $this->loadCurrentComponents($item, strtolower($mode));
 
         $materials = $this->mapComponents($components->where('type_id', 1)->values());
         $labor = $this->mapComponents($components->where('type_id', 2)->values());
@@ -99,7 +99,16 @@ class ItemPriceAnalysisService
         ];
     }
 
-    private function loadCurrentComponents(Item $item): Collection
+    private function loadCurrentComponents(Item $item, string $mode): Collection
+    {
+        if ($mode !== 'general') {
+            return $this->loadInstitutionalCurrentComponents($item);
+        }
+
+        return $this->loadGeneralCurrentComponents($item);
+    }
+
+    private function loadGeneralCurrentComponents(Item $item): Collection
     {
         return ItemInput::query()
             ->from('item_insumo')
@@ -111,6 +120,54 @@ class ItemPriceAnalysisService
             ->where('item_insumo.id_item', $item->id_item)
             ->where('insumo.estado', 'AC')
             ->where('item_insumo.estado', 'AC')
+            ->select([
+                'item_insumo.id_item_insumo',
+                'item_insumo.id_insumo',
+                'item_insumo.cantidad',
+                'insumo.tipo as type_id',
+                'insumo.descripcion',
+                'insumo.precio as unit_price',
+                'grupo.nombre_grupo as group_name',
+                'sub_grupo.descripcion as subgroup_name',
+                'unidad_medida.id_unidad_medida as unit_measure_id',
+                'unidad_medida.descripcion as unit_measure_description',
+                'unidad_medida.abreviatura as unit_measure_abbreviation',
+            ])
+            ->orderBy('insumo.tipo')
+            ->orderBy('grupo.nombre_grupo')
+            ->orderBy('sub_grupo.descripcion')
+            ->get();
+    }
+
+    private function loadInstitutionalCurrentComponents(Item $item): Collection
+    {
+        return collect()
+            ->concat($this->loadInstitutionalCurrentComponentsByType($item, 1, false))
+            ->concat($this->loadInstitutionalCurrentComponentsByType($item, 2, true))
+            ->concat($this->loadInstitutionalCurrentComponentsByType($item, 3, true))
+            ->values();
+    }
+
+    private function loadInstitutionalCurrentComponentsByType(Item $item, int $type, bool $joinLogs): Collection
+    {
+        $query = ItemInput::query()
+            ->from('item_insumo')
+            ->join('item', 'item.id_item', '=', 'item_insumo.id_item')
+            ->join('grupo', 'grupo.id_grupo', '=', 'item.grupo')
+            ->join('sub_grupo', 'sub_grupo.id_subgrupo', '=', 'item.subgrupo')
+            ->join('insumo', 'insumo.id_insumo', '=', 'item_insumo.id_insumo')
+            ->where('item_insumo.id_item', $item->id_item)
+            ->where('item_insumo.estado', 'AC')
+            ->where('insumo.tipo', $type);
+
+        if ($joinLogs) {
+            $query->join('log_insumo', 'log_insumo.id_insumo', '=', 'item_insumo.id_insumo')
+                ->join('unidad_medida', 'unidad_medida.id_unidad_medida', '=', 'log_insumo.unidad_medida');
+        } else {
+            $query->join('unidad_medida', 'unidad_medida.id_unidad_medida', '=', 'insumo.unidad_medida');
+        }
+
+        return $query
             ->select([
                 'item_insumo.id_item_insumo',
                 'item_insumo.id_insumo',

@@ -79,6 +79,8 @@ class FndrItemApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 4, 'id_item' => 2, 'id_insumo' => 1, 'cantidad' => 1]);
         $this->createItemInputRecord(['id_item_insumo' => 5, 'id_item' => 2, 'id_insumo' => 2, 'cantidad' => 1]);
         $this->createItemInputRecord(['id_item_insumo' => 6, 'id_item' => 2, 'id_insumo' => 3, 'cantidad' => 1]);
+        $this->createInputLog(['id_log' => 1, 'id_insumo' => 2, 'precio' => 100, 'tipo' => 2, 'descripcion' => 'Mano 1', 'fecha' => '2026-05-01']);
+        $this->createInputLog(['id_log' => 2, 'id_insumo' => 3, 'precio' => 200, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-05-01']);
 
         $response = $this->getJson('/api/v1/items/fndr?search=ITEM&group_id=1&subgroup_id=1&status=AC&per_page=10');
 
@@ -108,7 +110,7 @@ class FndrItemApiTest extends TestCase
             ->assertJsonPath('data.items.0.available_actions.breakdown_recalculation', false);
     }
 
-    public function test_fndr_list_calculated_price_matches_legacy_list_rules_without_log_duplication(): void
+    public function test_fndr_list_calculated_price_matches_legacy_list_rules_with_log_join_multiplication(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
 
@@ -134,9 +136,9 @@ class FndrItemApiTest extends TestCase
 
         $this->getJson('/api/v1/items/fndr?per_page=10')
             ->assertOk()
-            ->assertJsonPath('data.items.0.calculated_price', 62.3)
-            ->assertJsonPath('data.items.0.calculated_price_label', '62,30')
-            ->assertJsonPath('data.items.0.precio_calculado', '62,30');
+            ->assertJsonPath('data.items.0.calculated_price', 99.67)
+            ->assertJsonPath('data.items.0.calculated_price_label', '99,67')
+            ->assertJsonPath('data.items.0.precio_calculado', '99,67');
     }
 
     public function test_fndr_list_calculated_price_label_uses_legacy_thousands_format(): void
@@ -156,6 +158,8 @@ class FndrItemApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 20]);
         $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 30]);
         $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 10]);
+        $this->createInputLog(['id_log' => 1, 'id_insumo' => 2, 'precio' => 100, 'tipo' => 2, 'descripcion' => 'Mano 1', 'fecha' => '2026-05-01']);
+        $this->createInputLog(['id_log' => 2, 'id_insumo' => 3, 'precio' => 200, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-05-01']);
 
         $this->getJson('/api/v1/items/fndr?per_page=10')
             ->assertOk()
@@ -231,6 +235,8 @@ class FndrItemApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
         $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 3]);
         $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
+        $this->createInputLog(['id_log' => 1, 'id_insumo' => 2, 'precio' => 100, 'tipo' => 2, 'descripcion' => 'Mano 1', 'fecha' => '2026-05-01']);
+        $this->createInputLog(['id_log' => 2, 'id_insumo' => 3, 'precio' => 200, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-05-01']);
 
         $response = $this->getJson('/api/v1/items/1/price-analysis?mode=fndr');
 

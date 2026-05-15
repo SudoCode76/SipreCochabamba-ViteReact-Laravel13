@@ -72,6 +72,66 @@ class LegacyUnitPriceAnalysisPdfTest extends TestCase
         $this->assertStringStartsWith('%PDF', $response->getContent());
     }
 
+    public function test_legacy_unit_price_analysis_pdf_supports_upre_mode(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->seedAnalysisFixture();
+        $this->seedUprePercentages();
+
+        $response = $this->get('/api/v1/items/1/analisis-precios-unitarios/pdf?mode=upre');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="analisis_de_precios_unitarios.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_legacy_unit_price_analysis_pdf_supports_fps_mode(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->seedAnalysisFixture();
+        $this->seedFpsPercentages();
+
+        $response = $this->get('/api/v1/items/1/analisis-precios-unitarios/pdf?mode=fps');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="analisis_de_precios_unitarios.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_legacy_unit_price_analysis_pdf_supports_obras_mode(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->seedAnalysisFixture();
+        $this->seedObrasPercentages();
+
+        $response = $this->get('/api/v1/items/1/analisis-precios-unitarios/pdf?mode=obras');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="analisis_de_precios_unitarios.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_legacy_unit_price_analysis_pdf_supports_proman_mode(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->seedAnalysisFixture();
+        $this->seedPromanPercentages();
+
+        $response = $this->get('/api/v1/items/1/analisis-precios-unitarios/pdf?mode=proman');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="analisis_de_precios_unitarios.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
     public function test_legacy_unit_price_analysis_service_uses_fndr_percentages_when_requested(): void
     {
         $this->seedAnalysisFixture();
@@ -101,5 +161,7 @@ class LegacyUnitPriceAnalysisPdfTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
         $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 3]);
         $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
+        $this->createInputLog(['id_log' => 1, 'id_insumo' => 2, 'precio' => 100, 'tipo' => 2, 'descripcion' => 'Mano 1', 'fecha' => '2026-05-01']);
+        $this->createInputLog(['id_log' => 2, 'id_insumo' => 3, 'precio' => 200, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-05-01']);
     }
 }

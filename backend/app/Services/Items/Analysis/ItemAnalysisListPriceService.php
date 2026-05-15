@@ -68,13 +68,17 @@ class ItemAnalysisListPriceService
 
     private function totalByType(Item $item, int $type): float
     {
-        $rows = DB::table('item_insumo')
+        $query = DB::table('item_insumo')
             ->join('insumo', 'insumo.id_insumo', '=', 'item_insumo.id_insumo')
             ->where('item_insumo.id_item', $item->id_item)
             ->where('item_insumo.estado', 'AC')
-            ->where('insumo.tipo', $type)
-            ->select(['item_insumo.cantidad', 'insumo.precio'])
-            ->get();
+            ->where('insumo.tipo', $type);
+
+        if (in_array($type, [2, 3], true)) {
+            $query->join('log_insumo', 'log_insumo.id_insumo', '=', 'item_insumo.id_insumo');
+        }
+
+        $rows = $query->select(['item_insumo.cantidad', 'insumo.precio'])->get();
 
         return $rows->sum(fn ($row): float => ((float) $row->cantidad) * ((float) $row->precio));
     }
