@@ -12,6 +12,16 @@ export const itemsService = {
     return response.data;
   },
 
+  context: async () => {
+    const response = await apiClient.get("/v1/items/context");
+    return response.data;
+  },
+
+  create: async (payload) => {
+    const response = await apiClient.post("/v1/items", payload);
+    return response.data;
+  },
+
   fndrList: async ({ page = 1, perPage = 10, search = "" } = {}) => {
     const response = await apiClient.get("/v1/items/fndr", {
       params: {

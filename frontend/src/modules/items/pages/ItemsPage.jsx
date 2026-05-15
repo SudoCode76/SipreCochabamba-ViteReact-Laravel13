@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,16 @@ const statusClass = {
   DC: "bg-rose-600 text-white",
 };
 
+const collectValidationMessages = (error, fallback) => {
+  const errors = error?.response?.data?.errors;
+
+  if (errors && typeof errors === "object") {
+    return Object.values(errors).flat().filter(Boolean);
+  }
+
+  return [error?.response?.data?.message || error?.message || fallback];
+};
+
 export default function ItemsPage() {
   const queryClient = useQueryClient();
   const [perPage, setPerPage] = useState(10);
@@ -38,6 +48,12 @@ export default function ItemsPage() {
   const [page, setPage] = useState(1);
   const [reportLoadingItemId, setReportLoadingItemId] = useState(null);
   const [reportFeedback, setReportFeedback] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createGroupId, setCreateGroupId] = useState("");
+  const [createUnitId, setCreateUnitId] = useState("");
+  const [unitSearch, setUnitSearch] = useState("");
+  const [unitComboboxOpen, setUnitComboboxOpen] = useState(false);
+  const [createErrors, setCreateErrors] = useState([]);
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [materialsOpen, setMaterialsOpen] = useState(false);
@@ -58,6 +74,24 @@ export default function ItemsPage() {
   const [breakdownItem, setBreakdownItem] = useState(null);
   const [breakdownDate, setBreakdownDate] = useState("");
   const [breakdownType, setBreakdownType] = useState("");
+
+  const openCreate = () => {
+    setCreateOpen(true);
+    setCreateGroupId("");
+    setCreateUnitId("");
+    setUnitSearch("");
+    setUnitComboboxOpen(false);
+    setCreateErrors([]);
+  };
+
+  const closeCreate = () => {
+    setCreateOpen(false);
+    setCreateGroupId("");
+    setCreateUnitId("");
+    setUnitSearch("");
+    setUnitComboboxOpen(false);
+    setCreateErrors([]);
+  };
 
   const handleEdit = (item) => {
     setEditItem(item);
@@ -145,6 +179,19 @@ export default function ItemsPage() {
     queryKey: ["items", { page, perPage, search }],
     queryFn: () => itemsService.list({ page, perPage, search }),
     placeholderData: (previousData) => previousData,
+  });
+
+  const { data: contextData, isLoading: contextLoading } = useQuery({
+    queryKey: ["items-context"],
+    queryFn: itemsService.context,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: itemsService.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+      closeCreate();
+    },
   });
 
   const updateMutation = useMutation({
@@ -282,6 +329,22 @@ export default function ItemsPage() {
   });
 
   const items = data?.data?.items ?? [];
+  const context = contextData?.data ?? {};
+  const groups = context.groups ?? [];
+  const subgroupsByGroup = context.subgroups_by_group ?? {};
+  const statuses = context.statuses ?? [];
+  const unitMeasures = context.unit_measures ?? [];
+  const permissions = context.permissions ?? {};
+  const createSubgroups = createGroupId ? (subgroupsByGroup[createGroupId] ?? []) : [];
+  const normalizedUnitSearch = unitSearch.trim().toLowerCase();
+  const filteredUnitMeasures = unitMeasures
+    .filter((unit) => {
+      if (!normalizedUnitSearch) return true;
+
+      return `${unit.description ?? ""} ${unit.abbreviation ?? ""}`.toLowerCase().includes(normalizedUnitSearch);
+    })
+    .slice(0, 30);
+  const selectedUnitMeasure = unitMeasures.find((unit) => String(unit.id) === String(createUnitId));
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
 
@@ -519,6 +582,51 @@ export default function ItemsPage() {
       });
     } finally {
       setReportLoadingItemId(null);
+    }
+  };
+
+  const handleUnitSearchChange = (event) => {
+    const value = event.target.value;
+    setUnitSearch(value);
+    setUnitComboboxOpen(true);
+
+    const exactMatch = unitMeasures.find((unit) => {
+      const label = `${unit.description ?? ""}${unit.abbreviation ? ` (${unit.abbreviation})` : ""}`;
+      return label.toLowerCase() === value.trim().toLowerCase();
+    });
+
+    setCreateUnitId(exactMatch ? String(exactMatch.id) : "");
+  };
+
+  const handleSelectUnitMeasure = (unit) => {
+    setCreateUnitId(String(unit.id));
+    setUnitSearch(`${unit.description ?? ""}${unit.abbreviation ? ` (${unit.abbreviation})` : ""}`);
+    setUnitComboboxOpen(false);
+  };
+
+  const handleCreateSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!createUnitId) {
+      setCreateErrors(["Selecciona una unidad de medida valida."]);
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    const payload = {
+      group_id: Number(formData.get("group_id") || 0),
+      subgroup_id: Number(formData.get("subgroup_id") || 0),
+      item: String(formData.get("item") || "").trim(),
+      unit_measure_id: Number(createUnitId),
+      status: String(formData.get("status") || "").trim(),
+    };
+
+    try {
+      setCreateErrors([]);
+      await createMutation.mutateAsync(payload);
+      setPage(1);
+    } catch (mutationError) {
+      setCreateErrors(collectValidationMessages(mutationError, "No se pudo crear el item."));
     }
   };
 
@@ -801,6 +909,17 @@ export default function ItemsPage() {
                 <CardTitle className="text-2xl tracking-[-0.04em]">Items</CardTitle>
               </div>
             </div>
+            {permissions.can_create && (
+              <Button
+                type="button"
+                className="h-11 rounded-full bg-foreground px-5 text-background hover:bg-foreground/90"
+                onClick={openCreate}
+                disabled={contextLoading}
+              >
+                <Plus className="mr-2 size-4" />
+                Nuevo
+              </Button>
+            )}
           </div>
         </CardHeader>
 
@@ -898,7 +1017,7 @@ export default function ItemsPage() {
                           <div className="max-w-[260px] leading-7">{item.name ?? "-"}</div>
                         </td>
                         <td className="px-5 py-4 align-top text-foreground">
-                          {item.calculated_price !== null ? Number(item.calculated_price).toFixed(2) : "-"}
+                          {item.calculated_price_label ?? item.precio_calculado ?? (item.calculated_price !== null ? Number(item.calculated_price).toFixed(2) : "-")}
                         </td>
                         <td className="px-5 py-4 align-top text-muted-foreground">
                           {item.unit_measure?.abbreviation ?? "-"}
@@ -1045,6 +1164,179 @@ export default function ItemsPage() {
           )}
         </CardContent>
       </Card>
+
+      {createOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-2xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Nuevo Item</CardTitle>
+                    <CardDescription>Registra la informacion base del item.</CardDescription>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeCreate}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 sm:p-6">
+                <form className="flex flex-col gap-5" onSubmit={handleCreateSubmit}>
+                  {createErrors.length > 0 && (
+                    <Alert variant="destructive" className="rounded-2xl">
+                      <AlertDescription>
+                        <ul className="list-disc space-y-1 pl-4">
+                          {createErrors.map((message) => (
+                            <li key={message}>{message}</li>
+                          ))}
+                        </ul>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="create_group" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                        Grupo
+                      </Label>
+                      <select
+                        id="create_group"
+                        name="group_id"
+                        value={createGroupId}
+                        onChange={(event) => setCreateGroupId(event.target.value)}
+                        className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none transition focus:border-foreground/20"
+                        required
+                      >
+                        <option value="">Seleccionar</option>
+                        {groups.map((group) => (
+                          <option key={group.id} value={group.id}>{group.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="create_subgroup" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                        Subgrupo
+                      </Label>
+                      <select
+                        id="create_subgroup"
+                        name="subgroup_id"
+                        className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none transition focus:border-foreground/20"
+                        disabled={!createGroupId}
+                        required
+                      >
+                        <option value="">Seleccionar</option>
+                        {createSubgroups.map((subgroup) => (
+                          <option key={subgroup.id} value={subgroup.id}>{subgroup.description}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-2 sm:col-span-2">
+                      <Label htmlFor="create_item" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                        Descripcion del item
+                      </Label>
+                      <Input id="create_item" name="item" className="h-12 rounded-2xl border-border/80 bg-background/90" required />
+                    </div>
+
+                    <div className="flex flex-col gap-2 sm:col-span-2">
+                      <Label htmlFor="create_unit_combobox" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                        Unidad de medida
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="create_unit_combobox"
+                          placeholder="Buscar y seleccionar unidad"
+                          value={unitSearch}
+                          onChange={handleUnitSearchChange}
+                          onFocus={() => setUnitComboboxOpen(true)}
+                          onBlur={() => window.setTimeout(() => setUnitComboboxOpen(false), 120)}
+                          className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                          autoComplete="off"
+                          required
+                        />
+                        <input type="hidden" name="unit_measure_id" value={createUnitId} readOnly />
+                        <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
+
+                        {unitComboboxOpen && (
+                          <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 max-h-56 overflow-y-auto rounded-2xl border border-border/80 bg-background p-1 shadow-lg">
+                            {filteredUnitMeasures.map((unit) => {
+                              const label = `${unit.description ?? ""}${unit.abbreviation ? ` (${unit.abbreviation})` : ""}`;
+                              const isSelected = String(unit.id) === String(createUnitId);
+
+                              return (
+                                <button
+                                  key={unit.id}
+                                  type="button"
+                                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition hover:bg-muted ${isSelected ? "bg-muted font-medium text-foreground" : "text-muted-foreground"}`}
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    handleSelectUnitMeasure(unit);
+                                  }}
+                                >
+                                  <span>{label}</span>
+                                  {isSelected && <span className="text-xs uppercase tracking-[0.18em] text-emerald-700">Seleccionado</span>}
+                                </button>
+                              );
+                            })}
+
+                            {filteredUnitMeasures.length === 0 && (
+                              <div className="px-3 py-3 text-sm text-muted-foreground">
+                                No se encontraron unidades.
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {selectedUnitMeasure && (
+                        <p className="text-xs text-muted-foreground">
+                          Seleccionado: {selectedUnitMeasure.description}{selectedUnitMeasure.abbreviation ? ` (${selectedUnitMeasure.abbreviation})` : ""}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="create_status" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                        Estado
+                      </Label>
+                      <select
+                        id="create_status"
+                        name="status"
+                        defaultValue="AC"
+                        className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none transition focus:border-foreground/20"
+                        required
+                      >
+                        {(statuses.length > 0 ? statuses : [{ code: "AC", label: "ACTIVO" }, { code: "DC", label: "INACTIVO" }]).map((status) => (
+                          <option key={status.code} value={status.code}>{status.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <Separator className="bg-border/70" />
+
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={closeCreate}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit" className="rounded-full bg-foreground text-background hover:bg-foreground/90" disabled={createMutation.isPending}>
+                      {createMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                          Guardando...
+                        </>
+                      ) : "Guardar"}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {editOpen && createPortal(
         <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">

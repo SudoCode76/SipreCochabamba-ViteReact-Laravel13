@@ -3,6 +3,7 @@
 namespace App\Services\Items\Analysis;
 
 use App\Models\FndrCalculationPercentage;
+use App\Models\GeneralCalculationPercentage;
 use App\Models\Item;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -25,9 +26,24 @@ class ItemAnalysisListPriceService
     public function resolve(Item $item, string $mode): array
     {
         return match (strtolower($mode)) {
+            'general' => $this->calculateGeneral($item),
             'fndr' => $this->calculateFndr($item),
             default => throw new InvalidArgumentException('Modo de listado no soportado.'),
         };
+    }
+
+    private function calculateGeneral(Item $item): array
+    {
+        try {
+            $percentages = $this->resolveGeneralPercentages();
+        } catch (InvalidArgumentException) {
+            return [
+                'value' => null,
+                'label' => self::MISSING_PERCENTAGES_MESSAGE,
+            ];
+        }
+
+        return $this->calculateWithPercentages($item, $percentages);
     }
 
     private function calculateFndr(Item $item): array
@@ -41,6 +57,11 @@ class ItemAnalysisListPriceService
             ];
         }
 
+        return $this->calculateWithPercentages($item, $percentages);
+    }
+
+    private function calculateWithPercentages(Item $item, array $percentages): array
+    {
         $materialsTotal = $this->totalByType($item, 1);
         $laborBaseTotal = $this->totalByType($item, 2);
         $toolsBaseTotal = $this->totalByType($item, 3);
@@ -85,12 +106,22 @@ class ItemAnalysisListPriceService
 
     private function resolveFndrPercentages(): array
     {
+        return $this->resolvePercentages(FndrCalculationPercentage::class);
+    }
+
+    private function resolveGeneralPercentages(): array
+    {
+        return $this->resolvePercentages(GeneralCalculationPercentage::class);
+    }
+
+    private function resolvePercentages(string $percentageModel): array
+    {
         $map = [];
 
-        FndrCalculationPercentage::query()
+        $percentageModel::query()
             ->active()
             ->get()
-            ->each(function (FndrCalculationPercentage $percentage) use (&$map): void {
+            ->each(function ($percentage) use (&$map): void {
                 $description = strtoupper(trim((string) $percentage->descripcion));
 
                 if (str_contains($description, 'CARGAS SOCIALES')) {

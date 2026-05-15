@@ -30,9 +30,7 @@ class StoreItemRequest extends FormRequest
                 'required',
                 'string',
                 'max:100',
-                Rule::unique('item', 'item')->where(fn ($query) => $query
-                    ->where('grupo', (int) $this->input('group_id'))
-                    ->where('subgrupo', (int) $this->input('subgroup_id'))),
+                Rule::unique('item', 'item'),
             ],
             'unit_measure_id' => ['required', 'integer', 'exists:unidad_medida,id_unidad_medida'],
             'status' => ['required', 'string', 'size:2', 'in:AC,DC'],
