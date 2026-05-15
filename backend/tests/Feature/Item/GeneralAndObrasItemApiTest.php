@@ -257,6 +257,110 @@ class GeneralAndObrasItemApiTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_edit_item_updates_only_base_information_following_legacy_rules(): void
+    {
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+
+        $this->createUnitMeasure(['id_unidad_medida' => 1, 'descripcion' => 'Metro', 'abreviatura' => 'M']);
+        $this->createUnitMeasure(['id_unidad_medida' => 2, 'descripcion' => 'Global', 'abreviatura' => 'GLB']);
+        $this->createGroup(['id_grupo' => 1]);
+        $this->createGroup(['id_grupo' => 2, 'nombre_grupo' => 'OBRA GRUESA']);
+        $this->createSubgroup(['id_subgrupo' => 1, 'id_grupo' => 1]);
+        $this->createSubgroup(['id_subgrupo' => 2, 'id_grupo' => 2, 'descripcion' => 'ESTRUCTURAS']);
+        $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'ITEM ORIGINAL',
+            'id_unidad' => 1,
+            'precio' => 123.45,
+            'estado' => 'AC',
+            'grupo' => 1,
+            'subgrupo' => 1,
+            'especificacion' => 'original.pdf',
+            'ficha' => 'ficha.pdf',
+        ]);
+
+        $this->putJson('/api/v1/items/1', [
+            'group_id' => 2,
+            'subgroup_id' => 2,
+            'item' => 'item editado',
+            'unit_measure_id' => 2,
+            'status' => 'dc',
+        ])->assertOk()
+            ->assertJsonPath('data.item.name', 'ITEM EDITADO')
+            ->assertJsonPath('data.item.status', 'DC')
+            ->assertJsonPath('data.item.group.id', 2)
+            ->assertJsonPath('data.item.subgroup.id', 2)
+            ->assertJsonPath('data.item.unit_measure.id', 2);
+
+        $this->assertDatabaseHas('item', [
+            'id_item' => 1,
+            'item' => 'ITEM EDITADO',
+            'id_unidad' => 2,
+            'precio' => 123.45,
+            'estado' => 'DC',
+            'id_usuario' => 2,
+            'grupo' => 2,
+            'subgrupo' => 2,
+            'especificacion' => 'original.pdf',
+            'ficha' => 'ficha.pdf',
+        ]);
+    }
+
+    public function test_edit_item_preserves_existing_unit_when_unit_measure_is_not_sent(): void
+    {
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+
+        $this->createUnitMeasure(['id_unidad_medida' => 1]);
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createItemRecord(['id_item' => 1, 'id_unidad' => 1]);
+
+        $this->putJson('/api/v1/items/1', [
+            'group_id' => 1,
+            'subgroup_id' => 1,
+            'item' => 'mismo item editado',
+            'status' => 'AC',
+        ])->assertOk()
+            ->assertJsonPath('data.item.unit_measure.id', 1);
+
+        $this->assertDatabaseHas('item', [
+            'id_item' => 1,
+            'item' => 'MISMO ITEM EDITADO',
+            'id_unidad' => 1,
+        ]);
+    }
+
+    public function test_edit_item_rejects_invalid_subgroup_and_global_duplicate_name(): void
+    {
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+
+        $this->createUnitMeasure(['id_unidad_medida' => 1]);
+        $this->createGroup(['id_grupo' => 1]);
+        $this->createGroup(['id_grupo' => 2, 'nombre_grupo' => 'OTRO GRUPO']);
+        $this->createSubgroup(['id_subgrupo' => 1, 'id_grupo' => 1]);
+        $this->createSubgroup(['id_subgrupo' => 2, 'id_grupo' => 2, 'descripcion' => 'OTRO SUBGRUPO']);
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM UNO']);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM DOS']);
+
+        $this->putJson('/api/v1/items/1', [
+            'group_id' => 1,
+            'subgroup_id' => 2,
+            'item' => 'ITEM UNO EDITADO',
+            'unit_measure_id' => 1,
+            'status' => 'AC',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['subgroup_id']);
+
+        $this->putJson('/api/v1/items/1', [
+            'group_id' => 1,
+            'subgroup_id' => 1,
+            'item' => 'ITEM DOS',
+            'unit_measure_id' => 1,
+            'status' => 'AC',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['item']);
+    }
+
     public function test_obras_context_list_analysis_and_recalculation_work(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

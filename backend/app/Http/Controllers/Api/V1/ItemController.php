@@ -360,11 +360,15 @@ class ItemController extends Controller
             return $this->forbiddenResponse('No tiene permisos para editar items.');
         }
 
-        $item->item = strtoupper(trim($request->string('item')->toString()));
-        $item->precio = $request->filled('price') ? (float) $request->input('price') : null;
-
-        if ($request->filled('status')) {
+        if ($request->filled('group_id') && $request->filled('subgroup_id') && $request->filled('status')) {
+            $item->grupo = (int) $request->integer('group_id');
+            $item->subgrupo = (int) $request->integer('subgroup_id');
+            $item->item = strtoupper(trim($request->string('item')->toString()));
+            $item->id_unidad = $request->filled('unit_measure_id')
+                ? (int) $request->integer('unit_measure_id')
+                : $item->id_unidad;
             $item->estado = strtoupper(trim((string) $request->input('status')));
+            $item->id_usuario = $request->user()->id_usuario;
         }
 
         if ($request->hasFile('specification_file')) {
@@ -405,6 +409,7 @@ class ItemController extends Controller
                     ] : null,
                     'unit_measure' => $item->unitMeasure ? [
                         'id' => $item->unitMeasure->id_unidad_medida,
+                        'description' => $item->unitMeasure->descripcion,
                         'abbreviation' => $item->unitMeasure->abreviatura,
                     ] : null,
                 ],

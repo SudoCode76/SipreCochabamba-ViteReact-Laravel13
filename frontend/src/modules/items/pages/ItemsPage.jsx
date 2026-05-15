@@ -56,6 +56,12 @@ export default function ItemsPage() {
   const [createErrors, setCreateErrors] = useState([]);
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState(null);
+  const [editGroupId, setEditGroupId] = useState("");
+  const [editSubgroupId, setEditSubgroupId] = useState("");
+  const [editUnitId, setEditUnitId] = useState("");
+  const [editUnitSearch, setEditUnitSearch] = useState("");
+  const [editUnitComboboxOpen, setEditUnitComboboxOpen] = useState(false);
+  const [editErrors, setEditErrors] = useState([]);
   const [materialsOpen, setMaterialsOpen] = useState(false);
   const [materialsItem, setMaterialsItem] = useState(null);
   const [materialSearch, setMaterialSearch] = useState("");
@@ -94,13 +100,29 @@ export default function ItemsPage() {
   };
 
   const handleEdit = (item) => {
+    const unitLabel = item.unit_measure
+      ? `${item.unit_measure.description ?? ""}${item.unit_measure.abbreviation ? ` (${item.unit_measure.abbreviation})` : ""}`
+      : "";
+
     setEditItem(item);
+    setEditGroupId(item.group?.id ? String(item.group.id) : "");
+    setEditSubgroupId(item.subgroup?.id ? String(item.subgroup.id) : "");
+    setEditUnitId(item.unit_measure?.id ? String(item.unit_measure.id) : "");
+    setEditUnitSearch(unitLabel.trim());
+    setEditUnitComboboxOpen(false);
+    setEditErrors([]);
     setEditOpen(true);
   };
 
   const closeEdit = () => {
     setEditOpen(false);
     setEditItem(null);
+    setEditGroupId("");
+    setEditSubgroupId("");
+    setEditUnitId("");
+    setEditUnitSearch("");
+    setEditUnitComboboxOpen(false);
+    setEditErrors([]);
   };
 
   const openMaterials = (item) => {
@@ -336,6 +358,7 @@ export default function ItemsPage() {
   const unitMeasures = context.unit_measures ?? [];
   const permissions = context.permissions ?? {};
   const createSubgroups = createGroupId ? (subgroupsByGroup[createGroupId] ?? []) : [];
+  const editSubgroups = editGroupId ? (subgroupsByGroup[editGroupId] ?? []) : [];
   const normalizedUnitSearch = unitSearch.trim().toLowerCase();
   const filteredUnitMeasures = unitMeasures
     .filter((unit) => {
@@ -345,6 +368,15 @@ export default function ItemsPage() {
     })
     .slice(0, 30);
   const selectedUnitMeasure = unitMeasures.find((unit) => String(unit.id) === String(createUnitId));
+  const normalizedEditUnitSearch = editUnitSearch.trim().toLowerCase();
+  const filteredEditUnitMeasures = unitMeasures
+    .filter((unit) => {
+      if (!normalizedEditUnitSearch) return true;
+
+      return `${unit.description ?? ""} ${unit.abbreviation ?? ""}`.toLowerCase().includes(normalizedEditUnitSearch);
+    })
+    .slice(0, 30);
+  const selectedEditUnitMeasure = unitMeasures.find((unit) => String(unit.id) === String(editUnitId));
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
 
@@ -604,6 +636,37 @@ export default function ItemsPage() {
     setUnitComboboxOpen(false);
   };
 
+  const handleEditGroupChange = (event) => {
+    const groupId = event.target.value;
+    const availableSubgroups = groupId ? (subgroupsByGroup[groupId] ?? []) : [];
+    const currentSubgroupIsValid = availableSubgroups.some((subgroup) => String(subgroup.id) === String(editSubgroupId));
+
+    setEditGroupId(groupId);
+
+    if (!currentSubgroupIsValid) {
+      setEditSubgroupId("");
+    }
+  };
+
+  const handleEditUnitSearchChange = (event) => {
+    const value = event.target.value;
+    setEditUnitSearch(value);
+    setEditUnitComboboxOpen(true);
+
+    const exactMatch = unitMeasures.find((unit) => {
+      const label = `${unit.description ?? ""}${unit.abbreviation ? ` (${unit.abbreviation})` : ""}`;
+      return label.toLowerCase() === value.trim().toLowerCase();
+    });
+
+    setEditUnitId(exactMatch ? String(exactMatch.id) : "");
+  };
+
+  const handleSelectEditUnitMeasure = (unit) => {
+    setEditUnitId(String(unit.id));
+    setEditUnitSearch(`${unit.description ?? ""}${unit.abbreviation ? ` (${unit.abbreviation})` : ""}`);
+    setEditUnitComboboxOpen(false);
+  };
+
   const handleCreateSubmit = async (event) => {
     event.preventDefault();
 
@@ -634,22 +697,28 @@ export default function ItemsPage() {
     event.preventDefault();
     if (!editItem?.id_item) return;
 
+    if (!editUnitId) {
+      setEditErrors(["Selecciona una unidad de medida valida."]);
+      return;
+    }
+
     const formData = new FormData(event.currentTarget);
     const payload = {
+      group_id: Number(formData.get("group_id") || 0),
+      subgroup_id: Number(formData.get("subgroup_id") || 0),
       item: String(formData.get("item") || "").trim(),
-      price: String(formData.get("price") || "").trim(),
+      unit_measure_id: Number(editUnitId),
+      status: String(formData.get("status") || "").trim(),
     };
 
     try {
+      setEditErrors([]);
       await updateMutation.mutateAsync({
         id: editItem.id_item,
-        payload: {
-          item: payload.item,
-          price: payload.price === "" ? null : Number(payload.price),
-        },
+        payload,
       });
     } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudo actualizar el item.");
+      setEditErrors(collectValidationMessages(mutationError, "No se pudo actualizar el item."));
     }
   };
 
@@ -1360,40 +1429,149 @@ export default function ItemsPage() {
               <CardContent className="p-5 sm:p-6">
                 {editItem && (
                   <form className="flex flex-col gap-5" onSubmit={handleEditSubmit}>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <div className="flex flex-col gap-2 sm:col-span-2">
-                        <Label htmlFor="name" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                          Nombre
-                        </Label>
-                        <Input id="name" name="item" defaultValue={editItem.name} className="h-12 rounded-2xl border-border/80 bg-background/90" required />
-                      </div>
+                    {editErrors.length > 0 && (
+                      <Alert variant="destructive" className="rounded-2xl">
+                        <AlertDescription>
+                          <ul className="list-disc space-y-1 pl-4">
+                            {editErrors.map((message) => (
+                              <li key={message}>{message}</li>
+                            ))}
+                          </ul>
+                        </AlertDescription>
+                      </Alert>
+                    )}
 
+                    <div className="grid gap-5 sm:grid-cols-2">
                       <div className="flex flex-col gap-2">
-                        <Label htmlFor="grupo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                        <Label htmlFor="edit_group" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                           Grupo
                         </Label>
-                        <Input id="grupo" defaultValue={editItem.group?.name} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled />
+                        <select
+                          id="edit_group"
+                          name="group_id"
+                          value={editGroupId}
+                          onChange={handleEditGroupChange}
+                          className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none transition focus:border-foreground/20"
+                          required
+                        >
+                          <option value="">Seleccionar</option>
+                          {groups.map((group) => (
+                            <option key={group.id} value={group.id}>{group.name}</option>
+                          ))}
+                        </select>
                       </div>
 
                       <div className="flex flex-col gap-2">
-                        <Label htmlFor="subgrupo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                        <Label htmlFor="edit_subgroup" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                           Subgrupo
                         </Label>
-                        <Input id="subgrupo" defaultValue={editItem.subgroup?.description} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled />
+                        <select
+                          id="edit_subgroup"
+                          name="subgroup_id"
+                          value={editSubgroupId}
+                          onChange={(event) => setEditSubgroupId(event.target.value)}
+                          className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none transition focus:border-foreground/20"
+                          disabled={!editGroupId}
+                          required
+                        >
+                          <option value="">Seleccionar</option>
+                          {editSubgroups.map((subgroup) => (
+                            <option key={subgroup.id} value={subgroup.id}>{subgroup.description}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-2 sm:col-span-2">
+                        <Label htmlFor="edit_name" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                          Descripcion del item
+                        </Label>
+                        <Input id="edit_name" name="item" defaultValue={editItem.name} className="h-12 rounded-2xl border-border/80 bg-background/90" required />
+                      </div>
+
+                      <div className="flex flex-col gap-2 sm:col-span-2">
+                        <Label htmlFor="edit_unit_combobox" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                          Unidad de medida
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="edit_unit_combobox"
+                            placeholder="Buscar y seleccionar unidad"
+                            value={editUnitSearch}
+                            onChange={handleEditUnitSearchChange}
+                            onFocus={() => setEditUnitComboboxOpen(true)}
+                            onBlur={() => window.setTimeout(() => setEditUnitComboboxOpen(false), 120)}
+                            className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                            autoComplete="off"
+                            role="combobox"
+                            aria-expanded={editUnitComboboxOpen}
+                            aria-controls="edit_unit_options"
+                            required
+                          />
+                          <input type="hidden" name="unit_measure_id" value={editUnitId} readOnly />
+                          <button
+                            type="button"
+                            className="absolute inset-y-0 right-3 flex items-center px-1 text-muted-foreground"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              setEditUnitComboboxOpen((current) => !current);
+                            }}
+                            aria-label="Mostrar unidades de medida"
+                          >
+                            ▾
+                          </button>
+
+                          {editUnitComboboxOpen && (
+                            <div id="edit_unit_options" className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 max-h-56 overflow-y-auto rounded-2xl border border-border/80 bg-background p-1 shadow-lg">
+                              {filteredEditUnitMeasures.map((unit) => {
+                                const label = `${unit.description ?? ""}${unit.abbreviation ? ` (${unit.abbreviation})` : ""}`;
+                                const isSelected = String(unit.id) === String(editUnitId);
+
+                                return (
+                                  <button
+                                    key={unit.id}
+                                    type="button"
+                                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition hover:bg-muted ${isSelected ? "bg-muted font-medium text-foreground" : "text-muted-foreground"}`}
+                                    onMouseDown={(event) => {
+                                      event.preventDefault();
+                                      handleSelectEditUnitMeasure(unit);
+                                    }}
+                                  >
+                                    <span>{label}</span>
+                                    {isSelected && <span className="text-xs uppercase tracking-[0.18em] text-emerald-700">Seleccionado</span>}
+                                  </button>
+                                );
+                              })}
+
+                              {filteredEditUnitMeasures.length === 0 && (
+                                <div className="px-3 py-3 text-sm text-muted-foreground">
+                                  No se encontraron unidades.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {selectedEditUnitMeasure && (
+                          <p className="text-xs text-muted-foreground">
+                            Seleccionado: {selectedEditUnitMeasure.description}{selectedEditUnitMeasure.abbreviation ? ` (${selectedEditUnitMeasure.abbreviation})` : ""}
+                          </p>
+                        )}
                       </div>
 
                       <div className="flex flex-col gap-2">
-                        <Label htmlFor="precio" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                          Precio
+                        <Label htmlFor="edit_status" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                          Estado
                         </Label>
-                        <Input id="precio" name="price" type="number" step="0.01" min="0" defaultValue={editItem.calculated_price} className="h-12 rounded-2xl border-border/80 bg-background/90" />
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="unidad" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                          Unidad
-                        </Label>
-                        <Input id="unidad" defaultValue={editItem.unit_measure?.abbreviation} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled />
+                        <select
+                          id="edit_status"
+                          name="status"
+                          defaultValue={editItem.status ?? "AC"}
+                          className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none transition focus:border-foreground/20"
+                          required
+                        >
+                          {(statuses.length > 0 ? statuses : [{ code: "AC", label: "ACTIVO" }, { code: "DC", label: "INACTIVO" }]).map((status) => (
+                            <option key={status.code} value={status.code}>{status.label}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 
