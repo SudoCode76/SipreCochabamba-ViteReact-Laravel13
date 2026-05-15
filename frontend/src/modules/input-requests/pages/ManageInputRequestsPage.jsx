@@ -453,7 +453,7 @@ export default function ManageInputRequestsPage() {
                       {items.map((item, index) => (
                         <tr key={getRequestId(item) ?? `${item.descripcion}-${index}`} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
                           <td className="px-4 py-4 align-top text-foreground">{(meta.from || 1) + index}</td>
-                          <td className="px-4 py-4 align-top text-foreground">{item.descripcion || "-"}</td>
+                          <td className="px-4 py-4 align-top text-foreground whitespace-pre-line">{item.descripcion || "-"}</td>
                           <td className="px-4 py-4 align-top text-muted-foreground">{item.precio ?? "-"}</td>
                           <td className="px-4 py-4 align-top text-muted-foreground">{item.nombre_unidad_medida || "-"}</td>
                           <td className="px-4 py-4 align-top text-muted-foreground">{item.fecha || "-"}</td>
@@ -508,7 +508,7 @@ export default function ManageInputRequestsPage() {
                     <CardContent className="flex flex-col gap-4 p-5">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-medium text-foreground">{item.descripcion || "-"}</p>
+                          <p className="font-medium text-foreground whitespace-pre-line">{item.descripcion || "-"}</p>
                           <p className="text-sm text-muted-foreground">{item.nombre_unidad_medida || "-"}</p>
                         </div>
                         <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${approvalStatusClass[item.approval_status] || "bg-slate-500 text-white"}`}>

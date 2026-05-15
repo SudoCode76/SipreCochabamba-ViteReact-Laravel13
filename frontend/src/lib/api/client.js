@@ -4,7 +4,6 @@ import axios from "axios";
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000/api",
   headers: {
-    "Content-Type": "application/json",
     Accept: "application/json",
   },
 });
@@ -13,6 +12,11 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
+
+    if (config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
+    }
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

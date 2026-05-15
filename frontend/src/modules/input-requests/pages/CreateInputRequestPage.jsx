@@ -8,7 +8,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { authService } from "@/modules/auth/services/auth.service";
 import apiClient from "@/lib/api/client";
+
+function getCurrentUserId(profile) {
+  return profile?.data?.user?.id
+    || profile?.data?.user?.id_usuario
+    || profile?.data?.user?.usuario_id
+    || profile?.user?.id
+    || profile?.user?.id_usuario
+    || profile?.id
+    || profile?.id_usuario
+    || null;
+}
 
 export default function CreateInputRequestPage() {
   const navigate = useNavigate();
@@ -27,6 +39,7 @@ export default function CreateInputRequestPage() {
   const [saving, setSaving] = useState(false);
   const [archivoValid, setArchivoValid] = useState(null);
   const [archivoPropuesto1, setArchivoPropuesto1] = useState(null);
+  const [archivoPropuesto2, setArchivoPropuesto2] = useState(null);
 
   const { data: contextData, isLoading: contextLoading } = useQuery({
     queryKey: ["input-requests-context"],
@@ -36,8 +49,15 @@ export default function CreateInputRequestPage() {
     },
   });
 
+  const profileQuery = useQuery({
+    queryKey: ["input-requests-create-profile"],
+    queryFn: authService.getProfile,
+    retry: false,
+  });
+
   const types = contextData?.data?.types ?? [];
   const unitMeasures = contextData?.data?.unit_measures ?? [];
+  const currentUserId = getCurrentUserId(profileQuery.data);
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -55,32 +75,50 @@ export default function CreateInputRequestPage() {
     setSaving(true);
 
     try {
-      const formDataToSend = new FormData();
-      formDataToSend.append("descripcion", formData.descripcion);
-      formDataToSend.append("precio", formData.precio);
-      formDataToSend.append("unidad_medida", formData.id_unidad_medida);
-      formDataToSend.append("tipo", formData.id_tipo);
-      formDataToSend.append("ubicacion", formData.ubicacion);
-      formDataToSend.append("justificacion", formData.justificacion);
-      formDataToSend.append("distrito", formData.distrito);
-      formDataToSend.append("zona", formData.zona);
-      formDataToSend.append("otb", formData.otb);
-      
-      if (archivoValid) formDataToSend.append("archivo", archivoValid);
-      if (archivoPropuesto1) formDataToSend.append("archivo1", archivoPropuesto1);
+      if (!currentUserId) {
+        throw new Error("No se pudo identificar al usuario actual.");
+      }
 
-      await apiClient.post("/v1/input-requests", formDataToSend, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const payload = {
+        descripcion: formData.descripcion,
+        precio: formData.precio,
+        unidad_medida: formData.id_unidad_medida,
+        tipo: formData.id_tipo,
+        ubicacion: formData.ubicacion,
+        justificacion: formData.justificacion,
+        usuario_solicitante: String(currentUserId),
+      };
+
+      const hasFiles = Boolean(archivoValid || archivoPropuesto1 || archivoPropuesto2);
+
+      if (hasFiles) {
+        const formDataToSend = new FormData();
+
+        Object.entries(payload).forEach(([key, value]) => {
+          formDataToSend.append(key, value);
+        });
+
+        if (archivoValid) formDataToSend.append("valido", archivoValid);
+        if (archivoPropuesto1) formDataToSend.append("propuesto_1", archivoPropuesto1);
+        if (archivoPropuesto2) formDataToSend.append("propuesto_2", archivoPropuesto2);
+
+        await apiClient.post("/v1/input-requests", formDataToSend);
+      } else {
+        await apiClient.post("/v1/input-requests", payload);
+      }
+
       navigate("/Listar Solicitud de Insumo");
     } catch (err) {
-      setError(err.response?.data?.message || "Error al crear la solicitud");
+      const firstFieldError = err.response?.data?.errors
+        ? Object.values(err.response.data.errors).flat().find(Boolean)
+        : null;
+      setError(firstFieldError || err.response?.data?.message || err.message || "Error al crear la solicitud");
     } finally {
       setSaving(false);
     }
   };
 
-  if (contextLoading) {
+  if (contextLoading || profileQuery.isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="animate-spin" />
@@ -275,6 +313,23 @@ export default function CreateInputRequestPage() {
                   </label>
                 </div>
                 {archivoPropuesto1 && <span className="text-sm text-muted-foreground">{archivoPropuesto1.name}</span>}
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Cotización Propuesta 2</Label>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border/80 cursor-pointer hover:bg-muted/30">
+                    <Upload className="h-4 w-4" />
+                    <span className="text-sm">Seleccionar archivo</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx"
+                      onChange={(e) => handleFileChange(e, setArchivoPropuesto2)}
+                    />
+                  </label>
+                </div>
+                {archivoPropuesto2 && <span className="text-sm text-muted-foreground">{archivoPropuesto2.name}</span>}
               </div>
             </div>
 

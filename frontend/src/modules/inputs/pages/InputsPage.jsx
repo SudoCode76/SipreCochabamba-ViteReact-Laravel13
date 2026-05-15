@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Eye, History, Power, FileText, X } from "lucide-react";
+import { Loader2, Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Eye, History, Trash2, FileText, X } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,14 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { DialogFooter } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -145,15 +138,37 @@ export default function InputsPage() {
 
   const quoteMutation = useMutation({
     mutationFn: async ({ id, payload }) => {
-      const response = await apiClient.post(`/v1/inputs/${id}/quotes`, payload, {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${apiClient.defaults.baseURL}/v1/inputs/${id}/quotes`, {
+        method: "POST",
         headers: {
-          "Content-Type": "multipart/form-data",
+          Accept: "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        body: payload,
       });
-      return response.data;
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+        throw new Error("Unauthorized");
+      }
+
+      if (!response.ok) {
+        const error = new Error(data?.message || "No se pudo registrar la cotización.");
+        error.response = { data, status: response.status };
+        throw error;
+      }
+
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["inputs"] });
+      queryClient.invalidateQueries({ queryKey: ["input-quote-history", variables.id] });
       closeQuote();
+      alert("Cotización registrada correctamente.");
     },
   });
 
@@ -184,23 +199,6 @@ export default function InputsPage() {
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  useEffect(() => {
-    if (!selectedInput || !editOpen) {
-      return;
-    }
-
-    setEditForm({
-      descripcion: selectedInput.descripcion ?? "",
-      precio: selectedInput.precio ?? "",
-      unidad_medida: String(selectedInput.unidad_medida ?? ""),
-      tipo: String(selectedInput.tipo ?? ""),
-      fecha_cotiz: selectedInput.fecha_cotiz ?? "",
-      observacion: selectedInput.observacion ?? "",
-      estado: selectedInput.estado ?? "AC",
-      cod: selectedInput.cod ?? "",
-    });
-  }, [selectedInput, editOpen]);
-
   const handlePerPageChange = (event) => {
     setPerPage(Number(event.target.value));
     setPage(1);
@@ -209,6 +207,16 @@ export default function InputsPage() {
   const handleEdit = (item) => {
     setSelectedInput(item);
     setEditError(null);
+    setEditForm({
+      descripcion: item.descripcion ?? "",
+      precio: item.precio ?? "",
+      unidad_medida: String(item.unidad_medida ?? ""),
+      tipo: String(item.tipo ?? ""),
+      fecha_cotiz: item.fecha_cotiz ?? "",
+      observacion: item.observacion ?? "",
+      estado: item.estado ?? "AC",
+      cod: item.cod ?? "",
+    });
     setEditOpen(true);
   };
 
@@ -544,14 +552,14 @@ export default function InputsPage() {
                                 <Eye className="h-4 w-4 text-muted-foreground" />
                                 <span>Ver cotizacion actual</span>
                               </DropdownMenuItem>
-                              <DropdownMenuSeparator className="my-1 bg-border/50" />
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleOpenDelete(item)}>
-                                <Power className="h-4 w-4 text-muted-foreground" />
-                                <span>Eliminar</span>
-                              </DropdownMenuItem>
                               <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
                                 <History className="h-4 w-4 text-muted-foreground" />
                                 <span>Ver historial de insumo</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="my-1 bg-border/50" />
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleOpenDelete(item)}>
+                                <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                <span>Eliminar</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -785,7 +793,7 @@ export default function InputsPage() {
               </CardHeader>
 
               <CardContent className="p-5 sm:p-6">
-                <form className="flex flex-col gap-6" onSubmit={handleQuoteSubmit}>
+                <form className="flex flex-col gap-6" onSubmit={handleQuoteSubmit} encType="multipart/form-data">
                   {quoteError && (
                     <Alert variant="destructive" className="rounded-2xl">
                       <AlertDescription>{quoteError}</AlertDescription>
@@ -836,46 +844,68 @@ export default function InputsPage() {
       )}
 
       {deleteOpen && createPortal(
-        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-3xl rounded-sm bg-white px-6 py-12 shadow-2xl sm:px-10 sm:py-16">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="absolute right-4 top-4 rounded-full text-muted-foreground"
-              onClick={closeDelete}
-            >
-              <X className="size-5" />
-            </Button>
+        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/20 p-4 backdrop-blur-[1px]">
+          <Card className="w-full max-w-xl border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.12)]">
+            <CardHeader className="border-b border-border/70 bg-muted/20">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-2xl tracking-[-0.04em]">Eliminar Insumo</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Solicita una autorización para eliminar el insumo seleccionado.
+                  </p>
+                </div>
 
-            <div className="mx-auto flex max-w-xl flex-col items-center text-center">
-              <div className="flex size-24 items-center justify-center rounded-full bg-[#ff4338] text-white shadow-[0_12px_30px_rgba(255,67,56,0.28)]">
-                <X className="size-12 stroke-[3]" />
-              </div>
-
-              <div className="mt-16 w-full text-left text-foreground">
-                <p className="text-[2rem] leading-none">Usted va a eliminar el insumo :</p>
-                <p className="mt-4 text-2xl font-medium text-[#111827]">{selectedInput?.descripcion ?? ""}</p>
-              </div>
-
-              {deleteError && (
-                <Alert variant="destructive" className="mt-6 w-full rounded-md text-left">
-                  <AlertDescription>{deleteError}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="mt-10 flex w-full justify-start">
-                <Button
-                  type="button"
-                  className="h-auto rounded-none bg-[#f2554f] px-6 py-4 text-xl font-normal text-black hover:bg-[#e24b46]"
-                  onClick={handleRequestDeleteAuthorization}
-                  disabled={deleteAuthorizationMutation.isPending}
-                >
-                  {deleteAuthorizationMutation.isPending && <Loader2 className="mr-2 size-5 animate-spin" />}
-                  Solicitar Autorizacion
+                <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeDelete}>
+                  <X />
                 </Button>
               </div>
-            </div>
-          </div>
+            </CardHeader>
+
+            <CardContent className="p-5 sm:p-6">
+              <div className="flex flex-col gap-6">
+                {deleteError && (
+                  <Alert variant="destructive" className="rounded-2xl">
+                    <AlertDescription>{deleteError}</AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="delete_input_name" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    Insumo
+                  </Label>
+                  <Input
+                    id="delete_input_name"
+                    value={selectedInput?.descripcion ?? ""}
+                    className="h-12 rounded-2xl border-border/80 bg-background/90"
+                    disabled
+                  />
+                </div>
+
+                <p className="text-sm text-muted-foreground">
+                  Esta acción enviará una solicitud de autorización para continuar con la eliminación del insumo.
+                </p>
+
+                <DialogFooter className="mt-2 justify-center gap-2 sm:justify-center">
+                  <Button type="button" variant="outline" className="min-w-36 rounded-full" onClick={closeDelete}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    className="min-w-52 rounded-full bg-rose-600 text-white hover:bg-rose-700"
+                    onClick={handleRequestDeleteAuthorization}
+                    disabled={deleteAuthorizationMutation.isPending}
+                  >
+                    {deleteAuthorizationMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 size-4 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : "Solicitar Autorizacion"}
+                  </Button>
+                </DialogFooter>
+              </div>
+            </CardContent>
+          </Card>
         </div>,
         document.body,
       )}

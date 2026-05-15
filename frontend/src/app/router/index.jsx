@@ -26,6 +26,7 @@ import ProjectItemsPage from "@/modules/projects/pages/ProjectItemsPage";
 import InputsPage from "@/modules/inputs/pages/InputsPage";
 import InputRequestsPage from "@/modules/input-requests/pages/InputRequestsPage";
 import CreateInputRequestPage from "@/modules/input-requests/pages/CreateInputRequestPage";
+import EditInputRequestPage from "@/modules/input-requests/pages/EditInputRequestPage";
 import ManageInputRequestsPage from "@/modules/input-requests/pages/ManageInputRequestsPage";
 import InputTypesPage from "@/modules/input-types/pages/InputTypesPage";
 import UnitMeasuresPage from "@/modules/input-types/pages/UnitMeasuresPage";
@@ -105,6 +106,10 @@ export const router = createBrowserRouter([
           {
             path: "/Crear Solicitud Insumo",
             element: <CreateInputRequestPage />,
+          },
+          {
+            path: "/Listar Solicitud de Insumo/:requestId/editar",
+            element: <EditInputRequestPage />,
           },
           {
             path: "/Gestionar Solicitud",

@@ -1,20 +1,13 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Search, ChevronLeft, ChevronRight, Loader2, MoreHorizontal, Pencil, Eye, File } from "lucide-react";
+import { FileText, Search, ChevronLeft, ChevronRight, Loader2, MoreHorizontal, Pencil, File, X } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import apiClient from "@/lib/api/client";
 
 const approvalStatusClass = {
@@ -32,10 +25,14 @@ const approvalStatusClass = {
 };
 
 export default function InputRequestsPage() {
+  const navigate = useNavigate();
   const [perPage, setPerPage] = useState(15);
   const [page, setPage] = useState(1);
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
+  const [viewPerPage, setViewPerPage] = useState(25);
+  const [viewPage, setViewPage] = useState(1);
+  const [viewSearch, setViewSearch] = useState("");
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
     queryKey: ["input-requests", { page, perPage }],
@@ -52,6 +49,15 @@ export default function InputRequestsPage() {
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
 
+  const quoteHistoryQuery = useQuery({
+    queryKey: ["input-request-quotes", selectedRequest?.id_solicitud],
+    queryFn: async () => {
+      const response = await apiClient.get(`/v1/input-requests/${selectedRequest.id_solicitud}/quotes/history`);
+      return response.data;
+    },
+    enabled: viewOpen && Boolean(selectedRequest?.id_solicitud),
+  });
+
   const visiblePages = useMemo(() => {
     const start = Math.max(1, meta.current_page - 2);
     const end = Math.min(totalPages, start + 4);
@@ -62,9 +68,45 @@ export default function InputRequestsPage() {
   const startRecord = meta.total === 0 ? 0 : (meta.current_page - 1) * meta.per_page + 1;
   const endRecord = Math.min(meta.current_page * meta.per_page, meta.total);
 
+  const quoteHistory = quoteHistoryQuery.data?.data?.items ?? [];
+  const filteredQuoteHistory = useMemo(() => {
+    const search = viewSearch.trim().toLowerCase();
+
+    if (!search) {
+      return quoteHistory;
+    }
+
+    return quoteHistory.filter((quote) => (
+      String(quote.id_cotizacion ?? "").toLowerCase().includes(search)
+      || String(quote.fecha ?? "").toLowerCase().includes(search)
+      || String(quote.condicion ?? "").toLowerCase().includes(search)
+    ));
+  }, [quoteHistory, viewSearch]);
+
+  const quoteTotalPages = Math.max(1, Math.ceil(filteredQuoteHistory.length / viewPerPage));
+  const safeQuotePage = Math.min(viewPage, quoteTotalPages);
+  const visibleQuoteHistory = filteredQuoteHistory.slice((safeQuotePage - 1) * viewPerPage, safeQuotePage * viewPerPage);
+  const quoteStartRecord = filteredQuoteHistory.length === 0 ? 0 : (safeQuotePage - 1) * viewPerPage + 1;
+  const quoteEndRecord = Math.min(safeQuotePage * viewPerPage, filteredQuoteHistory.length);
+
   const handleView = (item) => {
     setSelectedRequest(item);
+    setViewPerPage(25);
+    setViewPage(1);
+    setViewSearch("");
     setViewOpen(true);
+  };
+
+  const closeView = () => {
+    setViewOpen(false);
+    setSelectedRequest(null);
+    setViewPage(1);
+    setViewSearch("");
+  };
+
+  const getQuoteLabel = (index, prefix) => {
+    const isCurrent = index === 0;
+    return `${prefix} ${isCurrent ? "vigente" : "anterior"}`;
   };
 
   return (
@@ -192,7 +234,10 @@ export default function InputRequestsPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-lg">
                               {item.available_actions?.edit && (
-                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                                <DropdownMenuItem
+                                  className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2"
+                                  onClick={() => navigate(`/Listar Solicitud de Insumo/${item.id_solicitud}/editar`)}
+                                >
                                   <Pencil className="h-4 w-4 text-muted-foreground" />
                                   <span>Editar</span>
                                 </DropdownMenuItem>
@@ -200,10 +245,13 @@ export default function InputRequestsPage() {
                               {item.available_actions?.view_quotes && (
                                 <>
                                   <DropdownMenuSeparator className="my-1 bg-border/50" />
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
-                                    <File className="h-4 w-4 text-muted-foreground" />
-                                    <span>Ver Cotizaciones</span>
-                                  </DropdownMenuItem>
+                                   <DropdownMenuItem
+                                     className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2"
+                                     onClick={() => handleView(item)}
+                                   >
+                                     <File className="h-4 w-4 text-muted-foreground" />
+                                     <span>Ver Cotizaciones</span>
+                                   </DropdownMenuItem>
                                 </>
                               )}
                             </DropdownMenuContent>
@@ -267,72 +315,160 @@ export default function InputRequestsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
-        <DialogContent className="max-w-lg rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Detalles de Solicitud</DialogTitle>
-            <DialogDescription>
-              ID: {selectedRequest?.id_solicitud}
-            </DialogDescription>
-          </DialogHeader>
+      {viewOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-6xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <CardTitle className="text-center text-4xl tracking-[-0.04em] text-muted-foreground">
+                      Ver Cotización Actual
+                    </CardTitle>
+                  </div>
 
-          {selectedRequest && (
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Descripción:</span>
-                <span className="font-medium text-right max-w-[200px]">{selectedRequest.descripcion}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tipo:</span>
-                <span>{selectedRequest.nombre_tipo}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Precio:</span>
-                <span className="font-medium">{Number(selectedRequest.precio).toFixed(2)} Bs.</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Unidad:</span>
-                <span>{selectedRequest.nombre_unidad_medida} ({selectedRequest.abreviatura})</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Solicitante:</span>
-                <span>{selectedRequest.nombre_completo}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Fecha:</span>
-                <span>{selectedRequest.fecha}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Ubicación:</span>
-                <span>{selectedRequest.ubicacion || "-"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Justificación:</span>
-                <span className="text-right max-w-[200px]">{selectedRequest.justificacion || "-"}</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Estado:</span>
-                <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${approvalStatusClass[selectedRequest.approval_status] || "bg-slate-500 text-white"}`}>
-                  {selectedRequest.approval_status_label || selectedRequest.approval_status}
-                </Badge>
-              </div>
-              {selectedRequest.notificacion && (
-                <div className="pt-2">
-                  <span className="text-muted-foreground">Notificación:</span>
-                  <p className="mt-1 text-sm">{selectedRequest.notificacion}</p>
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeView}>
+                    <X />
+                  </Button>
                 </div>
-              )}
-            </div>
-          )}
+              </CardHeader>
 
-          <DialogFooter className="mt-4">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => setViewOpen(false)}>
-              Cerrar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <CardContent className="space-y-6 px-6 pb-6 pt-2 sm:px-8">
+            <div className="space-y-2">
+              <span className="text-base text-foreground">Insumo</span>
+              <Input value={selectedRequest?.descripcion ?? ""} className="h-12 rounded-none border-border/80 bg-background/90" disabled />
+            </div>
+
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex flex-col gap-2">
+                <span className="text-base text-foreground">Show</span>
+                <div className="relative w-44">
+                  <select
+                    className="h-12 w-full appearance-none rounded-none border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none"
+                    value={viewPerPage}
+                    onChange={(event) => {
+                      setViewPerPage(Number(event.target.value));
+                      setViewPage(1);
+                    }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
+                </div>
+                <span className="text-base text-foreground">entries</span>
+              </div>
+
+              <div className="flex w-full max-w-xs flex-col gap-2 self-start lg:self-auto">
+                <span className="text-right text-base text-foreground">Search:</span>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={viewSearch}
+                    onChange={(event) => {
+                      setViewSearch(event.target.value);
+                      setViewPage(1);
+                    }}
+                    className="h-12 rounded-none border-border/80 bg-background/90 pl-11"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-hidden border border-border/70 bg-background/90">
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border/70 bg-muted/15 text-left">
+                      <th className="px-3 py-4 font-semibold text-foreground">N°</th>
+                      <th className="px-3 py-4 font-semibold text-foreground">Fecha</th>
+                      <th className="px-3 py-4 font-semibold text-foreground">Propuesta oficial</th>
+                      <th className="px-3 py-4 font-semibold text-foreground">Propuesta Alternativa 1</th>
+                      <th className="px-3 py-4 font-semibold text-foreground">Propuesta Alternativa 2</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {quoteHistoryQuery.isLoading && (
+                      <tr>
+                        <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
+                          <Loader2 className="mr-2 inline size-4 animate-spin" /> Cargando cotizaciones...
+                        </td>
+                      </tr>
+                    )}
+                    {!quoteHistoryQuery.isLoading && visibleQuoteHistory.map((quote, index) => {
+                      const absoluteIndex = quoteStartRecord + index - 1;
+
+                      return (
+                        <tr key={quote.id_cotizacion} className={index < visibleQuoteHistory.length - 1 ? "border-b border-border/60" : ""}>
+                          <td className="px-3 py-4 align-top text-muted-foreground">{quoteStartRecord + index}</td>
+                          <td className="px-3 py-4 align-top text-muted-foreground">{quote.fecha ?? "-"}</td>
+                          <td className="px-3 py-4 align-top">
+                            {quote.archivo ? <a href={`/storage/${quote.archivo}`} target="_blank" rel="noreferrer" className="text-sky-500 hover:underline">{getQuoteLabel(absoluteIndex, "propuesta oficial")}</a> : <span className="text-muted-foreground">Sin archivo</span>}
+                          </td>
+                          <td className="px-3 py-4 align-top">
+                            {quote.archivo1 ? <a href={`/storage/${quote.archivo1}`} target="_blank" rel="noreferrer" className="text-sky-500 hover:underline">{getQuoteLabel(absoluteIndex, "propuesta alternativa")}</a> : <span className="text-muted-foreground">Sin archivo</span>}
+                          </td>
+                          <td className="px-3 py-4 align-top">
+                            {quote.archivo2 ? <a href={`/storage/${quote.archivo2}`} target="_blank" rel="noreferrer" className="text-sky-500 hover:underline">{getQuoteLabel(absoluteIndex, "propuesta alternativa")}</a> : <span className="text-muted-foreground">Sin archivo</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {quoteHistoryQuery.isError && (
+                      <tr>
+                        <td colSpan={5} className="px-3 py-8 text-center text-destructive">
+                          {quoteHistoryQuery.error?.response?.data?.message || "No se pudo cargar el historial de cotizaciones."}
+                        </td>
+                      </tr>
+                    )}
+                    {!quoteHistoryQuery.isLoading && visibleQuoteHistory.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
+                          No hay cotizaciones registradas.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-col gap-4 border-t border-border/70 px-3 py-4 text-sm lg:flex-row lg:items-center lg:justify-between">
+                <p className="text-foreground">
+                  Showing {quoteStartRecord} to {quoteEndRecord} of {filteredQuoteHistory.length} entries
+                </p>
+
+                <div className="flex items-center gap-2 self-end lg:self-auto">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="rounded-none px-2 text-foreground"
+                    onClick={() => setViewPage((prev) => Math.max(1, prev - 1))}
+                    disabled={safeQuotePage <= 1}
+                  >
+                    Previous
+                  </Button>
+                  <Button type="button" variant="outline" className="rounded-none px-3" disabled>
+                    {safeQuotePage}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="rounded-none px-2 text-foreground"
+                    onClick={() => setViewPage((prev) => Math.min(quoteTotalPages, prev + 1))}
+                    disabled={safeQuotePage >= quoteTotalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
