@@ -125,6 +125,8 @@ class GeneralAndObrasItemApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
         $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 3]);
         $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
+        $this->createInputLog(['id_log' => 1, 'id_insumo' => 2, 'precio' => 100, 'tipo' => 2, 'descripcion' => 'Mano 1', 'fecha' => '2026-05-01']);
+        $this->createInputLog(['id_log' => 2, 'id_insumo' => 3, 'precio' => 200, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-05-01']);
 
         $this->getJson('/api/v1/items/obras/context')
             ->assertOk()
@@ -151,7 +153,7 @@ class GeneralAndObrasItemApiTest extends TestCase
             'fecha' => '2026-04-30',
         ])->assertOk()
             ->assertJsonPath('data.meta.mode', 'obras')
-            ->assertJsonPath('data.materials.0.log_id', 1)
+            ->assertJsonPath('data.materials.0.log_id', 3)
             ->assertJsonPath('data.totals.total_price', 31);
     }
 

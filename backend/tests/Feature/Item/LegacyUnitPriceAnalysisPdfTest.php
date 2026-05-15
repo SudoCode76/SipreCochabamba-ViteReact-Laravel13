@@ -102,6 +102,36 @@ class LegacyUnitPriceAnalysisPdfTest extends TestCase
         $this->assertStringStartsWith('%PDF', $response->getContent());
     }
 
+    public function test_legacy_unit_price_analysis_pdf_supports_obras_mode(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->seedAnalysisFixture();
+        $this->seedObrasPercentages();
+
+        $response = $this->get('/api/v1/items/1/analisis-precios-unitarios/pdf?mode=obras');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="analisis_de_precios_unitarios.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_legacy_unit_price_analysis_pdf_supports_proman_mode(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->seedAnalysisFixture();
+        $this->seedPromanPercentages();
+
+        $response = $this->get('/api/v1/items/1/analisis-precios-unitarios/pdf?mode=proman');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="analisis_de_precios_unitarios.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
     public function test_legacy_unit_price_analysis_service_uses_fndr_percentages_when_requested(): void
     {
         $this->seedAnalysisFixture();
