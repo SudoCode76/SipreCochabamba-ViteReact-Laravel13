@@ -19,6 +19,8 @@ use App\Services\Projects\ProjectBudgetService;
 use App\Services\Projects\ProjectBudgetByGroupPdfService;
 use App\Services\Projects\ProjectContextService;
 use App\Services\Projects\ProjectCrudService;
+use App\Services\Projects\ProjectIncidenceSummaryPdfService;
+use App\Services\Projects\ProjectGeneralBudgetPdfService;
 use App\Services\Projects\ProjectItemService;
 use App\Services\Projects\ProjectListService;
 use App\Services\Projects\ProjectPermissionService;
@@ -34,6 +36,8 @@ class ProjectController extends Controller
         private readonly ProjectItemService $projectItemService,
         private readonly ProjectBudgetService $projectBudgetService,
         private readonly ProjectBudgetByGroupPdfService $projectBudgetByGroupPdfService,
+        private readonly ProjectIncidenceSummaryPdfService $projectIncidenceSummaryPdfService,
+        private readonly ProjectGeneralBudgetPdfService $projectGeneralBudgetPdfService,
         private readonly ProjectPermissionService $projectPermissionService,
         private readonly AuditService $auditService,
     ) {}
@@ -227,6 +231,24 @@ class ProjectController extends Controller
             'message' => 'Resumen de incidencia obtenido correctamente.',
             'data' => $this->projectBudgetService->incidenceSummary($project, $request->validated('format')),
         ]);
+    }
+
+    public function incidenceSummaryPdf(ProjectFormatRequest $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar el resumen de incidencia.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el resumen de incidencia.');
+        }
+
+        return $this->projectIncidenceSummaryPdfService->stream($project, $request->validated('format'));
+    }
+
+    public function generalBudgetPdf(ProjectFormatRequest $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar el presupuesto general.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el presupuesto general.');
+        }
+
+        return $this->projectGeneralBudgetPdfService->stream($project, $request->validated('format'));
     }
 
     public function breakdownCalculation(ProjectFormatRequest $request, Project $project): JsonResponse

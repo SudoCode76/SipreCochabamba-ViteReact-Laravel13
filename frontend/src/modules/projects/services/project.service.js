@@ -35,6 +35,22 @@ export const projectService = {
     return response.data;
   },
 
+  downloadIncidenceSummaryPdf: async (projectId, format) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/incidence-summary/pdf`, {
+      params: { format },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  downloadGeneralBudgetPdf: async (projectId, format) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/general-budget/pdf`, {
+      params: { format },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
   items: async (projectId, format = "PCA") => {
     const response = await apiClient.get(`/v1/projects/${projectId}/items`, {
       params: { format },

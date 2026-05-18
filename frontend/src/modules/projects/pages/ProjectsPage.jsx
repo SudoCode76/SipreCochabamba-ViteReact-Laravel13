@@ -37,6 +37,14 @@ export default function ProjectsPage() {
   const [recalculateProject, setRecalculateProject] = useState(null);
   const [recalculateDate, setRecalculateDate] = useState("");
   const [recalculateStatus, setRecalculateStatus] = useState(null);
+  const [incidenceOpen, setIncidenceOpen] = useState(false);
+  const [incidenceProject, setIncidenceProject] = useState(null);
+  const [incidenceFormat, setIncidenceFormat] = useState("PCA");
+  const [incidenceStatus, setIncidenceStatus] = useState(null);
+  const [generalBudgetOpen, setGeneralBudgetOpen] = useState(false);
+  const [generalBudgetProject, setGeneralBudgetProject] = useState(null);
+  const [generalBudgetFormat, setGeneralBudgetFormat] = useState("PCA");
+  const [generalBudgetStatus, setGeneralBudgetStatus] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const deferredSearch = useDeferredValue(search.trim());
 
@@ -170,6 +178,118 @@ export default function ProjectsPage() {
       setFeedback({
         type: "error",
         message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el presupuesto por rubros.",
+      });
+    }
+  };
+
+  const openIncidenceSummary = (project) => {
+    setIncidenceProject(project);
+    setIncidenceFormat("PCA");
+    setIncidenceStatus(null);
+    setIncidenceOpen(true);
+  };
+
+  const closeIncidenceSummary = () => {
+    setIncidenceOpen(false);
+    setIncidenceProject(null);
+    setIncidenceFormat("PCA");
+    setIncidenceStatus(null);
+  };
+
+  const handleIncidenceSummarySubmit = async (event) => {
+    event.preventDefault();
+
+    if (!incidenceProject?.id_proyecto) {
+      return;
+    }
+
+    setIncidenceStatus(null);
+    const popup = window.open("", "_blank");
+
+    if (popup) {
+      popup.document.write("<p>Generando PDF...</p>");
+    }
+
+    try {
+      const blob = await projectService.downloadIncidenceSummaryPdf(incidenceProject.id_proyecto, incidenceFormat);
+
+      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
+        throw new Error("La respuesta no contiene un PDF valido.");
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        window.open(url, "_blank");
+      }
+
+      closeIncidenceSummary();
+    } catch (pdfError) {
+      if (popup) {
+        popup.close();
+      }
+
+      setIncidenceStatus({
+        type: "error",
+        message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el resumen por incidencia.",
+      });
+    }
+  };
+
+  const openGeneralBudget = (project) => {
+    setGeneralBudgetProject(project);
+    setGeneralBudgetFormat("PCA");
+    setGeneralBudgetStatus(null);
+    setGeneralBudgetOpen(true);
+  };
+
+  const closeGeneralBudget = () => {
+    setGeneralBudgetOpen(false);
+    setGeneralBudgetProject(null);
+    setGeneralBudgetFormat("PCA");
+    setGeneralBudgetStatus(null);
+  };
+
+  const handleGeneralBudgetSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!generalBudgetProject?.id_proyecto) {
+      return;
+    }
+
+    setGeneralBudgetStatus(null);
+    const popup = window.open("", "_blank");
+
+    if (popup) {
+      popup.document.write("<p>Generando PDF...</p>");
+    }
+
+    try {
+      const blob = await projectService.downloadGeneralBudgetPdf(generalBudgetProject.id_proyecto, generalBudgetFormat);
+
+      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
+        throw new Error("La respuesta no contiene un PDF valido.");
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        window.open(url, "_blank");
+      }
+
+      closeGeneralBudget();
+    } catch (pdfError) {
+      if (popup) {
+        popup.close();
+      }
+
+      setGeneralBudgetStatus({
+        type: "error",
+        message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el presupuesto general.",
       });
     }
   };
@@ -347,11 +467,11 @@ export default function ProjectsPage() {
                                 <RefreshCw className="h-4 w-4 text-muted-foreground" />
                                 <span>Recalcular Precio por Rubro</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openIncidenceSummary(project)}>
                                 <PieChart className="h-4 w-4 text-muted-foreground" />
                                 <span>Resumen por Insidencia</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openGeneralBudget(project)}>
                                 <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
                                 <span>Presupuesto General</span>
                               </DropdownMenuItem>
@@ -513,6 +633,112 @@ export default function ProjectsPage() {
                         </>
                       ) : "Recalcular"}
                     </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {incidenceOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Resumen por incidencia</CardTitle>
+                    <CardDescription>{incidenceProject?.nombre_proyecto || "Selecciona el formato del reporte."}</CardDescription>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeIncidenceSummary}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 sm:p-6">
+                <form className="flex flex-col gap-5" onSubmit={handleIncidenceSummarySubmit}>
+                  {incidenceStatus && (
+                    <Alert variant="destructive" className="rounded-2xl">
+                      <AlertDescription>{incidenceStatus.message}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="incidence-format">Formato</Label>
+                    <select
+                      id="incidence-format"
+                      value={incidenceFormat}
+                      onChange={(event) => setIncidenceFormat(event.target.value)}
+                      className="h-10 rounded-xl border border-border/80 bg-background px-3 text-sm"
+                    >
+                      <option value="PCA">PCA</option>
+                      <option value="PC_FPS">PC_FPS</option>
+                      <option value="PC_UPRE">PC_UPRE</option>
+                      <option value="PC_FNDR">PC_FNDR</option>
+                      <option value="PC_OBRAS">PC_OBRAS</option>
+                    </select>
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <Button type="button" variant="outline" onClick={closeIncidenceSummary}>Cancelar</Button>
+                    <Button type="submit">Generar PDF</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {generalBudgetOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Presupuesto general</CardTitle>
+                    <CardDescription>{generalBudgetProject?.nombre_proyecto || "Selecciona el formato del reporte."}</CardDescription>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeGeneralBudget}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 sm:p-6">
+                <form className="flex flex-col gap-5" onSubmit={handleGeneralBudgetSubmit}>
+                  {generalBudgetStatus && (
+                    <Alert variant="destructive" className="rounded-2xl">
+                      <AlertDescription>{generalBudgetStatus.message}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="general-budget-format">Formato</Label>
+                    <select
+                      id="general-budget-format"
+                      value={generalBudgetFormat}
+                      onChange={(event) => setGeneralBudgetFormat(event.target.value)}
+                      className="h-10 rounded-xl border border-border/80 bg-background px-3 text-sm"
+                    >
+                      <option value="PCA">PCA</option>
+                      <option value="PC_FPS">PC_FPS</option>
+                      <option value="PC_UPRE">PC_UPRE</option>
+                      <option value="PC_FNDR">PC_FNDR</option>
+                      <option value="PC_OBRAS">PC_OBRAS</option>
+                    </select>
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <Button type="button" variant="outline" onClick={closeGeneralBudget}>Cancelar</Button>
+                    <Button type="submit">Generar PDF</Button>
                   </div>
                 </form>
               </CardContent>

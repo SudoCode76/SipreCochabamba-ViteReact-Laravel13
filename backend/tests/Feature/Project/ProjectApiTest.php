@@ -331,6 +331,88 @@ class ProjectApiTest extends TestCase
         $this->assertSame(['ALFA', 'ZETA'], array_column($data['items'], 'grupo'));
     }
 
+    public function test_can_generate_incidence_summary_pdf(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->seedGeneralPercentages();
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material 1']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 2, 'precio' => 5, 'descripcion' => 'Mano 1']);
+        $this->createInput(['id_insumo' => 3, 'tipo' => 3, 'precio' => 4, 'descripcion' => 'Herramienta 1']);
+        $this->createItemRecord();
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 3]);
+        $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
+        $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 2, 'precio' => 63.8266, 'prioridad' => 1]);
+
+        $response = $this->get('/api/v1/projects/1/incidence-summary/pdf?format=PCA');
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertHeader('content-disposition', 'inline; filename="resumen_incidencia.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_incidence_summary_pdf_is_valid_when_percentages_are_incomplete(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createProjectRecord();
+
+        $response = $this->get('/api/v1/projects/1/incidence-summary/pdf?format=PCA');
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_can_generate_general_budget_pdf(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->seedGeneralPercentages();
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material 1']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 2, 'precio' => 5, 'descripcion' => 'Mano 1']);
+        $this->createInput(['id_insumo' => 3, 'tipo' => 3, 'precio' => 4, 'descripcion' => 'Herramienta 1']);
+        $this->createItemRecord(['precio' => 9999]);
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 3]);
+        $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
+        $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 2, 'precio' => 9999, 'prioridad' => 1]);
+
+        $items = app(\App\Services\Projects\ProjectBudgetService::class)->generalBudgetPdfItems(
+            \App\Models\Project::findOrFail(1),
+            'PCA',
+            app(\App\Services\Projects\ProjectLegacyUnitPriceService::class),
+        );
+
+        $this->assertEqualsWithDelta(63.826645668056706, $items[0]['precio'], 0.000001);
+
+        $response = $this->get('/api/v1/projects/1/general-budget/pdf?format=PCA');
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertHeader('content-disposition', 'inline; filename="presupuesto_general.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_general_budget_pdf_is_valid_when_project_has_no_items(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createProjectRecord();
+
+        $response = $this->get('/api/v1/projects/1/general-budget/pdf?format=PCA');
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
     public function test_non_admin_without_project_permissions_cannot_manage_projects(): void
     {
         $this->createLegacyAuthUser();

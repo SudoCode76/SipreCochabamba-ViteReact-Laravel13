@@ -141,6 +141,29 @@ class ProjectBudgetService
         ];
     }
 
+    public function generalBudgetPdfItems(Project $project, string $format, ProjectLegacyUnitPriceService $legacyUnitPriceService): array
+    {
+        return $this->activeProjectItems($project)
+            ->sortBy(fn (ProjectItem $item) => $item->prioridad)
+            ->values()
+            ->map(function (ProjectItem $row) use ($format, $legacyUnitPriceService): array {
+                $price = $legacyUnitPriceService->resolve($row->item, $format);
+
+                return [
+                    'id_item' => $row->id_item,
+                    'nombre_item' => $row->item?->item,
+                    'nombre_grupo' => $row->item?->groupCatalog?->nombre_grupo,
+                    'nombre_subgrupo' => $row->item?->subgroupCatalog?->descripcion,
+                    'unidad' => $row->item?->unitMeasure?->abreviatura,
+                    'prioridad' => $row->prioridad,
+                    'cantidad' => round((float) $row->cantidad, 4),
+                    'precio' => $price,
+                    'parcial' => round(((float) $row->cantidad) * $price, 4),
+                ];
+            })
+            ->all();
+    }
+
     public function unitPrices(Project $project, string $format): array
     {
         $items = ProjectItem::query()
