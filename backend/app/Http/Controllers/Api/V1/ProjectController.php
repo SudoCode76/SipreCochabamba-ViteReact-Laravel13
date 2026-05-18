@@ -7,6 +7,7 @@ use App\Http\Requests\Project\BudgetRecalculationRequest;
 use App\Http\Requests\Project\IncidencePriceRequest;
 use App\Http\Requests\Project\IndexProjectRequest;
 use App\Http\Requests\Project\ProjectFormatRequest;
+use App\Http\Requests\Project\ProjectInputBreakdownRequest;
 use App\Http\Requests\Project\ShowProjectItemsRequest;
 use App\Http\Requests\Project\StoreProjectRequest;
 use App\Http\Requests\Project\SyncProjectItemsRequest;
@@ -20,6 +21,7 @@ use App\Services\Projects\ProjectBudgetByGroupPdfService;
 use App\Services\Projects\ProjectContextService;
 use App\Services\Projects\ProjectCrudService;
 use App\Services\Projects\ProjectIncidenceSummaryPdfService;
+use App\Services\Projects\ProjectInputBreakdownPdfService;
 use App\Services\Projects\ProjectGeneralBudgetPdfService;
 use App\Services\Projects\ProjectItemService;
 use App\Services\Projects\ProjectListService;
@@ -38,6 +40,7 @@ class ProjectController extends Controller
         private readonly ProjectBudgetByGroupPdfService $projectBudgetByGroupPdfService,
         private readonly ProjectIncidenceSummaryPdfService $projectIncidenceSummaryPdfService,
         private readonly ProjectGeneralBudgetPdfService $projectGeneralBudgetPdfService,
+        private readonly ProjectInputBreakdownPdfService $projectInputBreakdownPdfService,
         private readonly ProjectPermissionService $projectPermissionService,
         private readonly AuditService $auditService,
     ) {}
@@ -249,6 +252,15 @@ class ProjectController extends Controller
         }
 
         return $this->projectGeneralBudgetPdfService->stream($project, $request->validated('format'));
+    }
+
+    public function inputBreakdownPdf(ProjectInputBreakdownRequest $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar el desglose de insumos del proyecto.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el desglose de insumos del proyecto.');
+        }
+
+        return $this->projectInputBreakdownPdfService->stream($project, (int) $request->validated('type'));
     }
 
     public function breakdownCalculation(ProjectFormatRequest $request, Project $project): JsonResponse

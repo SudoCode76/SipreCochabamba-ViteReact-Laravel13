@@ -51,6 +51,14 @@ export const projectService = {
     return response.data;
   },
 
+  downloadInputBreakdownPdf: async (projectId, type) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/input-breakdown/pdf`, {
+      params: { type },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
   items: async (projectId, format = "PCA") => {
     const response = await apiClient.get(`/v1/projects/${projectId}/items`, {
       params: { format },

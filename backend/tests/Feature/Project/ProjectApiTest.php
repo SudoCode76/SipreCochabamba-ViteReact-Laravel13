@@ -413,6 +413,38 @@ class ProjectApiTest extends TestCase
         $this->assertStringStartsWith('%PDF', $response->getContent());
     }
 
+    public function test_can_generate_project_input_breakdown_pdf_by_type(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material 1']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 2, 'precio' => 5, 'descripcion' => 'Mano 1']);
+        $this->createInput(['id_insumo' => 3, 'tipo' => 3, 'precio' => 4, 'descripcion' => 'Herramienta 1']);
+        $this->createItemRecord();
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 3]);
+        $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
+        $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 2, 'prioridad' => 1]);
+
+        $service = app(\App\Services\Projects\ProjectInputBreakdownPdfService::class);
+        $this->assertSame('Material 1', $service->rows(\App\Models\Project::findOrFail(1), 1)[0]['descripcion']);
+        $this->assertSame(20.0, $service->rows(\App\Models\Project::findOrFail(1), 1)[0]['parcial']);
+        $this->assertSame('Mano 1', $service->rows(\App\Models\Project::findOrFail(1), 2)[0]['descripcion']);
+        $this->assertSame('Herramienta 1', $service->rows(\App\Models\Project::findOrFail(1), 3)[0]['descripcion']);
+
+        foreach ([1 => 'desglose_materiales.pdf', 2 => 'desglose_mano_obra.pdf', 3 => 'desglose_maquinaria.pdf'] as $type => $filename) {
+            $response = $this->get('/api/v1/projects/1/input-breakdown/pdf?type='.$type);
+
+            $response->assertOk()
+                ->assertHeader('content-type', 'application/pdf')
+                ->assertHeader('content-disposition', 'inline; filename="'.$filename.'"');
+            $this->assertStringStartsWith('%PDF', $response->getContent());
+        }
+    }
+
     public function test_non_admin_without_project_permissions_cannot_manage_projects(): void
     {
         $this->createLegacyAuthUser();
