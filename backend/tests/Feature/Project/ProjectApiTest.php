@@ -229,6 +229,14 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.items.0.mano_obra', 15)
             ->assertJsonPath('data.items.0.herramientas', 4);
 
+        $pdf = $this->get('/api/v1/projects/1/budget-by-group/pdf');
+
+        $pdf->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertHeader('content-disposition', 'inline; filename="presupuesto_por_rubros.pdf"');
+
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
         $this->createInputLog(['id_log' => 1, 'id_insumo' => 1, 'precio' => 8, 'tipo' => 1, 'descripcion' => 'Material 1', 'fecha' => '2026-04-01']);
         $this->createInputLog(['id_log' => 2, 'id_insumo' => 2, 'precio' => 4, 'tipo' => 2, 'descripcion' => 'Mano 1', 'fecha' => '2026-04-01']);
         $this->createInputLog(['id_log' => 3, 'id_insumo' => 3, 'precio' => 3, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-04-01']);
@@ -257,6 +265,70 @@ class ProjectApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.id_usuario', 1)
             ->assertJsonPath('data.funcionario', 'Usuario Demo');
+    }
+
+    public function test_budget_by_group_pdf_is_valid_when_project_has_no_items(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createProjectRecord();
+
+        $response = $this->get('/api/v1/projects/1/budget-by-group/pdf');
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_budget_by_group_pdf_data_uses_legacy_complete_items_dataset(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        $this->createItemRecord();
+        $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 1, 'precio' => 0, 'prioridad' => 1]);
+
+        $data = app(\App\Services\Projects\ProjectBudgetService::class)
+            ->budgetByGroupPdfData(\App\Models\Project::findOrFail(1));
+
+        $this->assertSame(1, $data['items_proyecto_count']);
+        $this->assertSame([], $data['items']);
+        $this->assertSame([
+            'materiales' => 0.0,
+            'mano_obra' => 0.0,
+            'herramientas' => 0.0,
+        ], $data['totals']);
+
+        $response = $this->get('/api/v1/projects/1/budget-by-group/pdf');
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_budget_by_group_pdf_data_orders_by_group_then_subgroup_like_legacy(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup(['id_grupo' => 1, 'nombre_grupo' => 'ZETA']);
+        $this->createGroup(['id_grupo' => 2, 'nombre_grupo' => 'ALFA', 'codigo_grupo' => '002-ALF']);
+        $this->createSubgroup(['id_subgrupo' => 1, 'id_grupo' => 1, 'descripcion' => 'BETA']);
+        $this->createSubgroup(['id_subgrupo' => 2, 'id_grupo' => 2, 'descripcion' => 'OMEGA', 'codigo' => 'OMG']);
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material 1']);
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM ZETA', 'grupo' => 1, 'subgrupo' => 1]);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM ALFA', 'grupo' => 2, 'subgrupo' => 2, 'cod' => 'ITM-002']);
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 1]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 2, 'id_insumo' => 1, 'cantidad' => 1]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'prioridad' => 1]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'prioridad' => 99]);
+
+        $data = app(\App\Services\Projects\ProjectBudgetService::class)
+            ->budgetByGroupPdfData(\App\Models\Project::findOrFail(1));
+
+        $this->assertSame(['ITEM ALFA', 'ITEM ZETA'], array_column($data['items'], 'descripcion'));
+        $this->assertSame(['ALFA', 'ZETA'], array_column($data['items'], 'grupo'));
     }
 
     public function test_non_admin_without_project_permissions_cannot_manage_projects(): void

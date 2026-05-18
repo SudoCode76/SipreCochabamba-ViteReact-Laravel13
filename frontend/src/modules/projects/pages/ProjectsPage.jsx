@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -37,11 +37,8 @@ export default function ProjectsPage() {
   const [recalculateProject, setRecalculateProject] = useState(null);
   const [recalculateDate, setRecalculateDate] = useState("");
   const [recalculateStatus, setRecalculateStatus] = useState(null);
+  const [feedback, setFeedback] = useState(null);
   const deferredSearch = useDeferredValue(search.trim());
-
-  useEffect(() => {
-    setPage(1);
-  }, [deferredSearch, perPage]);
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
     queryKey: ["projects", { page, perPage, search: deferredSearch }],
@@ -64,7 +61,18 @@ export default function ProjectsPage() {
   const endRecord = Math.min(meta.current_page * meta.per_page, meta.total);
 
   const handlePerPageChange = (event) => {
+    setPage(1);
     setPerPage(Number(event.target.value));
+  };
+
+  const handleSearchChange = (event) => {
+    setPage(1);
+    setSearch(event.target.value);
+  };
+
+  const clearSearch = () => {
+    setPage(1);
+    setSearch("");
   };
 
   const openEdit = (project) => {
@@ -132,6 +140,40 @@ export default function ProjectsPage() {
     }
   };
 
+  const handleOpenBudgetByGroupPdf = async (project) => {
+    setFeedback(null);
+    const popup = window.open("", "_blank");
+
+    if (popup) {
+      popup.document.write("<p>Generando PDF...</p>");
+    }
+
+    try {
+      const blob = await projectService.downloadBudgetByGroupPdf(project.id_proyecto);
+
+      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
+        throw new Error("La respuesta no contiene un PDF valido.");
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        window.open(url, "_blank");
+      }
+    } catch (pdfError) {
+      if (popup) {
+        popup.close();
+      }
+
+      setFeedback({
+        type: "error",
+        message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el presupuesto por rubros.",
+      });
+    }
+  };
+
   const formatProjectNameLines = (value) => {
     const words = String(value || "").trim().split(/\s+/).filter(Boolean);
     const lines = [];
@@ -160,6 +202,11 @@ export default function ProjectsPage() {
         </CardHeader>
 
         <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
+          {feedback && (
+            <Alert variant={feedback.type === "error" ? "destructive" : "default"} className="rounded-2xl">
+              <AlertDescription>{feedback.message}</AlertDescription>
+            </Alert>
+          )}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex items-end gap-3">
               <div className="flex flex-col gap-2">
@@ -169,14 +216,14 @@ export default function ProjectsPage() {
                     placeholder="Buscar proyecto..."
                     className="h-9 w-64 rounded-xl border-border/80"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={handleSearchChange}
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     className="h-9 rounded-xl"
-                    onClick={() => setSearch("")}
+                    onClick={clearSearch}
                     disabled={!search}
                   >
                     {search ? <X className="size-4" /> : <Search className="size-4" />}
@@ -292,7 +339,7 @@ export default function ProjectsPage() {
                                 <ListPlus className="h-4 w-4 text-muted-foreground" />
                                 <span>Agregar Items al Proyecto</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => void handleOpenBudgetByGroupPdf(project)}>
                                 <Calculator className="h-4 w-4 text-muted-foreground" />
                                 <span>Presupuesto por Rubros</span>
                               </DropdownMenuItem>

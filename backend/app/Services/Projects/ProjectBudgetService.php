@@ -28,6 +28,43 @@ class ProjectBudgetService
         return $this->buildCurrentBudgetRows($rows);
     }
 
+    public function budgetByGroupPdfData(Project $project): array
+    {
+        $rows = $this->activeProjectItemsForLegacyBudgetPdf($project);
+
+        $items = $rows->map(function (ProjectItem $row): array {
+            $acc = $this->currentAccumulators($row->id_proyecto, $row->id_item);
+
+            return [
+                'id_proyecto' => $row->id_proyecto,
+                'nombre_proy' => $row->project?->nombre_proyecto,
+                'id_item' => $row->id_item,
+                'descripcion' => $row->item?->item,
+                'materiales' => $acc['materiales'],
+                'mano_obra' => $acc['mano_obra'],
+                'herramientas' => $acc['herramientas'],
+                'id_grupo' => $row->item?->groupCatalog?->id_grupo,
+                'grupo' => $row->item?->groupCatalog?->nombre_grupo,
+                'id_subgrupo' => $row->item?->subgroupCatalog?->id_subgrupo,
+                'subgrupo' => $row->item?->subgroupCatalog?->descripcion,
+            ];
+        })->values();
+
+        $completeItems = $items
+            ->filter(fn (array $item): bool => $item['materiales'] > 0 || $item['mano_obra'] > 0 || $item['herramientas'] > 0)
+            ->values();
+
+        return [
+            'items_proyecto_count' => $rows->count(),
+            'items' => $completeItems->all(),
+            'totals' => [
+                'materiales' => round($completeItems->sum('materiales'), 4),
+                'mano_obra' => round($completeItems->sum('mano_obra'), 4),
+                'herramientas' => round($completeItems->sum('herramientas'), 4),
+            ],
+        ];
+    }
+
     public function budgetRecalculation(Project $project, CarbonInterface $date): array
     {
         $rows = $this->activeProjectItems($project)
@@ -134,6 +171,22 @@ class ProjectBudgetService
             ->where('proyecto_item.estado', 'AC')
             ->whereNotNull('proyecto_item.id_item')
             ->whereHas('item')
+            ->get();
+    }
+
+    private function activeProjectItemsForLegacyBudgetPdf(Project $project): Collection
+    {
+        return ProjectItem::query()
+            ->select('proyecto_item.*')
+            ->join('item', 'item.id_item', '=', 'proyecto_item.id_item')
+            ->join('grupo', 'grupo.id_grupo', '=', 'item.grupo')
+            ->join('sub_grupo', 'sub_grupo.id_subgrupo', '=', 'item.subgrupo')
+            ->with(['project', 'item.groupCatalog', 'item.subgroupCatalog', 'item.unitMeasure'])
+            ->where('proyecto_item.id_proyecto', $project->id_proyecto)
+            ->where('proyecto_item.estado', 'AC')
+            ->whereNotNull('proyecto_item.id_item')
+            ->orderBy('grupo.nombre_grupo')
+            ->orderBy('sub_grupo.descripcion')
             ->get();
     }
 

@@ -28,6 +28,13 @@ export const projectService = {
     return response.data;
   },
 
+  downloadBudgetByGroupPdf: async (projectId) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/budget-by-group/pdf`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
   items: async (projectId, format = "PCA") => {
     const response = await apiClient.get(`/v1/projects/${projectId}/items`, {
       params: { format },

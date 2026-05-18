@@ -17,6 +17,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/projects/items/{item}/incidence-price', [ProjectController::class, 'incidencePrice']);
     Route::post('/projects/{project}/budget-recalculation', [ProjectController::class, 'budgetRecalculation']);
     Route::get('/projects/{project}/budget-by-group', [ProjectController::class, 'budgetByGroup']);
+    Route::get('/projects/{project}/budget-by-group/pdf', [ProjectController::class, 'budgetByGroupPdf']);
     Route::get('/projects/{project}/incidence-summary', [ProjectController::class, 'incidenceSummary']);
     Route::post('/projects/{project}/breakdown-calculation', [ProjectController::class, 'breakdownCalculation']);
     Route::get('/projects/{project}/unit-prices', [ProjectController::class, 'unitPrices']);

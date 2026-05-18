@@ -16,6 +16,7 @@ use App\Models\Project;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\Projects\ProjectBudgetService;
+use App\Services\Projects\ProjectBudgetByGroupPdfService;
 use App\Services\Projects\ProjectContextService;
 use App\Services\Projects\ProjectCrudService;
 use App\Services\Projects\ProjectItemService;
@@ -32,6 +33,7 @@ class ProjectController extends Controller
         private readonly ProjectCrudService $projectCrudService,
         private readonly ProjectItemService $projectItemService,
         private readonly ProjectBudgetService $projectBudgetService,
+        private readonly ProjectBudgetByGroupPdfService $projectBudgetByGroupPdfService,
         private readonly ProjectPermissionService $projectPermissionService,
         private readonly AuditService $auditService,
     ) {}
@@ -203,6 +205,15 @@ class ProjectController extends Controller
             'message' => 'Presupuesto por rubros obtenido correctamente.',
             'data' => $this->projectBudgetService->budgetByGroup($project),
         ]);
+    }
+
+    public function budgetByGroupPdf(Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view_reports', 'No tiene permisos para consultar presupuesto por rubros.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar presupuesto por rubros.');
+        }
+
+        return $this->projectBudgetByGroupPdfService->stream($project);
     }
 
     public function incidenceSummary(ProjectFormatRequest $request, Project $project): JsonResponse
