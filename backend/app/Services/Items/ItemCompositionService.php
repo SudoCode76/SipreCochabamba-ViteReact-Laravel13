@@ -148,6 +148,81 @@ class ItemCompositionService
         ]);
     }
 
+    public function syncType(Item $item, int $type, array $rows, array $deletedInputIds, User $user): array
+    {
+        $this->ensureItemCanMutate($item);
+
+        $normalizedRows = collect($rows)
+            ->map(fn (array $row): array => [
+                'id_insumo' => (int) $row['id_insumo'],
+                'cantidad' => (float) $row['cantidad'],
+            ])
+            ->keyBy('id_insumo')
+            ->values();
+
+        $normalizedRows->each(fn (array $row) => $this->resolveValidInput($row['id_insumo'], $type));
+
+        $deletedIds = collect($deletedInputIds)
+            ->map(fn ($inputId): int => (int) $inputId)
+            ->filter()
+            ->unique()
+            ->values();
+
+        $submittedIds = $normalizedRows->pluck('id_insumo');
+
+        DB::transaction(function () use ($item, $type, $user, $normalizedRows, $deletedIds, $submittedIds): void {
+            if ($deletedIds->isNotEmpty()) {
+                ItemInput::query()
+                    ->where('id_item', $item->id_item)
+                    ->whereIn('id_insumo', $deletedIds)
+                    ->whereHas('input', fn ($query) => $query->where('tipo', $type))
+                    ->update(['estado' => 'DC']);
+            }
+
+            ItemInput::query()
+                ->where('id_item', $item->id_item)
+                ->where('estado', 'AC')
+                ->whereHas('input', fn ($query) => $query->where('tipo', $type))
+                ->when($submittedIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id_insumo', $submittedIds))
+                ->update(['estado' => 'DC']);
+
+            foreach ($normalizedRows as $row) {
+                ItemInput::query()->updateOrCreate(
+                    [
+                        'id_item' => $item->id_item,
+                        'id_insumo' => $row['id_insumo'],
+                    ],
+                    [
+                        'cantidad' => $row['cantidad'],
+                        'estado' => 'AC',
+                        'id_usuario' => $user->id_usuario,
+                        'fecha' => now()->toDateString(),
+                        'tipo' => $type,
+                    ],
+                );
+            }
+        });
+
+        $items = $this->listByType($item->refresh(), $type);
+        $blockTotal = round(collect($items)->sum('parcial'), 4);
+
+        if ($type === 1) {
+            $item->forceFill(['precio' => $blockTotal])->save();
+        }
+
+        return [
+            'items' => $items,
+            'totals' => [
+                'block' => $blockTotal,
+                'global' => $this->globalTotal($item),
+            ],
+            'item' => [
+                'id_item' => $item->id_item,
+                'price' => (float) $item->precio,
+            ],
+        ];
+    }
+
     public function totalByType(Item $item, int $type): float
     {
         return round(collect($this->listByType($item, $type))->sum('parcial'), 4);

@@ -83,7 +83,7 @@ class ListAnalysisItemsService
 
     private function calculatedPrice(Item $item, string $mode): array
     {
-        if (strtolower($mode) === 'fndr') {
+        if (in_array(strtolower($mode), ['general', 'fndr'], true)) {
             return $this->itemAnalysisListPriceService->resolve($item, $mode);
         }
 
