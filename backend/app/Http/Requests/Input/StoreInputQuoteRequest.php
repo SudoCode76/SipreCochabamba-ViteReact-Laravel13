@@ -32,9 +32,9 @@ class StoreInputQuoteRequest extends FormRequest
             'date' => ['nullable', 'date'],
             'file_1' => ['nullable'],
             'file_2' => ['nullable'],
-            'valido' => ['nullable', 'file', 'max:10240'],
-            'propuesto_1' => ['nullable', 'file', 'max:10240'],
-            'propuesto_2' => ['nullable', 'file', 'max:10240'],
+            'valido' => ['nullable', 'file', 'mimes:pdf', 'max:4096', 'required_without_all:propuesto_1,propuesto_2'],
+            'propuesto_1' => ['nullable', 'file', 'mimes:pdf', 'max:4096', 'required_without_all:valido,propuesto_2'],
+            'propuesto_2' => ['nullable', 'file', 'mimes:pdf', 'max:4096', 'required_without_all:valido,propuesto_1'],
             'request_id' => ['nullable', 'integer'],
         ];
     }
