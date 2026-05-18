@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
-import { FileText, ChevronLeft, ChevronRight, Loader2, MoreHorizontal, Pencil, Trash2, X, Plus } from "lucide-react";
+import { FileText, ChevronLeft, ChevronRight, Loader2, Pencil, Trash2, X, Plus } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,13 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import { inputTypesService } from "@/modules/input-types/services/input-types.service";
 
 const statusClass = {
@@ -242,33 +236,30 @@ export default function InputTypesPage() {
                             </Badge>
                           </td>
                           <td className="px-5 py-4 align-top text-center">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                  <MoreHorizontal className="h-4 w-4" />
+                            <div className="flex items-center justify-center gap-2">
+                              {item.available_actions?.edit && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 gap-1 px-2 text-muted-foreground hover:text-foreground"
+                                  onClick={() => handleEdit(item)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  <span>Editar</span>
                                 </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-lg">
-                                {item.available_actions?.edit && (
-                                  <DropdownMenuItem
-                                    className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
-                                    onClick={() => handleEdit(item)}
-                                  >
-                                    <Pencil className="h-4 w-4 text-muted-foreground" />
-                                    <span>Editar</span>
-                                  </DropdownMenuItem>
-                                )}
-                                {item.available_actions?.delete && (
-                                  <DropdownMenuItem
-                                    className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer text-rose-600 focus:text-rose-700"
-                                    onClick={() => openDelete(item)}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                    <span>Eliminar</span>
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                              )}
+                              {item.available_actions?.delete && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 gap-1 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                  onClick={() => openDelete(item)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  <span>Eliminar</span>
+                                </Button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -356,7 +347,7 @@ export default function InputTypesPage() {
                     <div className="grid gap-5 sm:grid-cols-2">
                       <div className="flex flex-col gap-2 sm:col-span-2">
                         <Label htmlFor="descripcion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                          Descripción
+                          Nombre Tipo Insumo
                         </Label>
                         <Input
                           id="descripcion"
@@ -389,9 +380,9 @@ export default function InputTypesPage() {
                       <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={closeEdit}>
                         Cancelar
                       </Button>
-                      <Button 
-                        type="submit" 
-                        className="rounded-full bg-foreground text-background hover:bg-foreground/90" 
+                      <Button
+                        type="submit"
+                        className="rounded-full bg-foreground text-background hover:bg-foreground/90"
                         disabled={updateMutation.isPending || createMutation.isPending}
                       >
                         {updateMutation.isPending || createMutation.isPending ? "Guardando..." : "Guardar cambios"}

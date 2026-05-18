@@ -129,10 +129,6 @@ export default function CalculationPercentagesPage() {
                 </div>
                 <CardTitle className="text-2xl tracking-[-0.04em]">Porcentajes de Cálculo</CardTitle>
               </div>
-              <Button className="bg-sky-600 hover:bg-sky-700" onClick={openNew}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nuevo
-              </Button>
             </div>
           </CardHeader>
 
@@ -242,43 +238,43 @@ export default function CalculationPercentagesPage() {
                     <div className="grid gap-5 sm:grid-cols-2">
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="codigo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Codigo</Label>
-                        <Input 
-                          id="codigo" 
-                          name="codigo" 
-                          defaultValue={selectedItem.codigo || selectedItem.code || ""} 
-                          className="h-12 rounded-2xl border-border/80 bg-background/90" 
-                          required 
+                        <Input
+                          id="codigo"
+                          name="codigo"
+                          defaultValue={selectedItem.codigo || selectedItem.code || ""}
+                          className="h-12 rounded-2xl border-border/80 bg-background/90"
+                          required
                         />
                       </div>
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="porcentaje" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Porcentaje (%)</Label>
-                        <Input 
-                          id="porcentaje" 
-                          name="porcentaje" 
-                          type="number" 
+                        <Input
+                          id="porcentaje"
+                          name="porcentaje"
+                          type="number"
                           step="0.01"
-                          defaultValue={selectedItem.porcentaje || selectedItem.percentage || ""} 
-                          className="h-12 rounded-2xl border-border/80 bg-background/90" 
-                          required 
+                          defaultValue={selectedItem.porcentaje || selectedItem.percentage || ""}
+                          className="h-12 rounded-2xl border-border/80 bg-background/90"
+                          required
                         />
                       </div>
                       <div className="flex flex-col gap-2 sm:col-span-2">
                         <Label htmlFor="descripcion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Descripción</Label>
-                        <Input 
-                          id="descripcion" 
-                          name="descripcion" 
-                          defaultValue={selectedItem.descripcion || selectedItem.description || ""} 
-                          className="h-12 rounded-2xl border-border/80 bg-background/90" 
-                          required 
+                        <Input
+                          id="descripcion"
+                          name="descripcion"
+                          defaultValue={selectedItem.descripcion || selectedItem.description || ""}
+                          className="h-12 rounded-2xl border-border/80 bg-background/90"
+                          required
                         />
                       </div>
                       <div className="flex flex-col gap-2 sm:col-span-2">
                         <Label htmlFor="observacion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Observación</Label>
-                        <Input 
-                          id="observacion" 
-                          name="observacion" 
-                          defaultValue={selectedItem.observacion || selectedItem.observation || ""} 
-                          className="h-12 rounded-2xl border-border/80 bg-background/90" 
+                        <Input
+                          id="observacion"
+                          name="observacion"
+                          defaultValue={selectedItem.observacion || selectedItem.observation || ""}
+                          className="h-12 rounded-2xl border-border/80 bg-background/90"
                         />
                       </div>
                       <div className="flex flex-col gap-2 sm:col-span-2">

@@ -2,16 +2,17 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   FileText,
   Loader2,
   MapPin,
+  Pencil,
   RefreshCcw,
   RotateCcw,
   Search,
   ShieldAlert,
+  SquarePen,
   X,
 } from "lucide-react";
 
@@ -294,10 +295,10 @@ export default function ManageInputRequestsPage() {
           unidad_medida: Number(manageForm.unidad_medida),
           ubicacion: manageForm.ubicacion.trim(),
           justificacion: manageForm.justificacion.trim(),
-        notificacion: manageForm.notificacion.trim(),
-        usuario_aprobacion: currentUserId,
-        fecha_aprobacion: formatDateInput(),
-      },
+          notificacion: manageForm.notificacion.trim(),
+          usuario_aprobacion: currentUserId,
+          fecha_aprobacion: formatDateInput(),
+        },
     });
   };
 
@@ -467,17 +468,25 @@ export default function ManageInputRequestsPage() {
                           <td className="px-4 py-4 align-top text-muted-foreground">{item.justificacion || "-"}</td>
                           <td className="px-4 py-4 align-top text-muted-foreground">{item.notificacion || "-"}</td>
                           <td className="px-4 py-4 align-top text-right">
-                            <div className="flex justify-end gap-2">
+                            <div className="flex justify-end gap-1.5">
                               {item.available_actions?.gestionar && (
-                                <Button variant="outline" className="rounded-full border-border/70" onClick={() => openManageModal(getRequestId(item))}>
-                                  <CheckCircle2 data-icon="inline-start" />
-                                  Gestionar
+                                <Button
+                                  size="icon-sm"
+                                  className="size-9 rounded-lg bg-[#209c8d] text-white hover:bg-[#1a8578] shadow-sm transition-colors"
+                                  onClick={() => openManageModal(getRequestId(item))}
+                                  title="Editar gestión"
+                                >
+                                  <SquarePen className="size-4" />
                                 </Button>
                               )}
                               {item.available_actions?.revertir && (
-                                <Button variant="outline" className="rounded-full border-border/70" onClick={() => openRevertModal(getRequestId(item))}>
-                                  <RotateCcw data-icon="inline-start" />
-                                  Revertir
+                                <Button
+                                  size="icon-sm"
+                                  className="size-9 rounded-lg bg-[#337ab7] text-white hover:bg-[#286090] shadow-sm transition-colors"
+                                  onClick={() => openRevertModal(getRequestId(item))}
+                                  title="Revertir"
+                                >
+                                  <RotateCcw className="size-4" />
                                 </Button>
                               )}
                             </div>
@@ -523,17 +532,23 @@ export default function ManageInputRequestsPage() {
                         <p><span className="font-medium text-foreground">Justificación:</span> {item.justificacion || "-"}</p>
                         <p><span className="font-medium text-foreground">Notificación:</span> {item.notificacion || "-"}</p>
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5">
                         {item.available_actions?.gestionar && (
-                          <Button variant="outline" className="rounded-full border-border/70" onClick={() => openManageModal(getRequestId(item))}>
-                            <CheckCircle2 data-icon="inline-start" />
-                            Gestionar
+                          <Button
+                            size="icon-sm"
+                            className="size-9 rounded-lg bg-[#209c8d] text-white hover:bg-[#1a8578] shadow-sm transition-colors"
+                            onClick={() => openManageModal(getRequestId(item))}
+                          >
+                            <SquarePen className="size-4" />
                           </Button>
                         )}
                         {item.available_actions?.revertir && (
-                          <Button variant="outline" className="rounded-full border-border/70" onClick={() => openRevertModal(getRequestId(item))}>
-                            <RotateCcw data-icon="inline-start" />
-                            Revertir
+                          <Button
+                            size="icon-sm"
+                            className="size-9 rounded-lg bg-[#337ab7] text-white hover:bg-[#286090] shadow-sm transition-colors"
+                            onClick={() => openRevertModal(getRequestId(item))}
+                          >
+                            <RotateCcw className="size-4" />
                           </Button>
                         )}
                       </div>
@@ -598,10 +613,7 @@ export default function ManageInputRequestsPage() {
               <CardHeader className="border-b border-border/70 bg-muted/20">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <CardTitle className="text-2xl tracking-[-0.04em]">Gestionar solicitud pendiente</CardTitle>
-                    <CardDescription>
-                      Revisa la solicitud y define si será aprobada o rechazada.
-                    </CardDescription>
+                    <CardTitle className="text-2xl font-bold tracking-tight text-slate-700">Aprobar/Rechazar Solicitud</CardTitle>
                   </div>
                   <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeManageModal}>
                     <X />
@@ -616,36 +628,36 @@ export default function ManageInputRequestsPage() {
                   </div>
                 ) : (
                   <form className="flex flex-col gap-5" onSubmit={handleManageSubmit}>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <div className="flex flex-col gap-2 sm:col-span-2">
-                        <Label htmlFor="descripcion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    <div className="flex flex-col gap-5">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="descripcion" className="text-sm font-semibold text-slate-700">
                           Descripción
                         </Label>
                         <textarea
                           id="descripcion"
                           value={manageForm.descripcion}
                           readOnly
-                          className="min-h-24 rounded-2xl border border-border/80 bg-muted/20 px-4 py-3 text-sm text-muted-foreground outline-none"
+                          className="min-h-24 rounded-lg border border-border/80 bg-muted/20 px-4 py-3 text-sm text-muted-foreground outline-none cursor-not-allowed"
                         />
                       </div>
 
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="precio" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="precio" className="text-sm font-semibold text-slate-700">
                           Precio
                         </Label>
-                        <Input id="precio" type="number" step="0.01" value={manageForm.precio} onChange={handleManageChange} className="h-12 rounded-2xl border-border/80 bg-background/90" />
+                        <Input id="precio" type="number" step="0.01" value={manageForm.precio} onChange={handleManageChange} className="h-12 rounded-lg border-border/80 bg-background/90" />
                         {formErrors.precio && <p className="text-sm text-destructive">{formErrors.precio[0]}</p>}
                       </div>
 
-                      <div className="flex flex-col gap-2 sm:col-span-2">
-                        <Label htmlFor="unidad_medida" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                          Unidad de medida
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="unidad_medida" className="text-sm font-semibold text-slate-700">
+                          Unidad de Medida
                         </Label>
                         <select
                           id="unidad_medida"
                           value={manageForm.unidad_medida}
                           onChange={handleManageChange}
-                          className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none"
+                          className="h-12 rounded-lg border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none"
                         >
                           <option value="">Seleccionar unidad de medida</option>
                           {unitMeasures.map((unit) => (
@@ -657,44 +669,44 @@ export default function ManageInputRequestsPage() {
                         {formErrors.unidad_medida && <p className="text-sm text-destructive">{formErrors.unidad_medida[0]}</p>}
                       </div>
 
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="ubicacion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="ubicacion" className="text-sm font-semibold text-slate-700">
                           Ubicación
                         </Label>
                         <div className="relative">
                           <MapPin className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                          <Input id="ubicacion" value={manageForm.ubicacion} onChange={handleManageChange} className="h-12 rounded-2xl border-border/80 bg-background/90 pl-11" />
+                          <Input id="ubicacion" value={manageForm.ubicacion} onChange={handleManageChange} className="h-12 rounded-lg border-border/80 bg-background/90 pl-11" />
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="solicitante" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="solicitante" className="text-sm font-semibold text-slate-700">
                           Solicitante
                         </Label>
-                        <Input id="solicitante" value={manageForm.solicitante} readOnly className="h-12 rounded-2xl border-border/80 bg-muted/20 text-muted-foreground" />
+                        <Input id="solicitante" value={manageForm.solicitante} readOnly className="h-12 rounded-lg border-border/80 bg-muted/20 text-muted-foreground cursor-not-allowed" />
                       </div>
 
-                      <div className="flex flex-col gap-2 sm:col-span-2">
-                        <Label htmlFor="justificacion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="justificacion" className="text-sm font-semibold text-slate-700">
                           Justificación
                         </Label>
-                        <textarea id="justificacion" value={manageForm.justificacion} onChange={handleManageChange} className="min-h-28 rounded-2xl border border-border/80 bg-background/90 px-4 py-3 text-sm text-foreground outline-none" />
+                        <textarea id="justificacion" value={manageForm.justificacion} onChange={handleManageChange} className="min-h-28 rounded-lg border border-border/80 bg-background/90 px-4 py-3 text-sm text-foreground outline-none" />
                         {formErrors.justificacion && <p className="text-sm text-destructive">{formErrors.justificacion[0]}</p>}
                       </div>
 
-                      <div className="flex flex-col gap-2 sm:col-span-2">
-                        <Label htmlFor="notificacion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="notificacion" className="text-sm font-semibold text-slate-700">
                           Detalle la razón por la cual se esta aprobando o rechazando la solicitud
                         </Label>
-                        <textarea id="notificacion" value={manageForm.notificacion} onChange={handleManageChange} className="min-h-24 rounded-2xl border border-border/80 bg-background/90 px-4 py-3 text-sm text-foreground outline-none" />
+                        <textarea id="notificacion" value={manageForm.notificacion} onChange={handleManageChange} className="min-h-24 rounded-lg border border-border/80 bg-background/90 px-4 py-3 text-sm text-foreground outline-none" />
                         {formErrors.notificacion && <p className="text-sm text-destructive">{formErrors.notificacion[0]}</p>}
                       </div>
 
-                      <div className="flex flex-col gap-2 sm:col-span-2">
-                        <Label htmlFor="estado_aprobacion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="estado_aprobacion" className="text-sm font-semibold text-slate-700">
                           Estado
                         </Label>
-                        <select id="estado_aprobacion" value={manageForm.estado_aprobacion} onChange={handleManageChange} className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none">
+                        <select id="estado_aprobacion" value={manageForm.estado_aprobacion} onChange={handleManageChange} className="h-12 rounded-lg border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none">
                           {approvalStatuses
                             .filter((status) => status.code === "AP" || status.code === "RC")
                             .map((status) => (
@@ -715,13 +727,10 @@ export default function ManageInputRequestsPage() {
 
                     <Separator className="bg-border/70" />
 
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={closeManageModal}>
-                        Cancelar
-                      </Button>
-                      <Button type="submit" className="rounded-full bg-foreground text-background hover:bg-foreground/90" disabled={isManaging}>
+                    <div className="flex justify-center">
+                      <Button type="submit" className="h-12 w-full max-w-xs rounded-lg bg-[#209c8d] text-white hover:bg-[#1a8578] shadow-sm transition-colors" disabled={isManaging}>
                         {isManaging && <Loader2 data-icon="inline-start" className="animate-spin" />}
-                        Guardar gestión
+                        Guardar Cambios
                       </Button>
                     </div>
                   </form>
@@ -740,8 +749,8 @@ export default function ManageInputRequestsPage() {
               <CardHeader className="border-b border-border/70 bg-muted/20">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <CardTitle className="text-2xl tracking-[-0.04em]">Revertir solicitud</CardTitle>
-                    <CardDescription>
+                    <CardTitle className="text-2xl font-bold tracking-tight text-slate-700">Revertir solicitud</CardTitle>
+                    <CardDescription className="hidden">
                       Devuelve la solicitud a estado pendiente y registra el motivo de la reversión.
                     </CardDescription>
                   </div>
@@ -758,13 +767,13 @@ export default function ManageInputRequestsPage() {
                   </div>
                 ) : (
                   <form className="flex flex-col gap-5" onSubmit={handleRevertSubmit}>
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor="observacion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="observacion" className="text-sm font-semibold text-slate-700">
                         Observación de reversión
                       </Label>
                       <div className="relative">
                         <ShieldAlert className="absolute left-4 top-4 size-4 text-muted-foreground" />
-                        <textarea id="observacion" value={revertForm.observacion} onChange={handleRevertChange} className="min-h-32 w-full rounded-2xl border border-border/80 bg-background/90 px-11 py-3 text-sm text-foreground outline-none" placeholder="Describe el motivo de la reversión" />
+                        <textarea id="observacion" value={revertForm.observacion} onChange={handleRevertChange} className="min-h-32 w-full rounded-lg border border-border/80 bg-background/90 px-11 py-3 text-sm text-foreground outline-none" placeholder="Describe el motivo de la reversión" />
                       </div>
                       {formErrors.observacion && <p className="text-sm text-destructive">{formErrors.observacion[0]}</p>}
                     </div>
@@ -779,11 +788,8 @@ export default function ManageInputRequestsPage() {
 
                     <Separator className="bg-border/70" />
 
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={closeRevertModal}>
-                        Cancelar
-                      </Button>
-                      <Button type="submit" className="rounded-full bg-foreground text-background hover:bg-foreground/90" disabled={isReverting}>
+                    <div className="flex justify-center">
+                      <Button type="submit" className="h-12 w-full max-w-xs rounded-lg bg-[#209c8d] text-white hover:bg-[#1a8578] shadow-sm transition-colors" disabled={isReverting}>
                         {isReverting && <Loader2 data-icon="inline-start" className="animate-spin" />}
                         Confirmar reversión
                       </Button>

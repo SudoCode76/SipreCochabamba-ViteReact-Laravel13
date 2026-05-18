@@ -116,107 +116,107 @@ export default function GroupsPage() {
   return (
     <>
       <div className={`flex flex-col gap-6 animate-in fade-in duration-500 ${formOpen || deleteOpen ? "blur-sm" : ""}`}>
-      <Card className="border border-border/70 bg-white/86 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
-        <CardHeader className="gap-4 border-b border-border/70 bg-muted/25">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-sky-600 text-white">
-                <FolderKanban className="size-5" />
+        <Card className="border border-border/70 bg-white/86 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+          <CardHeader className="gap-4 border-b border-border/70 bg-muted/25">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex size-11 items-center justify-center rounded-2xl bg-sky-600 text-white">
+                  <FolderKanban className="size-5" />
+                </div>
+                <CardTitle className="text-2xl tracking-[-0.04em]">Grupos</CardTitle>
               </div>
-              <CardTitle className="text-2xl tracking-[-0.04em]">Grupos</CardTitle>
+              <Button className="bg-sky-600 hover:bg-sky-700" onClick={openNew}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo
+              </Button>
             </div>
-            <Button className="bg-sky-600 hover:bg-sky-700" onClick={openNew}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo
-            </Button>
-          </div>
-        </CardHeader>
+          </CardHeader>
 
-        <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
-          {isLoading && (
-            <div className="flex items-center justify-center rounded-2xl border border-border/70 bg-background/70 p-8 text-muted-foreground">
-              <Loader2 className="mr-2 size-4 animate-spin" /> Cargando grupos...
-            </div>
-          )}
+          <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
+            {isLoading && (
+              <div className="flex items-center justify-center rounded-2xl border border-border/70 bg-background/70 p-8 text-muted-foreground">
+                <Loader2 className="mr-2 size-4 animate-spin" /> Cargando grupos...
+              </div>
+            )}
 
-          {isError && (
-            <Alert variant="destructive" className="rounded-2xl">
-              <AlertDescription>
-                {error?.response?.data?.message || "No se pudieron cargar los grupos."}
-              </AlertDescription>
-            </Alert>
-          )}
+            {isError && (
+              <Alert variant="destructive" className="rounded-2xl">
+                <AlertDescription>
+                  {error?.response?.data?.message || "No se pudieron cargar los grupos."}
+                </AlertDescription>
+              </Alert>
+            )}
 
-          {!isLoading && !isError && (
-            <div className="overflow-hidden rounded-[28px] border border-border/70 bg-background/90">
-              <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
-                <table className="min-w-full border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-border/70 bg-muted/30 text-left">
-                      <th className="px-5 py-4 font-semibold text-foreground">N°</th>
-                      <th className="px-5 py-4 font-semibold text-foreground">Codigo</th>
-                      <th className="px-5 py-4 font-semibold text-foreground">Nombre</th>
-                      <th className="px-5 py-4 font-semibold text-foreground">Estado</th>
-                      <th className="px-5 py-4 font-semibold text-foreground text-center">Opciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item, index) => {
-                      const code = item.codigo_grupo || item.codigo || item.code || "-";
-                      const name = item.nombre_grupo || item.nombre || item.description || "-";
-                      const status = item.estado || item.status || "DC";
-                      const statusLabelText = item.status_label || (status === "AC" ? "ACTIVO" : "INACTIVO");
+            {!isLoading && !isError && (
+              <div className="overflow-hidden rounded-[28px] border border-border/70 bg-background/90">
+                <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+                  <table className="min-w-full border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border/70 bg-muted/30 text-left">
+                        <th className="px-5 py-4 font-semibold text-foreground">N°</th>
+                        <th className="px-5 py-4 font-semibold text-foreground">Codigo</th>
+                        <th className="px-5 py-4 font-semibold text-foreground">Nombre</th>
+                        <th className="px-5 py-4 font-semibold text-foreground">Estado</th>
+                        <th className="px-5 py-4 font-semibold text-foreground text-center">Opciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item, index) => {
+                        const code = item.codigo_grupo || item.codigo || item.code || "-";
+                        const name = item.nombre_grupo || item.nombre || item.description || "-";
+                        const status = item.estado || item.status || "DC";
+                        const statusLabelText = item.status_label || (status === "AC" ? "ACTIVO" : "INACTIVO");
 
-                      return (
-                        <tr key={item.id_grupo || item.id || index} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
-                          <td className="px-5 py-4 align-top text-foreground">{index + 1}</td>
-                          <td className="px-5 py-4 align-top text-foreground font-medium">{code}</td>
-                          <td className="px-5 py-4 align-top text-foreground">{name?.trim()}</td>
-                          <td className="px-5 py-4 align-top">
-                            <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClass[status] || "bg-slate-500 text-white"}`}>
-                              {statusLabelText}
-                            </Badge>
-                          </td>
-                          <td className="px-5 py-4 align-top text-center">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-lg">
-                                {item.available_actions?.edit && (
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openEdit(item)}>
-                                    <Pencil className="h-4 w-4 text-muted-foreground" />
-                                    <span>Editar</span>
-                                  </DropdownMenuItem>
-                                )}
-                                {item.available_actions?.delete && (
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer text-destructive" onClick={() => openDelete(item)}>
-                                    <Trash2 className="h-4 w-4" />
-                                    <span>Eliminar</span>
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                        return (
+                          <tr key={item.id_grupo || item.id || index} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
+                            <td className="px-5 py-4 align-top text-foreground">{index + 1}</td>
+                            <td className="px-5 py-4 align-top text-foreground font-medium">{code}</td>
+                            <td className="px-5 py-4 align-top text-foreground">{name?.trim()}</td>
+                            <td className="px-5 py-4 align-top">
+                              <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClass[status] || "bg-slate-500 text-white"}`}>
+                                {statusLabelText}
+                              </Badge>
+                            </td>
+                            <td className="px-5 py-4 align-top text-center">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-lg">
+                                  {item.available_actions?.edit && (
+                                    <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openEdit(item)}>
+                                      <Pencil className="h-4 w-4 text-muted-foreground" />
+                                      <span>Editar</span>
+                                    </DropdownMenuItem>
+                                  )}
+                                  {item.available_actions?.delete && (
+                                    <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer text-destructive" onClick={() => openDelete(item)}>
+                                      <Trash2 className="h-4 w-4" />
+                                      <span>Eliminar</span>
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {items.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
+                            No se encontraron grupos.
                           </td>
                         </tr>
-                      );
-                    })}
-                    {items.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
-                          No se encontraron grupos.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {formOpen && createPortal(
@@ -242,7 +242,7 @@ export default function GroupsPage() {
                         <Input id="codigo_grupo" name="codigo_grupo" defaultValue={selectedGroup.codigo_grupo || ""} className="h-12 rounded-2xl border-border/80 bg-background/90" required />
                       </div>
                       <div className="flex flex-col gap-2 sm:col-span-2">
-                        <Label htmlFor="nombre_grupo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Nombre</Label>
+                        <Label htmlFor="nombre_grupo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Descripcion</Label>
                         <Input id="nombre_grupo" name="nombre_grupo" defaultValue={selectedGroup.nombre_grupo?.trim() || ""} className="h-12 rounded-2xl border-border/80 bg-background/90" required />
                       </div>
                       <div className="flex flex-col gap-2 sm:col-span-2">

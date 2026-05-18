@@ -260,7 +260,7 @@ export default function UpreCalculationPercentagesPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button
+              /<Button
                 variant="outline"
                 className="rounded-full border-border/70 bg-background/80"
                 onClick={() => listQuery.refetch()}
@@ -269,12 +269,7 @@ export default function UpreCalculationPercentagesPage() {
                 <RefreshCcw data-icon="inline-start" className={cn(listQuery.isFetching && "animate-spin")} />
                 Refrescar
               </Button>
-              {permissions.can_create && (
-                <Button className="rounded-full bg-foreground text-background hover:bg-foreground/90" onClick={openCreate}>
-                  <Plus data-icon="inline-start" />
-                  Registrar UPRE
-                </Button>
-              )}
+
             </div>
           </div>
         </CardHeader>

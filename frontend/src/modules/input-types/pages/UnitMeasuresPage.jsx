@@ -99,7 +99,7 @@ export default function UnitMeasuresPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const payload = {
-      descripcion: String(formData.get("descripcion") || "").trim(),
+      descripcion: String(formData.get("Descripcion") || "").trim(),
       abreviatura: String(formData.get("abreviatura") || "").trim(),
       estado: String(formData.get("estado") || "AC"),
     };
@@ -254,7 +254,7 @@ export default function UnitMeasuresPage() {
                   <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
                     <div className="grid gap-5 sm:grid-cols-2">
                       <div className="flex flex-col gap-2 sm:col-span-2">
-                        <Label htmlFor="descripcion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Descripcion</Label>
+                        <Label htmlFor="descripcion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Nombre Unidad Medida </Label>
                         <Input id="descripcion" name="descripcion" defaultValue={selectedItem.descripcion} className="h-12 rounded-2xl border-border/80 bg-background/90" required />
                       </div>
                       <div className="flex flex-col gap-2 sm:col-span-2">
