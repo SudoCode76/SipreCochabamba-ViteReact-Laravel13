@@ -14,6 +14,7 @@ use App\Http\Requests\Project\UpdateProjectRequest;
 use App\Models\Item;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\Projects\ProjectBudgetService;
 use App\Services\Projects\ProjectContextService;
 use App\Services\Projects\ProjectCrudService;
@@ -32,6 +33,7 @@ class ProjectController extends Controller
         private readonly ProjectItemService $projectItemService,
         private readonly ProjectBudgetService $projectBudgetService,
         private readonly ProjectPermissionService $projectPermissionService,
+        private readonly AuditService $auditService,
     ) {}
 
     public function context(Request $request): JsonResponse
@@ -77,6 +79,7 @@ class ProjectController extends Controller
 
         $project = $this->projectCrudService->create($request, $request->user());
         $project->load(['creator', 'requester']);
+        $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se creo el proyecto '.$project->nombre_proyecto);
 
         return response()->json([
             'success' => true,
@@ -112,6 +115,7 @@ class ProjectController extends Controller
 
         $project = $this->projectCrudService->update($request, $project);
         $project->load(['creator', 'requester']);
+        $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se actualizo el proyecto '.$project->nombre_proyecto);
 
         return response()->json([
             'success' => true,
@@ -129,6 +133,7 @@ class ProjectController extends Controller
         }
 
         $project = $this->projectItemService->sync($project, $request->validated('items'), $request->user());
+        $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se sincronizaron los items del proyecto '.$project->nombre_proyecto);
 
         return response()->json([
             'success' => true,
@@ -177,10 +182,13 @@ class ProjectController extends Controller
             return $response;
         }
 
+        $data = $this->projectBudgetService->budgetRecalculation($project, $request->date('fecha'));
+        $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se recalculo el presupuesto del proyecto '.$project->nombre_proyecto);
+
         return response()->json([
             'success' => true,
             'message' => 'Presupuesto del proyecto recalculado correctamente.',
-            'data' => $this->projectBudgetService->budgetRecalculation($project, $request->date('fecha')),
+            'data' => $data,
         ]);
     }
 

@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   SquareChartGantt,
   UsersRound,
+  ClipboardClock,
 } from "lucide-react";
 
 export const navigationSections = [
@@ -70,6 +71,7 @@ export const navigationSections = [
       { title: "Funciones", path: "/administracion/funciones", icon: Blocks, accent: "sky" },
       { title: "Roles", path: "/administracion/roles", icon: ShieldCheck, accent: "violet" },
       { title: "Autorizaciones", path: "/administracion/autorizaciones", icon: KeyRound, accent: "amber" },
+      { title: "Auditoría", path: "/administracion/auditoria", icon: ClipboardClock, accent: "rose" },
     ],
   },
 ];

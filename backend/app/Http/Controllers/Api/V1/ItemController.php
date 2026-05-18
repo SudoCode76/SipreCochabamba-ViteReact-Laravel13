@@ -27,6 +27,7 @@ use App\Services\Items\LegacyUnitPriceAnalysisPdfService;
 use App\Services\Items\LegacyUnitPriceAnalysisService;
 use App\Services\Items\MachineryBreakdownPdfService;
 use App\Services\Items\MaterialBreakdownPdfService;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Request as HttpRequest;
@@ -49,6 +50,7 @@ class ItemController extends Controller
         private readonly LaborBreakdownPdfService $laborBreakdownPdfService,
         private readonly MachineryBreakdownPdfService $machineryBreakdownPdfService,
         private readonly HistoricalBreakdownPdfService $historicalBreakdownPdfService,
+        private readonly AuditService $auditService,
     ) {}
 
     public function fndrContext(Request $request): JsonResponse
@@ -319,6 +321,7 @@ class ItemController extends Controller
 
         $item = $this->createAnalysisItemService->execute($request, $request->user());
         $item->load(['groupCatalog', 'subgroupCatalog', 'unitMeasure', 'creator']);
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se creo el item '.$item->item);
 
         return response()->json([
             'success' => true,
@@ -387,6 +390,7 @@ class ItemController extends Controller
 
         $item->save();
         $item->load(['groupCatalog', 'subgroupCatalog', 'unitMeasure']);
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se actualizo el item '.$item->item);
 
         return response()->json([
             'success' => true,
@@ -453,6 +457,7 @@ class ItemController extends Controller
         }
 
         $item->save();
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se actualizaron los archivos del item '.$item->item);
 
         return response()->json([
             'success' => true,
@@ -526,6 +531,7 @@ class ItemController extends Controller
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se recalculo el analisis '.$mode.' del item '.$item->item);
 
         return response()->json([
             'success' => true,
@@ -604,6 +610,7 @@ class ItemController extends Controller
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se sincronizaron materiales del item '.$item->item);
 
         return response()->json([
             'success' => true,
@@ -667,6 +674,7 @@ class ItemController extends Controller
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se sincronizo mano de obra del item '.$item->item);
 
         return response()->json([
             'success' => true,
@@ -730,6 +738,7 @@ class ItemController extends Controller
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se sincronizo maquinaria del item '.$item->item);
 
         return response()->json([
             'success' => true,
@@ -791,7 +800,10 @@ class ItemController extends Controller
         }
 
         try {
-            return $this->historicalBreakdownPdfService->stream($item, $type, $request->date('fecha'));
+            $response = $this->historicalBreakdownPdfService->stream($item, $type, $request->date('fecha'));
+            $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se recalculo el desglose historico del item '.$item->item);
+
+            return $response;
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
@@ -833,6 +845,7 @@ class ItemController extends Controller
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se agrego un insumo tipo '.$type.' al item '.$item->item);
 
         return response()->json([
             'success' => true,
@@ -865,6 +878,7 @@ class ItemController extends Controller
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se actualizo un insumo tipo '.$type.' del item '.$item->item);
 
         return response()->json([
             'success' => true,
@@ -892,6 +906,7 @@ class ItemController extends Controller
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se retiro un insumo tipo '.$type.' del item '.$item->item);
 
         return response()->json([
             'success' => true,

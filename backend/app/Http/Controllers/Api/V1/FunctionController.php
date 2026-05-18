@@ -9,10 +9,13 @@ use App\Http\Requests\Function\UpdateFunctionRequest;
 use App\Http\Requests\Function\UpdateFunctionStatusRequest;
 use App\Http\Resources\Function\FunctionResource;
 use App\Models\SystemFunction;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 
 class FunctionController extends Controller
 {
+    public function __construct(private readonly AuditService $auditService) {}
+
     public function context(): JsonResponse
     {
         $classes = SystemFunction::query()
@@ -102,6 +105,7 @@ class FunctionController extends Controller
             'clase' => trim($request->string('clase')->toString()),
             'estado' => strtoupper($request->string('estado')->toString()),
         ]);
+        $this->auditService->record($request->user(), $request->ip(), 'ADMINISTRACION: se creo la funcion '.$function->nombre_funcion);
 
         return response()->json([
             'success' => true,
@@ -133,6 +137,7 @@ class FunctionController extends Controller
         ]);
 
         $function->refresh();
+        $this->auditService->record($request->user(), $request->ip(), 'ADMINISTRACION: se actualizo la funcion '.$function->nombre_funcion);
 
         return response()->json([
             'success' => true,
@@ -150,6 +155,7 @@ class FunctionController extends Controller
         ]);
 
         $function->refresh();
+        $this->auditService->record($request->user(), $request->ip(), 'ADMINISTRACION: se cambio el estado de la funcion '.$function->nombre_funcion);
 
         return response()->json([
             'success' => true,

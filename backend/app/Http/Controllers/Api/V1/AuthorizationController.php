@@ -7,6 +7,7 @@ use App\Http\Requests\Authorization\IndexAuthorizationRequest;
 use App\Http\Requests\Authorization\UpdateAuthorizationStatusRequest;
 use App\Http\Resources\Authorization\AuthorizationResource;
 use App\Models\Authorization;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -14,6 +15,8 @@ use RuntimeException;
 
 class AuthorizationController extends Controller
 {
+    public function __construct(private readonly AuditService $auditService) {}
+
     public function context(): JsonResponse
     {
         $modules = Authorization::query()
@@ -155,6 +158,7 @@ class AuthorizationController extends Controller
         $authorization->update($payload);
 
         $authorization->refresh()->load('requester');
+        $this->auditService->record($request->user(), $request->ip(), 'ADMINISTRACION: se proceso la autorizacion '.$authorization->getKey());
 
         return response()->json([
             'success' => true,

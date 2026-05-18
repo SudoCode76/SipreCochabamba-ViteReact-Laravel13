@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, redirect } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import MainLayout from "@/app/layouts/MainLayout";
 import ProtectedRoute from "./ProtectedRoute";
@@ -36,6 +36,7 @@ import UsersPage from "@/modules/users/pages/UsersPage";
 import GroupsPage from "@/modules/groups/pages/GroupsPage";
 import SubgroupsPage from "@/modules/groups/pages/SubgroupsPage";
 import CalculationPercentagesPage from "@/modules/calculation-percentages/pages/CalculationPercentagesPage";
+import AuditsPage from "@/modules/audits/pages/AuditsPage";
 
 function placeholder(title, description, section, accent) {
   return (
@@ -282,6 +283,10 @@ export const router = createBrowserRouter([
           {
             path: "/administracion/autorizaciones",
             element: <AuthorizationsPage />,
+          },
+          {
+            path: "/administracion/auditoria",
+            element: <AuditsPage />,
           },
           {
             path: "/perfil",

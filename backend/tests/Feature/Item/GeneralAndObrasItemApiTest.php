@@ -212,6 +212,11 @@ class GeneralAndObrasItemApiTest extends TestCase
             ->assertJsonPath('data.item.subgroup.id', 1)
             ->assertJsonPath('data.item.unit_measure.id', 1);
 
+        $this->assertDatabaseHas('auditoria', [
+            'nombre_completo' => 'Usuario General',
+            'proceso' => 'ITEMS: se creo el item EXCAVACION COMUN',
+        ]);
+
         $this->assertDatabaseHas('item', [
             'item' => 'EXCAVACION COMUN',
             'id_unidad' => 1,
@@ -293,6 +298,11 @@ class GeneralAndObrasItemApiTest extends TestCase
             ->assertJsonPath('data.item.group.id', 2)
             ->assertJsonPath('data.item.subgroup.id', 2)
             ->assertJsonPath('data.item.unit_measure.id', 2);
+
+        $this->assertDatabaseHas('auditoria', [
+            'nombre_completo' => 'Usuario General',
+            'proceso' => 'ITEMS: se actualizo el item ITEM EDITADO',
+        ]);
 
         $this->assertDatabaseHas('item', [
             'id_item' => 1,

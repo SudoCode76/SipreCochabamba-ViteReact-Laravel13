@@ -85,6 +85,11 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.project.otb', 'OTB CENTRAL')
             ->assertJsonPath('data.project.id_usuario', 1);
 
+        $this->assertDatabaseHas('auditoria', [
+            'nombre_completo' => 'Usuario Demo',
+            'proceso' => 'PROYECTOS: se creo el proyecto NUEVO PROYECTO',
+        ]);
+
         $projectId = $create->json('data.project.id_proyecto');
 
         $this->putJson('/api/v1/projects/'.$projectId, [
@@ -99,6 +104,11 @@ class ProjectApiTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('data.project.nombre_proyecto', 'PROYECTO EDITADO')
             ->assertJsonPath('data.project.estado', 'DC');
+
+        $this->assertDatabaseHas('auditoria', [
+            'nombre_completo' => 'Usuario Demo',
+            'proceso' => 'PROYECTOS: se actualizo el proyecto PROYECTO EDITADO',
+        ]);
 
         $this->getJson('/api/v1/projects/'.$projectId)
             ->assertOk()
