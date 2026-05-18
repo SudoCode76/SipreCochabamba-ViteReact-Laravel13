@@ -8,7 +8,9 @@ use App\Http\Requests\Item\RecalculateItemPriceRequest;
 use App\Http\Requests\Item\ShowItemPriceAnalysisRequest;
 use App\Http\Requests\Item\StoreItemCompositionInputRequest;
 use App\Http\Requests\Item\StoreItemRequest;
+use App\Http\Requests\Item\SyncItemCompositionInputsRequest;
 use App\Http\Requests\Item\UpdateItemCompositionInputRequest;
+use App\Http\Requests\Item\UpdateItemFilesRequest;
 use App\Http\Requests\Item\UpdateItemRequest;
 use App\Http\Resources\Item\ItemFndrListResource;
 use App\Models\Item;
@@ -417,6 +419,50 @@ class ItemController extends Controller
         ]);
     }
 
+    public function show(Item $item, Request $request): JsonResponse
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para consultar items.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Item obtenido correctamente.',
+            'data' => [
+                'item' => $this->serializeFileItem($item),
+            ],
+        ]);
+    }
+
+    public function updateFiles(Item $item, UpdateItemFilesRequest $request): JsonResponse
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para adjuntar archivos al item.');
+        }
+
+        if ($request->hasFile('specification_file')) {
+            $item->especificacion = $request->file('specification_file')->store('archivos/items/especificaciones', 'public');
+        }
+
+        if ($request->hasFile('sheet_file')) {
+            $item->ficha = $request->file('sheet_file')->store('archivos/items/fichas', 'public');
+        }
+
+        $item->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Archivos del item actualizados correctamente.',
+            'data' => [
+                'item' => $this->serializeFileItem($item),
+            ],
+        ]);
+    }
+
     public function priceAnalysis(ShowItemPriceAnalysisRequest $request, Item $item): JsonResponse
     {
         $mode = strtolower((string) $request->input('mode', 'general'));
@@ -539,6 +585,33 @@ class ItemController extends Controller
         return $this->compositionStoreResponse($item, 1, $request, 'Material agregado correctamente al item.');
     }
 
+    public function syncMaterials(Item $item, SyncItemCompositionInputsRequest $request): JsonResponse
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_create']) {
+            return $this->forbiddenResponse('No tiene permisos para modificar la composicion del item.');
+        }
+
+        try {
+            $data = $this->itemCompositionService->syncType(
+                $item,
+                1,
+                $request->validated('items'),
+                $request->validated('deleted_input_ids') ?? [],
+                $request->user(),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $this->validationFailureResponse($exception->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Materiales del item sincronizados correctamente.',
+            'data' => $data,
+        ]);
+    }
+
     public function updateMaterial(Item $item, ItemInput $itemInput, UpdateItemCompositionInputRequest $request): JsonResponse
     {
         return $this->compositionUpdateResponse($item, $itemInput, 1, $request, 'Material actualizado correctamente.');
@@ -575,6 +648,33 @@ class ItemController extends Controller
         return $this->compositionStoreResponse($item, 2, $request, 'Mano de obra agregada correctamente al item.');
     }
 
+    public function syncLabor(Item $item, SyncItemCompositionInputsRequest $request): JsonResponse
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_create']) {
+            return $this->forbiddenResponse('No tiene permisos para modificar la composicion del item.');
+        }
+
+        try {
+            $data = $this->itemCompositionService->syncType(
+                $item,
+                2,
+                $request->validated('items'),
+                $request->validated('deleted_input_ids') ?? [],
+                $request->user(),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $this->validationFailureResponse($exception->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Mano de obra del item sincronizada correctamente.',
+            'data' => $data,
+        ]);
+    }
+
     public function updateLabor(Item $item, ItemInput $itemInput, UpdateItemCompositionInputRequest $request): JsonResponse
     {
         return $this->compositionUpdateResponse($item, $itemInput, 2, $request, 'Mano de obra actualizada correctamente.');
@@ -609,6 +709,33 @@ class ItemController extends Controller
     public function storeMachinery(Item $item, StoreItemCompositionInputRequest $request): JsonResponse
     {
         return $this->compositionStoreResponse($item, 3, $request, 'Maquinaria agregada correctamente al item.');
+    }
+
+    public function syncMachinery(Item $item, SyncItemCompositionInputsRequest $request): JsonResponse
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_create']) {
+            return $this->forbiddenResponse('No tiene permisos para modificar la composicion del item.');
+        }
+
+        try {
+            $data = $this->itemCompositionService->syncType(
+                $item,
+                3,
+                $request->validated('items'),
+                $request->validated('deleted_input_ids') ?? [],
+                $request->user(),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $this->validationFailureResponse($exception->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Maquinaria del item sincronizada correctamente.',
+            'data' => $data,
+        ]);
     }
 
     public function updateMachinery(Item $item, ItemInput $itemInput, UpdateItemCompositionInputRequest $request): JsonResponse
@@ -811,5 +938,17 @@ class ItemController extends Controller
             'message' => $message,
             'errors' => null,
         ], 422);
+    }
+
+    private function serializeFileItem(Item $item): array
+    {
+        return [
+            'id_item' => $item->id_item,
+            'name' => $item->item,
+            'specification' => $item->especificacion,
+            'specification_url' => $item->especificacion ? Storage::disk('public')->url($item->especificacion) : null,
+            'sheet' => $item->ficha,
+            'sheet_url' => $item->ficha ? Storage::disk('public')->url($item->ficha) : null,
+        ];
     }
 }

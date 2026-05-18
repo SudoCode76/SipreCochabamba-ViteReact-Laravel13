@@ -65,12 +65,27 @@ export default function ItemsPage() {
   const [materialsOpen, setMaterialsOpen] = useState(false);
   const [materialsItem, setMaterialsItem] = useState(null);
   const [materialSearch, setMaterialSearch] = useState("");
+  const [selectedMaterialId, setSelectedMaterialId] = useState("");
+  const [materialComboboxOpen, setMaterialComboboxOpen] = useState(false);
+  const [draftMaterials, setDraftMaterials] = useState([]);
+  const [materialDraftDirty, setMaterialDraftDirty] = useState(false);
+  const [deletedMaterialInputIds, setDeletedMaterialInputIds] = useState([]);
   const [laborOpen, setLaborOpen] = useState(false);
   const [laborItem, setLaborItem] = useState(null);
   const [laborSearch, setLaborSearch] = useState("");
+  const [selectedLaborId, setSelectedLaborId] = useState("");
+  const [laborComboboxOpen, setLaborComboboxOpen] = useState(false);
+  const [draftLabor, setDraftLabor] = useState([]);
+  const [laborDraftDirty, setLaborDraftDirty] = useState(false);
+  const [deletedLaborInputIds, setDeletedLaborInputIds] = useState([]);
   const [machineryOpen, setMachineryOpen] = useState(false);
   const [machineryItem, setMachineryItem] = useState(null);
   const [machinerySearch, setMachinerySearch] = useState("");
+  const [selectedMachineryId, setSelectedMachineryId] = useState("");
+  const [machineryComboboxOpen, setMachineryComboboxOpen] = useState(false);
+  const [draftMachinery, setDraftMachinery] = useState([]);
+  const [machineryDraftDirty, setMachineryDraftDirty] = useState(false);
+  const [deletedMachineryInputIds, setDeletedMachineryInputIds] = useState([]);
   const [filesOpen, setFilesOpen] = useState(false);
   const [filesItem, setFilesItem] = useState(null);
   const [recalculateOpen, setRecalculateOpen] = useState(false);
@@ -129,36 +144,66 @@ export default function ItemsPage() {
     setMaterialsItem(item);
     setMaterialsOpen(true);
     setMaterialSearch("");
+    setSelectedMaterialId("");
+    setMaterialComboboxOpen(false);
+    setDraftMaterials([]);
+    setMaterialDraftDirty(false);
+    setDeletedMaterialInputIds([]);
   };
 
   const closeMaterials = () => {
     setMaterialsOpen(false);
     setMaterialsItem(null);
     setMaterialSearch("");
+    setSelectedMaterialId("");
+    setMaterialComboboxOpen(false);
+    setDraftMaterials([]);
+    setMaterialDraftDirty(false);
+    setDeletedMaterialInputIds([]);
   };
 
   const openLabor = (item) => {
     setLaborItem(item);
     setLaborOpen(true);
     setLaborSearch("");
+    setSelectedLaborId("");
+    setLaborComboboxOpen(false);
+    setDraftLabor([]);
+    setLaborDraftDirty(false);
+    setDeletedLaborInputIds([]);
   };
 
   const closeLabor = () => {
     setLaborOpen(false);
     setLaborItem(null);
     setLaborSearch("");
+    setSelectedLaborId("");
+    setLaborComboboxOpen(false);
+    setDraftLabor([]);
+    setLaborDraftDirty(false);
+    setDeletedLaborInputIds([]);
   };
 
   const openMachinery = (item) => {
     setMachineryItem(item);
     setMachineryOpen(true);
     setMachinerySearch("");
+    setSelectedMachineryId("");
+    setMachineryComboboxOpen(false);
+    setDraftMachinery([]);
+    setMachineryDraftDirty(false);
+    setDeletedMachineryInputIds([]);
   };
 
   const closeMachinery = () => {
     setMachineryOpen(false);
     setMachineryItem(null);
     setMachinerySearch("");
+    setSelectedMachineryId("");
+    setMachineryComboboxOpen(false);
+    setDraftMachinery([]);
+    setMachineryDraftDirty(false);
+    setDeletedMachineryInputIds([]);
   };
 
   const openFiles = (item) => {
@@ -242,19 +287,12 @@ export default function ItemsPage() {
     enabled: materialsOpen,
   });
 
-  const addMaterialMutation = useMutation({
-    mutationFn: itemsService.addMaterial,
+  const syncMaterialsMutation = useMutation({
+    mutationFn: itemsService.syncMaterials,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["item-materials", materialsItem?.id_item] });
       queryClient.invalidateQueries({ queryKey: ["items"] });
-    },
-  });
-
-  const removeMaterialMutation = useMutation({
-    mutationFn: itemsService.removeMaterial,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["item-materials", materialsItem?.id_item] });
-      queryClient.invalidateQueries({ queryKey: ["items"] });
+      closeMaterials();
     },
   });
 
@@ -276,19 +314,12 @@ export default function ItemsPage() {
     enabled: laborOpen,
   });
 
-  const addLaborMutation = useMutation({
-    mutationFn: itemsService.addLabor,
+  const syncLaborMutation = useMutation({
+    mutationFn: itemsService.syncLabor,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["item-labor", laborItem?.id_item] });
       queryClient.invalidateQueries({ queryKey: ["items"] });
-    },
-  });
-
-  const removeLaborMutation = useMutation({
-    mutationFn: itemsService.removeLabor,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["item-labor", laborItem?.id_item] });
-      queryClient.invalidateQueries({ queryKey: ["items"] });
+      closeLabor();
     },
   });
 
@@ -310,19 +341,12 @@ export default function ItemsPage() {
     enabled: machineryOpen,
   });
 
-  const addMachineryMutation = useMutation({
-    mutationFn: itemsService.addMachinery,
+  const syncMachineryMutation = useMutation({
+    mutationFn: itemsService.syncMachinery,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["item-machinery", machineryItem?.id_item] });
       queryClient.invalidateQueries({ queryKey: ["items"] });
-    },
-  });
-
-  const removeMachineryMutation = useMutation({
-    mutationFn: itemsService.removeMachinery,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["item-machinery", machineryItem?.id_item] });
-      queryClient.invalidateQueries({ queryKey: ["items"] });
+      closeMachinery();
     },
   });
 
@@ -332,6 +356,12 @@ export default function ItemsPage() {
       queryClient.invalidateQueries({ queryKey: ["items"] });
       closeFiles();
     },
+  });
+
+  const { data: filesData, isLoading: filesLoading, isError: filesError } = useQuery({
+    queryKey: ["item-files", filesItem?.id_item],
+    queryFn: () => itemsService.getById(filesItem.id_item),
+    enabled: filesOpen && Boolean(filesItem?.id_item),
   });
 
   const recalculateMutation = useMutation({
@@ -667,6 +697,51 @@ export default function ItemsPage() {
     setEditUnitComboboxOpen(false);
   };
 
+  const handleMaterialSearchChange = (event) => {
+    const value = event.target.value;
+    setMaterialSearch(value);
+    setMaterialComboboxOpen(true);
+
+    const exactMatch = materialOptions.find((option) => option.text.toLowerCase() === value.trim().toLowerCase());
+    setSelectedMaterialId(exactMatch ? String(exactMatch.id) : "");
+  };
+
+  const handleSelectMaterial = (material) => {
+    setSelectedMaterialId(String(material.id));
+    setMaterialSearch(material.text);
+    setMaterialComboboxOpen(false);
+  };
+
+  const handleLaborSearchChange = (event) => {
+    const value = event.target.value;
+    setLaborSearch(value);
+    setLaborComboboxOpen(true);
+
+    const exactMatch = laborOptions.find((option) => option.text.toLowerCase() === value.trim().toLowerCase());
+    setSelectedLaborId(exactMatch ? String(exactMatch.id) : "");
+  };
+
+  const handleSelectLabor = (labor) => {
+    setSelectedLaborId(String(labor.id));
+    setLaborSearch(labor.text);
+    setLaborComboboxOpen(false);
+  };
+
+  const handleMachinerySearchChange = (event) => {
+    const value = event.target.value;
+    setMachinerySearch(value);
+    setMachineryComboboxOpen(true);
+
+    const exactMatch = machineryOptions.find((option) => option.text.toLowerCase() === value.trim().toLowerCase());
+    setSelectedMachineryId(exactMatch ? String(exactMatch.id) : "");
+  };
+
+  const handleSelectMachinery = (machinery) => {
+    setSelectedMachineryId(String(machinery.id));
+    setMachinerySearch(machinery.text);
+    setMachineryComboboxOpen(false);
+  };
+
   const handleCreateSubmit = async (event) => {
     event.preventDefault();
 
@@ -722,12 +797,12 @@ export default function ItemsPage() {
     }
   };
 
-  const handleAddMaterial = async (event) => {
+  const handleAddMaterial = (event) => {
     event.preventDefault();
     if (!materialsItem?.id_item) return;
 
     const formData = new FormData(event.currentTarget);
-    const idInsumo = Number(formData.get("id_insumo") || 0);
+    const idInsumo = Number(selectedMaterialId || 0);
     const cantidad = Number(formData.get("cantidad") || 0);
 
     if (!idInsumo || !cantidad || cantidad <= 0) {
@@ -735,37 +810,89 @@ export default function ItemsPage() {
       return;
     }
 
-    try {
-      await addMaterialMutation.mutateAsync({
-        itemId: materialsItem.id_item,
-        payload: { id_insumo: idInsumo, cantidad },
-      });
-      event.currentTarget.reset();
-      setMaterialSearch("");
-    } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudo agregar el material.");
+    const selectedOption = materialOptions.find((option) => Number(option.id) === idInsumo);
+
+    const existingIndex = materialRows.findIndex((row) => Number(row.id_insumo) === idInsumo);
+    const existingRow = existingIndex >= 0 ? materialRows[existingIndex] : null;
+    const unitPrice = Number(selectedOption?.precio ?? existingRow?.precio_unitario ?? 0);
+    const nextRow = {
+      id_item_insumo: existingRow?.id_item_insumo,
+      id_insumo: idInsumo,
+      descripcion: selectedOption?.text ?? existingRow?.descripcion ?? "",
+      unidad: selectedOption?.unidad ?? existingRow?.unidad ?? "",
+      cantidad,
+      precio_unitario: unitPrice,
+      parcial: cantidad * unitPrice,
+      persisted: Boolean(existingRow?.persisted),
+    };
+    const nextRows = existingIndex >= 0
+      ? materialRows.map((row, index) => (index === existingIndex ? nextRow : row))
+      : [...materialRows, nextRow];
+
+    setDraftMaterials(nextRows);
+    setMaterialDraftDirty(true);
+    setDeletedMaterialInputIds((currentIds) => currentIds.filter((inputId) => Number(inputId) !== idInsumo));
+    event.currentTarget.reset();
+    setMaterialSearch("");
+    setSelectedMaterialId("");
+    setMaterialComboboxOpen(false);
+  };
+
+  const handleRemoveMaterial = (material) => {
+    setDraftMaterials(materialRows.filter((row) => Number(row.id_insumo) !== Number(material.id_insumo)));
+    setMaterialDraftDirty(true);
+
+    if (material.persisted) {
+      setDeletedMaterialInputIds((currentIds) => Array.from(new Set([...currentIds, Number(material.id_insumo)])));
     }
   };
 
-  const handleRemoveMaterial = async (itemInputId) => {
+  const handleMaterialQuantityChange = (material, nextQuantity) => {
+    const quantity = nextQuantity === "" ? "" : Number(nextQuantity);
+
+    setDraftMaterials(materialRows.map((row) => {
+      if (Number(row.id_insumo) !== Number(material.id_insumo)) {
+        return row;
+      }
+
+      return {
+        ...row,
+        cantidad: quantity,
+        parcial: Number(quantity || 0) * Number(row.precio_unitario || 0),
+      };
+    }));
+    setMaterialDraftDirty(true);
+  };
+
+  const handleSaveMaterials = async () => {
     if (!materialsItem?.id_item) return;
+    if (materialRows.some((material) => !Number(material.cantidad) || Number(material.cantidad) <= 0)) {
+      alert("Todas las cantidades deben ser mayores a 0.");
+      return;
+    }
 
     try {
-      await removeMaterialMutation.mutateAsync({
+      await syncMaterialsMutation.mutateAsync({
         itemId: materialsItem.id_item,
-        itemInputId,
+        payload: {
+          items: materialRows.map((material) => ({
+            id_insumo: Number(material.id_insumo),
+            cantidad: Number(material.cantidad),
+          })),
+          deleted_input_ids: deletedMaterialInputIds,
+        },
       });
     } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudo quitar el material.");
+      alert(mutationError?.response?.data?.message || "No se pudieron guardar los materiales.");
     }
   };
 
-  const handleAddLabor = async (event) => {
+  const handleAddLabor = (event) => {
     event.preventDefault();
     if (!laborItem?.id_item) return;
 
     const formData = new FormData(event.currentTarget);
-    const idInsumo = Number(formData.get("id_insumo") || 0);
+    const idInsumo = Number(selectedLaborId || 0);
     const cantidad = Number(formData.get("cantidad") || 0);
 
     if (!idInsumo || !cantidad || cantidad <= 0) {
@@ -773,37 +900,82 @@ export default function ItemsPage() {
       return;
     }
 
-    try {
-      await addLaborMutation.mutateAsync({
-        itemId: laborItem.id_item,
-        payload: { id_insumo: idInsumo, cantidad },
-      });
-      event.currentTarget.reset();
-      setLaborSearch("");
-    } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudo agregar la mano de obra.");
+    const selectedOption = laborOptions.find((option) => Number(option.id) === idInsumo);
+    const existingIndex = laborRows.findIndex((row) => Number(row.id_insumo) === idInsumo);
+    const existingRow = existingIndex >= 0 ? laborRows[existingIndex] : null;
+    const unitPrice = Number(selectedOption?.precio ?? existingRow?.precio_unitario ?? 0);
+    const nextRow = {
+      id_item_insumo: existingRow?.id_item_insumo,
+      id_insumo: idInsumo,
+      descripcion: selectedOption?.text ?? existingRow?.descripcion ?? "",
+      unidad: selectedOption?.unidad ?? existingRow?.unidad ?? "",
+      cantidad,
+      precio_unitario: unitPrice,
+      parcial: cantidad * unitPrice,
+      persisted: Boolean(existingRow?.persisted),
+    };
+    const nextRows = existingIndex >= 0
+      ? laborRows.map((row, index) => (index === existingIndex ? nextRow : row))
+      : [...laborRows, nextRow];
+
+    setDraftLabor(nextRows);
+    setLaborDraftDirty(true);
+    setDeletedLaborInputIds((currentIds) => currentIds.filter((inputId) => Number(inputId) !== idInsumo));
+    event.currentTarget.reset();
+    setLaborSearch("");
+    setSelectedLaborId("");
+    setLaborComboboxOpen(false);
+  };
+
+  const handleRemoveLabor = (labor) => {
+    setDraftLabor(laborRows.filter((row) => Number(row.id_insumo) !== Number(labor.id_insumo)));
+    setLaborDraftDirty(true);
+
+    if (labor.persisted) {
+      setDeletedLaborInputIds((currentIds) => Array.from(new Set([...currentIds, Number(labor.id_insumo)])));
     }
   };
 
-  const handleRemoveLabor = async (itemInputId) => {
+  const handleLaborQuantityChange = (labor, nextQuantity) => {
+    const quantity = nextQuantity === "" ? "" : Number(nextQuantity);
+
+    setDraftLabor(laborRows.map((row) => (
+      Number(row.id_insumo) === Number(labor.id_insumo)
+        ? { ...row, cantidad: quantity, parcial: Number(quantity || 0) * Number(row.precio_unitario || 0) }
+        : row
+    )));
+    setLaborDraftDirty(true);
+  };
+
+  const handleSaveLabor = async () => {
     if (!laborItem?.id_item) return;
+    if (laborRows.some((labor) => !Number(labor.cantidad) || Number(labor.cantidad) <= 0)) {
+      alert("Todas las cantidades deben ser mayores a 0.");
+      return;
+    }
 
     try {
-      await removeLaborMutation.mutateAsync({
+      await syncLaborMutation.mutateAsync({
         itemId: laborItem.id_item,
-        itemInputId,
+        payload: {
+          items: laborRows.map((labor) => ({
+            id_insumo: Number(labor.id_insumo),
+            cantidad: Number(labor.cantidad),
+          })),
+          deleted_input_ids: deletedLaborInputIds,
+        },
       });
     } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudo quitar la mano de obra.");
+      alert(mutationError?.response?.data?.message || "No se pudo guardar la mano de obra.");
     }
   };
 
-  const handleAddMachinery = async (event) => {
+  const handleAddMachinery = (event) => {
     event.preventDefault();
     if (!machineryItem?.id_item) return;
 
     const formData = new FormData(event.currentTarget);
-    const idInsumo = Number(formData.get("id_insumo") || 0);
+    const idInsumo = Number(selectedMachineryId || 0);
     const cantidad = Number(formData.get("cantidad") || 0);
 
     if (!idInsumo || !cantidad || cantidad <= 0) {
@@ -811,51 +983,87 @@ export default function ItemsPage() {
       return;
     }
 
-    try {
-      await addMachineryMutation.mutateAsync({
-        itemId: machineryItem.id_item,
-        payload: { id_insumo: idInsumo, cantidad },
-      });
-      event.currentTarget.reset();
-      setMachinerySearch("");
-    } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudo agregar maquinaria.");
+    const selectedOption = machineryOptions.find((option) => Number(option.id) === idInsumo);
+    const existingIndex = machineryRows.findIndex((row) => Number(row.id_insumo) === idInsumo);
+    const existingRow = existingIndex >= 0 ? machineryRows[existingIndex] : null;
+    const unitPrice = Number(selectedOption?.precio ?? existingRow?.precio_unitario ?? 0);
+    const nextRow = {
+      id_item_insumo: existingRow?.id_item_insumo,
+      id_insumo: idInsumo,
+      descripcion: selectedOption?.text ?? existingRow?.descripcion ?? "",
+      unidad: selectedOption?.unidad ?? existingRow?.unidad ?? "",
+      cantidad,
+      precio_unitario: unitPrice,
+      parcial: cantidad * unitPrice,
+      persisted: Boolean(existingRow?.persisted),
+    };
+    const nextRows = existingIndex >= 0
+      ? machineryRows.map((row, index) => (index === existingIndex ? nextRow : row))
+      : [...machineryRows, nextRow];
+
+    setDraftMachinery(nextRows);
+    setMachineryDraftDirty(true);
+    setDeletedMachineryInputIds((currentIds) => currentIds.filter((inputId) => Number(inputId) !== idInsumo));
+    event.currentTarget.reset();
+    setMachinerySearch("");
+    setSelectedMachineryId("");
+    setMachineryComboboxOpen(false);
+  };
+
+  const handleRemoveMachinery = (machinery) => {
+    setDraftMachinery(machineryRows.filter((row) => Number(row.id_insumo) !== Number(machinery.id_insumo)));
+    setMachineryDraftDirty(true);
+
+    if (machinery.persisted) {
+      setDeletedMachineryInputIds((currentIds) => Array.from(new Set([...currentIds, Number(machinery.id_insumo)])));
     }
   };
 
-  const handleRemoveMachinery = async (itemInputId) => {
+  const handleMachineryQuantityChange = (machinery, nextQuantity) => {
+    const quantity = nextQuantity === "" ? "" : Number(nextQuantity);
+
+    setDraftMachinery(machineryRows.map((row) => (
+      Number(row.id_insumo) === Number(machinery.id_insumo)
+        ? { ...row, cantidad: quantity, parcial: Number(quantity || 0) * Number(row.precio_unitario || 0) }
+        : row
+    )));
+    setMachineryDraftDirty(true);
+  };
+
+  const handleSaveMachinery = async () => {
     if (!machineryItem?.id_item) return;
+    if (machineryRows.some((machinery) => !Number(machinery.cantidad) || Number(machinery.cantidad) <= 0)) {
+      alert("Todas las cantidades deben ser mayores a 0.");
+      return;
+    }
 
     try {
-      await removeMachineryMutation.mutateAsync({
+      await syncMachineryMutation.mutateAsync({
         itemId: machineryItem.id_item,
-        itemInputId,
+        payload: {
+          items: machineryRows.map((machinery) => ({
+            id_insumo: Number(machinery.id_insumo),
+            cantidad: Number(machinery.cantidad),
+          })),
+          deleted_input_ids: deletedMachineryInputIds,
+        },
       });
     } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudo quitar maquinaria.");
+      alert(mutationError?.response?.data?.message || "No se pudo guardar maquinaria.");
     }
   };
 
   const handleFilesSubmit = async (event) => {
     event.preventDefault();
-    if (!filesItem?.id_item) return;
+    const currentFilesItem = filesData?.data?.item;
+    if (!currentFilesItem?.id_item) return;
 
     const formData = new FormData(event.currentTarget);
     const payload = new FormData();
-    payload.append("item", filesItem.name || "");
+    payload.append("item", currentFilesItem.name || "");
 
-    const specification = formData.get("specification");
-    const sheet = formData.get("sheet");
     const specificationFile = formData.get("specification_file");
     const sheetFile = formData.get("sheet_file");
-
-    if (typeof specification === "string" && specification.trim()) {
-      payload.append("specification", specification.trim());
-    }
-
-    if (typeof sheet === "string" && sheet.trim()) {
-      payload.append("sheet", sheet.trim());
-    }
 
     if (specificationFile instanceof File && specificationFile.size > 0) {
       payload.append("specification_file", specificationFile);
@@ -867,11 +1075,11 @@ export default function ItemsPage() {
 
     try {
       await updateFilesMutation.mutateAsync({
-        id: filesItem.id_item,
+        id: currentFilesItem.id_item,
         formData: payload,
       });
     } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudieron guardar los archivos del item.");
+      alert(collectValidationMessages(mutationError, "No se pudieron guardar los archivos del item.").join("\n"));
     }
   };
 
@@ -950,20 +1158,63 @@ export default function ItemsPage() {
     }
   };
 
-  const materials = materialsData?.data?.items ?? [];
   const materialOptions = inputOptionsData?.data?.items ?? [];
   const materialContext = materialsContextData?.data ?? null;
-  const materialsTotal = materials.reduce((acc, material) => acc + Number(material.parcial || 0), 0);
-  const laborItems = laborData?.data?.items ?? [];
+  const initialMaterialRows = useMemo(() => {
+    const currentMaterials = materialsData?.data?.items ?? [];
+
+    return currentMaterials.map((material) => ({
+      id_item_insumo: material.id_item_insumo,
+      id_insumo: material.id_insumo,
+      descripcion: material.descripcion,
+      unidad: material.unidad,
+      cantidad: Number(material.cantidad || 0),
+      precio_unitario: Number(material.precio_unitario || 0),
+      parcial: Number(material.cantidad || 0) * Number(material.precio_unitario || 0),
+      persisted: true,
+    }));
+  }, [materialsData]);
+  const materialRows = materialDraftDirty ? draftMaterials : initialMaterialRows;
+  const materialsTotal = materialRows.reduce((acc, material) => acc + Number(material.parcial || 0), 0);
   const laborOptions = laborOptionsData?.data?.items ?? [];
   const laborContext = laborContextData?.data ?? null;
-  const laborTotal = laborItems.reduce((acc, labor) => acc + Number(labor.parcial || 0), 0);
-  const machineryItems = machineryData?.data?.items ?? [];
+  const initialLaborRows = useMemo(() => {
+    const currentLabor = laborData?.data?.items ?? [];
+
+    return currentLabor.map((labor) => ({
+      id_item_insumo: labor.id_item_insumo,
+      id_insumo: labor.id_insumo,
+      descripcion: labor.descripcion,
+      unidad: labor.unidad,
+      cantidad: Number(labor.cantidad || 0),
+      precio_unitario: Number(labor.precio_unitario || 0),
+      parcial: Number(labor.cantidad || 0) * Number(labor.precio_unitario || 0),
+      persisted: true,
+    }));
+  }, [laborData]);
+  const laborRows = laborDraftDirty ? draftLabor : initialLaborRows;
+  const laborTotal = laborRows.reduce((acc, labor) => acc + Number(labor.parcial || 0), 0);
   const machineryOptions = machineryOptionsData?.data?.items ?? [];
   const machineryContext = machineryContextData?.data ?? null;
-  const machineryTotal = machineryItems.reduce((acc, machinery) => acc + Number(machinery.parcial || 0), 0);
-  const specificationUrl = filesItem?.specification ? `/storage/${filesItem.specification}` : null;
-  const sheetUrl = filesItem?.sheet ? `/storage/${filesItem.sheet}` : null;
+  const initialMachineryRows = useMemo(() => {
+    const currentMachinery = machineryData?.data?.items ?? [];
+
+    return currentMachinery.map((machinery) => ({
+      id_item_insumo: machinery.id_item_insumo,
+      id_insumo: machinery.id_insumo,
+      descripcion: machinery.descripcion,
+      unidad: machinery.unidad,
+      cantidad: Number(machinery.cantidad || 0),
+      precio_unitario: Number(machinery.precio_unitario || 0),
+      parcial: Number(machinery.cantidad || 0) * Number(machinery.precio_unitario || 0),
+      persisted: true,
+    }));
+  }, [machineryData]);
+  const machineryRows = machineryDraftDirty ? draftMachinery : initialMachineryRows;
+  const machineryTotal = machineryRows.reduce((acc, machinery) => acc + Number(machinery.parcial || 0), 0);
+  const currentFilesItem = filesData?.data?.item ?? null;
+  const specificationUrl = currentFilesItem?.specification_url ?? null;
+  const sheetUrl = currentFilesItem?.sheet_url ?? null;
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
@@ -1608,7 +1859,7 @@ export default function ItemsPage() {
                   <div>
                     <CardTitle className="text-2xl tracking-[-0.04em]">Adjuntar Archivos al Item</CardTitle>
                     <CardDescription>
-                      {filesItem?.name ?? "Carga especificaciones y ficha tecnica del item."}
+                      {currentFilesItem?.name ?? filesItem?.name ?? "Carga especificaciones y ficha tecnica del item."}
                     </CardDescription>
                   </div>
                   <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeFiles}>
@@ -1620,8 +1871,8 @@ export default function ItemsPage() {
               <CardContent className="p-5 sm:p-6">
                 <form className="flex flex-col gap-6" onSubmit={handleFilesSubmit}>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="specification" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Descripcion</Label>
-                    <Input id="specification" name="specification" defaultValue="" className="h-12 rounded-2xl border-border/80 bg-background/90" />
+                    <Label htmlFor="files_item_name" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Item</Label>
+                    <Input id="files_item_name" value={currentFilesItem?.name ?? ""} className="h-12 rounded-2xl border-border/80 bg-muted/20" readOnly />
                   </div>
 
                   <div className="grid gap-5 sm:grid-cols-2">
@@ -1652,7 +1903,13 @@ export default function ItemsPage() {
                     </div>
                   </div>
 
-                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={updateFilesMutation.isPending}>
+                  {filesError && (
+                    <Alert variant="destructive">
+                      <AlertDescription>No se pudieron cargar los datos actuales del item.</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={updateFilesMutation.isPending || filesLoading || !currentFilesItem}>
                     {updateFilesMutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 size-4 animate-spin" />
@@ -1660,6 +1917,12 @@ export default function ItemsPage() {
                       </>
                     ) : "Agregar"}
                   </Button>
+
+                  {filesLoading && (
+                    <div className="flex items-center text-sm text-muted-foreground">
+                      <Loader2 className="mr-2 size-4 animate-spin" /> Cargando datos del item...
+                    </div>
+                  )}
                 </form>
               </CardContent>
             </Card>
@@ -1802,23 +2065,60 @@ export default function ItemsPage() {
 
                 <form className="grid gap-4 lg:grid-cols-[1fr_180px_auto] lg:items-end" onSubmit={handleAddMaterial}>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="id_insumo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Material</Label>
-                    <select id="id_insumo" name="id_insumo" className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none transition focus:border-foreground/20" required>
-                      <option value="">--- Seleccionar ---</option>
-                      {materialOptions.map((option) => (
-                        <option key={option.id} value={option.id}>{option.text}</option>
-                      ))}
-                    </select>
-                    <Input placeholder="Buscar material" className="h-11 rounded-2xl border-border/80 bg-background/90" value={materialSearch} onChange={(event) => setMaterialSearch(event.target.value)} />
+                    <Label htmlFor="material_combobox" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Material</Label>
+                    <div className="relative">
+                      <Input
+                        id="material_combobox"
+                        placeholder="Buscar y seleccionar material"
+                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                        value={materialSearch}
+                        onChange={handleMaterialSearchChange}
+                        onFocus={() => setMaterialComboboxOpen(true)}
+                        onBlur={() => window.setTimeout(() => setMaterialComboboxOpen(false), 120)}
+                        autoComplete="off"
+                        required
+                      />
+                      <input type="hidden" name="id_insumo" value={selectedMaterialId} readOnly />
+                      <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
+
+                      {materialComboboxOpen && (
+                        <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 max-h-56 overflow-y-auto rounded-2xl border border-border/80 bg-background p-1 shadow-lg">
+                          {materialOptions.map((material) => {
+                            const isSelected = String(material.id) === String(selectedMaterialId);
+
+                            return (
+                              <button
+                                key={material.id}
+                                type="button"
+                                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition hover:bg-muted ${isSelected ? "bg-muted font-medium text-foreground" : "text-muted-foreground"}`}
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  handleSelectMaterial(material);
+                                }}
+                              >
+                                <span>{material.text}</span>
+                                {isSelected && <span className="text-xs uppercase tracking-[0.18em] text-emerald-700">Seleccionado</span>}
+                              </button>
+                            );
+                          })}
+
+                          {materialOptions.length === 0 && (
+                            <div className="px-3 py-3 text-sm text-muted-foreground">
+                              No se encontraron materiales.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="cantidad" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cantidad</Label>
-                    <Input id="cantidad" name="cantidad" type="number" min="1" step="1" className="h-12 rounded-2xl border-border/80 bg-background/90" required />
+                    <Input id="cantidad" name="cantidad" type="number" min="0.0001" step="0.0001" className="h-12 rounded-2xl border-border/80 bg-background/90" required />
                   </div>
 
-                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 px-6 text-white hover:bg-emerald-700" disabled={addMaterialMutation.isPending}>
-                    {addMaterialMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "Agregar"}
+                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 px-6 text-white hover:bg-emerald-700">
+                    Agregar
                   </Button>
                 </form>
 
@@ -1836,21 +2136,30 @@ export default function ItemsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {materials.map((material, index) => (
-                          <tr key={material.id_item_insumo || index} className={index < materials.length - 1 ? "border-b border-border/60" : ""}>
+                        {materialRows.map((material, index) => (
+                          <tr key={material.id_item_insumo || `new-${material.id_insumo}`} className={index < materialRows.length - 1 ? "border-b border-border/60" : ""}>
                             <td className="px-4 py-3">{material.descripcion ?? "-"}</td>
                             <td className="px-4 py-3">{material.unidad ?? "-"}</td>
-                            <td className="px-4 py-3">{Math.round(Number(material.cantidad || 0))}</td>
+                            <td className="px-4 py-3">
+                              <Input
+                                type="number"
+                                min="0.0001"
+                                step="0.0001"
+                                value={material.cantidad}
+                                onChange={(event) => handleMaterialQuantityChange(material, event.target.value)}
+                                className="h-10 min-w-28 rounded-xl border-border/80 bg-background/90"
+                              />
+                            </td>
                             <td className="px-4 py-3">{Number(material.precio_unitario || 0).toFixed(2)}</td>
                             <td className="px-4 py-3">{Number(material.parcial || 0).toFixed(2)}</td>
                             <td className="px-4 py-3 text-center">
-                              <Button type="button" className="h-9 rounded-md bg-red-600 px-3 text-white hover:bg-red-700" onClick={() => handleRemoveMaterial(material.id_item_insumo)} disabled={removeMaterialMutation.isPending}>
+                              <Button type="button" className="h-9 rounded-md bg-red-600 px-3 text-white hover:bg-red-700" onClick={() => handleRemoveMaterial(material)}>
                                 <Trash2 className="size-4" />
                               </Button>
                             </td>
                           </tr>
                         ))}
-                        {materials.length === 0 && !materialsLoading && (
+                        {materialRows.length === 0 && !materialsLoading && (
                           <tr>
                             <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No hay materiales registrados.</td>
                           </tr>
@@ -1863,6 +2172,16 @@ export default function ItemsPage() {
                 <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
                   <p className="text-3xl font-semibold tracking-[-0.03em] text-foreground">Total</p>
                   <p className="mt-1 text-lg font-medium text-muted-foreground">{materialsTotal.toFixed(2)} Bs.</p>
+                </div>
+
+                <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
+                  <Button type="button" variant="outline" className="rounded-full" onClick={closeMaterials}>
+                    Cancelar
+                  </Button>
+                  <Button type="button" className="rounded-full bg-foreground text-background hover:bg-foreground/90" onClick={handleSaveMaterials} disabled={syncMaterialsMutation.isPending || materialsLoading}>
+                    {syncMaterialsMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                    Guardar materiales
+                  </Button>
                 </div>
 
                 {(inputOptionsLoading || materialsLoading) && (
@@ -1913,23 +2232,60 @@ export default function ItemsPage() {
 
                 <form className="grid gap-4 lg:grid-cols-[1fr_180px_auto] lg:items-end" onSubmit={handleAddLabor}>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="labor_id_insumo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Mano de Obra del Item</Label>
-                    <select id="labor_id_insumo" name="id_insumo" className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none transition focus:border-foreground/20" required>
-                      <option value="">--- Seleccionar ---</option>
-                      {laborOptions.map((option) => (
-                        <option key={option.id} value={option.id}>{option.text}</option>
-                      ))}
-                    </select>
-                    <Input placeholder="Buscar mano de obra" className="h-11 rounded-2xl border-border/80 bg-background/90" value={laborSearch} onChange={(event) => setLaborSearch(event.target.value)} />
+                    <Label htmlFor="labor_combobox" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Mano de Obra del Item</Label>
+                    <div className="relative">
+                      <Input
+                        id="labor_combobox"
+                        placeholder="Buscar y seleccionar mano de obra"
+                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                        value={laborSearch}
+                        onChange={handleLaborSearchChange}
+                        onFocus={() => setLaborComboboxOpen(true)}
+                        onBlur={() => window.setTimeout(() => setLaborComboboxOpen(false), 120)}
+                        autoComplete="off"
+                        required
+                      />
+                      <input type="hidden" name="id_insumo" value={selectedLaborId} readOnly />
+                      <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
+
+                      {laborComboboxOpen && (
+                        <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 max-h-56 overflow-y-auto rounded-2xl border border-border/80 bg-background p-1 shadow-lg">
+                          {laborOptions.map((labor) => {
+                            const isSelected = String(labor.id) === String(selectedLaborId);
+
+                            return (
+                              <button
+                                key={labor.id}
+                                type="button"
+                                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition hover:bg-muted ${isSelected ? "bg-muted font-medium text-foreground" : "text-muted-foreground"}`}
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  handleSelectLabor(labor);
+                                }}
+                              >
+                                <span>{labor.text}</span>
+                                {isSelected && <span className="text-xs uppercase tracking-[0.18em] text-emerald-700">Seleccionado</span>}
+                              </button>
+                            );
+                          })}
+
+                          {laborOptions.length === 0 && (
+                            <div className="px-3 py-3 text-sm text-muted-foreground">
+                              No se encontró mano de obra.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="labor_cantidad" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cantidad</Label>
-                    <Input id="labor_cantidad" name="cantidad" type="number" min="1" step="1" className="h-12 rounded-2xl border-border/80 bg-background/90" required />
+                    <Input id="labor_cantidad" name="cantidad" type="number" min="0.0001" step="0.0001" className="h-12 rounded-2xl border-border/80 bg-background/90" required />
                   </div>
 
-                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 px-6 text-white hover:bg-emerald-700" disabled={addLaborMutation.isPending}>
-                    {addLaborMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "Agregar"}
+                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 px-6 text-white hover:bg-emerald-700">
+                    Agregar
                   </Button>
                 </form>
 
@@ -1947,21 +2303,30 @@ export default function ItemsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {laborItems.map((labor, index) => (
-                          <tr key={labor.id_item_insumo || index} className={index < laborItems.length - 1 ? "border-b border-border/60" : ""}>
+                        {laborRows.map((labor, index) => (
+                          <tr key={labor.id_item_insumo || `new-labor-${labor.id_insumo}`} className={index < laborRows.length - 1 ? "border-b border-border/60" : ""}>
                             <td className="px-4 py-3">{labor.descripcion ?? "-"}</td>
                             <td className="px-4 py-3">{labor.unidad ?? "-"}</td>
-                            <td className="px-4 py-3">{Math.round(Number(labor.cantidad || 0))}</td>
+                            <td className="px-4 py-3">
+                              <Input
+                                type="number"
+                                min="0.0001"
+                                step="0.0001"
+                                value={labor.cantidad}
+                                onChange={(event) => handleLaborQuantityChange(labor, event.target.value)}
+                                className="h-10 min-w-28 rounded-xl border-border/80 bg-background/90"
+                              />
+                            </td>
                             <td className="px-4 py-3">{Number(labor.precio_unitario || 0).toFixed(2)}</td>
                             <td className="px-4 py-3">{Number(labor.parcial || 0).toFixed(2)}</td>
                             <td className="px-4 py-3 text-center">
-                              <Button type="button" className="h-9 rounded-md bg-red-600 px-3 text-white hover:bg-red-700" onClick={() => handleRemoveLabor(labor.id_item_insumo)} disabled={removeLaborMutation.isPending}>
+                              <Button type="button" className="h-9 rounded-md bg-red-600 px-3 text-white hover:bg-red-700" onClick={() => handleRemoveLabor(labor)}>
                                 <Trash2 className="size-4" />
                               </Button>
                             </td>
                           </tr>
                         ))}
-                        {laborItems.length === 0 && !laborLoading && (
+                        {laborRows.length === 0 && !laborLoading && (
                           <tr>
                             <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No hay mano de obra registrada.</td>
                           </tr>
@@ -1974,6 +2339,16 @@ export default function ItemsPage() {
                 <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
                   <p className="text-3xl font-semibold tracking-[-0.03em] text-foreground">Total</p>
                   <p className="mt-1 text-lg font-medium text-muted-foreground">{laborTotal.toFixed(2)} Bs.</p>
+                </div>
+
+                <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
+                  <Button type="button" variant="outline" className="rounded-full" onClick={closeLabor}>
+                    Cancelar
+                  </Button>
+                  <Button type="button" className="rounded-full bg-foreground text-background hover:bg-foreground/90" onClick={handleSaveLabor} disabled={syncLaborMutation.isPending || laborLoading}>
+                    {syncLaborMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                    Guardar mano de obra
+                  </Button>
                 </div>
 
                 {(laborOptionsLoading || laborLoading) && (
@@ -2024,14 +2399,51 @@ export default function ItemsPage() {
 
                 <form className="grid gap-4 lg:grid-cols-[1fr_180px_auto] lg:items-end" onSubmit={handleAddMachinery}>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="machinery_id_insumo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Equipos, Maquinaria, Herramientas de Item</Label>
-                    <select id="machinery_id_insumo" name="id_insumo" className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4 text-sm text-foreground outline-none transition focus:border-foreground/20" required>
-                      <option value="">--- Seleccionar ---</option>
-                      {machineryOptions.map((option) => (
-                        <option key={option.id} value={option.id}>{option.text}</option>
-                      ))}
-                    </select>
-                    <Input placeholder="Buscar maquinaria" className="h-11 rounded-2xl border-border/80 bg-background/90" value={machinerySearch} onChange={(event) => setMachinerySearch(event.target.value)} />
+                    <Label htmlFor="machinery_combobox" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Equipos, Maquinaria, Herramientas de Item</Label>
+                    <div className="relative">
+                      <Input
+                        id="machinery_combobox"
+                        placeholder="Buscar y seleccionar maquinaria"
+                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                        value={machinerySearch}
+                        onChange={handleMachinerySearchChange}
+                        onFocus={() => setMachineryComboboxOpen(true)}
+                        onBlur={() => window.setTimeout(() => setMachineryComboboxOpen(false), 120)}
+                        autoComplete="off"
+                        required
+                      />
+                      <input type="hidden" name="id_insumo" value={selectedMachineryId} readOnly />
+                      <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
+
+                      {machineryComboboxOpen && (
+                        <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 max-h-56 overflow-y-auto rounded-2xl border border-border/80 bg-background p-1 shadow-lg">
+                          {machineryOptions.map((machinery) => {
+                            const isSelected = String(machinery.id) === String(selectedMachineryId);
+
+                            return (
+                              <button
+                                key={machinery.id}
+                                type="button"
+                                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition hover:bg-muted ${isSelected ? "bg-muted font-medium text-foreground" : "text-muted-foreground"}`}
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  handleSelectMachinery(machinery);
+                                }}
+                              >
+                                <span>{machinery.text}</span>
+                                {isSelected && <span className="text-xs uppercase tracking-[0.18em] text-emerald-700">Seleccionado</span>}
+                              </button>
+                            );
+                          })}
+
+                          {machineryOptions.length === 0 && (
+                            <div className="px-3 py-3 text-sm text-muted-foreground">
+                              No se encontró maquinaria.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-2">
@@ -2039,8 +2451,8 @@ export default function ItemsPage() {
                     <Input id="machinery_cantidad" name="cantidad" type="number" min="0.0001" step="0.0001" className="h-12 rounded-2xl border-border/80 bg-background/90" required />
                   </div>
 
-                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 px-6 text-white hover:bg-emerald-700" disabled={addMachineryMutation.isPending}>
-                    {addMachineryMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "Agregar"}
+                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 px-6 text-white hover:bg-emerald-700">
+                    Agregar
                   </Button>
                 </form>
 
@@ -2058,21 +2470,30 @@ export default function ItemsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {machineryItems.map((machinery, index) => (
-                          <tr key={machinery.id_item_insumo || index} className={index < machineryItems.length - 1 ? "border-b border-border/60" : ""}>
+                        {machineryRows.map((machinery, index) => (
+                          <tr key={machinery.id_item_insumo || `new-machinery-${machinery.id_insumo}`} className={index < machineryRows.length - 1 ? "border-b border-border/60" : ""}>
                             <td className="px-4 py-3">{machinery.descripcion ?? "-"}</td>
                             <td className="px-4 py-3">{machinery.unidad ?? "-"}</td>
-                            <td className="px-4 py-3">{Number(machinery.cantidad || 0).toFixed(2)}</td>
+                            <td className="px-4 py-3">
+                              <Input
+                                type="number"
+                                min="0.0001"
+                                step="0.0001"
+                                value={machinery.cantidad}
+                                onChange={(event) => handleMachineryQuantityChange(machinery, event.target.value)}
+                                className="h-10 min-w-28 rounded-xl border-border/80 bg-background/90"
+                              />
+                            </td>
                             <td className="px-4 py-3">{Number(machinery.precio_unitario || 0).toFixed(2)}</td>
                             <td className="px-4 py-3">{Number(machinery.parcial || 0).toFixed(2)}</td>
                             <td className="px-4 py-3 text-center">
-                              <Button type="button" className="h-9 rounded-md bg-red-600 px-3 text-white hover:bg-red-700" onClick={() => handleRemoveMachinery(machinery.id_item_insumo)} disabled={removeMachineryMutation.isPending}>
+                              <Button type="button" className="h-9 rounded-md bg-red-600 px-3 text-white hover:bg-red-700" onClick={() => handleRemoveMachinery(machinery)}>
                                 <Trash2 className="size-4" />
                               </Button>
                             </td>
                           </tr>
                         ))}
-                        {machineryItems.length === 0 && !machineryLoading && (
+                        {machineryRows.length === 0 && !machineryLoading && (
                           <tr>
                             <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No hay maquinaria registrada.</td>
                           </tr>
@@ -2085,6 +2506,16 @@ export default function ItemsPage() {
                 <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
                   <p className="text-3xl font-semibold tracking-[-0.03em] text-foreground">Total</p>
                   <p className="mt-1 text-lg font-medium text-muted-foreground">{machineryTotal.toFixed(2)} Bs.</p>
+                </div>
+
+                <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
+                  <Button type="button" variant="outline" className="rounded-full" onClick={closeMachinery}>
+                    Cancelar
+                  </Button>
+                  <Button type="button" className="rounded-full bg-foreground text-background hover:bg-foreground/90" onClick={handleSaveMachinery} disabled={syncMachineryMutation.isPending || machineryLoading}>
+                    {syncMachineryMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                    Guardar maquinaria
+                  </Button>
                 </div>
 
                 {(machineryOptionsLoading || machineryLoading) && (

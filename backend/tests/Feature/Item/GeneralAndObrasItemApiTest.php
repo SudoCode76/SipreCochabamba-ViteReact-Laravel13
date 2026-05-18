@@ -8,7 +8,9 @@ use App\Models\SystemFunction;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\InteractsWithLegacyAuth;
 use Tests\Concerns\InteractsWithLegacyInputs;
@@ -359,6 +361,67 @@ class GeneralAndObrasItemApiTest extends TestCase
             'status' => 'AC',
         ])->assertUnprocessable()
             ->assertJsonValidationErrors(['item']);
+    }
+
+    public function test_can_show_item_file_data_and_update_files_without_replacing_missing_attachment(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createItemRecord([
+            'especificacion' => 'archivos/items/especificaciones/anterior.pdf',
+            'ficha' => 'archivos/items/fichas/ficha-anterior.pdf',
+        ]);
+
+        $this->getJson('/api/v1/items/1')
+            ->assertOk()
+            ->assertJsonPath('data.item.id_item', 1)
+            ->assertJsonPath('data.item.specification', 'archivos/items/especificaciones/anterior.pdf')
+            ->assertJsonPath('data.item.sheet', 'archivos/items/fichas/ficha-anterior.pdf');
+
+        $response = $this->post('/api/v1/items/1/files', [
+            'item' => 'ITEM FNDR TEST',
+            'specification_file' => UploadedFile::fake()->create('nueva-especificacion.pdf', 100, 'application/pdf'),
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.item.sheet', 'archivos/items/fichas/ficha-anterior.pdf');
+
+        $this->assertDatabaseHas('item', [
+            'id_item' => 1,
+            'ficha' => 'archivos/items/fichas/ficha-anterior.pdf',
+        ]);
+        Storage::disk('public')->assertExists($response->json('data.item.specification'));
+    }
+
+    public function test_can_update_both_item_files_and_reject_oversized_upload(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createItemRecord();
+
+        $response = $this->post('/api/v1/items/1/files', [
+            'item' => 'ITEM FNDR TEST',
+            'specification_file' => UploadedFile::fake()->create('especificacion.pdf', 100, 'application/pdf'),
+            'sheet_file' => UploadedFile::fake()->create('ficha.pdf', 100, 'application/pdf'),
+        ]);
+
+        $response->assertOk();
+        Storage::disk('public')->assertExists($response->json('data.item.specification'));
+        Storage::disk('public')->assertExists($response->json('data.item.sheet'));
+
+        $this->withHeaders(['Accept' => 'application/json'])->post('/api/v1/items/1/files', [
+            'item' => 'ITEM FNDR TEST',
+            'sheet_file' => UploadedFile::fake()->create('muy-grande.pdf', 10241, 'application/pdf'),
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['sheet_file']);
     }
 
     public function test_obras_context_list_analysis_and_recalculation_work(): void

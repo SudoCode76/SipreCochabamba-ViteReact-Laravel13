@@ -82,6 +82,11 @@ export const itemsService = {
     return response.data;
   },
 
+  getById: async (itemId) => {
+    const response = await apiClient.get(`/v1/items/${itemId}`);
+    return response.data;
+  },
+
   compositionContext: async (itemId) => {
     const response = await apiClient.get(`/v1/items/${itemId}/composition/context`);
     return response.data;
@@ -107,6 +112,11 @@ export const itemsService = {
     return response.data;
   },
 
+  syncMaterials: async ({ itemId, payload }) => {
+    const response = await apiClient.post(`/v1/items/${itemId}/materials/sync`, payload);
+    return response.data;
+  },
+
   removeMaterial: async ({ itemId, itemInputId }) => {
     const response = await apiClient.delete(`/v1/items/${itemId}/materials/${itemInputId}`);
     return response.data;
@@ -119,6 +129,16 @@ export const itemsService = {
 
   addLabor: async ({ itemId, payload }) => {
     const response = await apiClient.post(`/v1/items/${itemId}/labor`, payload);
+    return response.data;
+  },
+
+  syncLabor: async ({ itemId, payload }) => {
+    const response = await apiClient.post(`/v1/items/${itemId}/labor/sync`, payload);
+    return response.data;
+  },
+
+  updateLabor: async ({ itemId, itemInputId, payload }) => {
+    const response = await apiClient.put(`/v1/items/${itemId}/labor/${itemInputId}`, payload);
     return response.data;
   },
 
@@ -137,13 +157,18 @@ export const itemsService = {
     return response.data;
   },
 
+  syncMachinery: async ({ itemId, payload }) => {
+    const response = await apiClient.post(`/v1/items/${itemId}/machinery/sync`, payload);
+    return response.data;
+  },
+
   removeMachinery: async ({ itemId, itemInputId }) => {
     const response = await apiClient.delete(`/v1/items/${itemId}/machinery/${itemInputId}`);
     return response.data;
   },
 
   updateFiles: async ({ id, formData }) => {
-    const response = await apiClient.post(`/v1/items/${id}?_method=PUT`, formData, {
+    const response = await apiClient.post(`/v1/items/${id}/files`, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },

@@ -25,14 +25,17 @@ class InputSearchService
         }
 
         return $query
+            ->with('unitMeasure')
             ->orderBy('descripcion')
             ->limit(20)
-            ->get(['id_insumo', 'descripcion', 'tipo', 'precio'])
+            ->get(['id_insumo', 'descripcion', 'tipo', 'precio', 'unidad_medida'])
             ->map(fn (Input $input): array => [
                 'id' => $input->id_insumo,
                 'text' => $input->descripcion,
                 'tipo' => $input->tipo,
                 'precio' => (float) $input->precio,
+                'unidad' => $input->unitMeasure?->abreviatura ?? $input->unitMeasure?->descripcion,
+                'id_unidad' => $input->unidad_medida,
             ])
             ->values()
             ->all();
