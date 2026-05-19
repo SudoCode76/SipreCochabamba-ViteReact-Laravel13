@@ -361,7 +361,7 @@ class ItemController extends Controller
     {
         $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
-        if (! $permissions['can_view']) {
+        if (! $permissions['can_edit']) {
             return $this->forbiddenResponse('No tiene permisos para editar items.');
         }
 
@@ -444,7 +444,7 @@ class ItemController extends Controller
     {
         $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
 
-        if (! $permissions['can_view']) {
+        if (! $permissions['can_edit']) {
             return $this->forbiddenResponse('No tiene permisos para adjuntar archivos al item.');
         }
 

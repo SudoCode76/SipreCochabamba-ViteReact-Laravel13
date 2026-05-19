@@ -15,6 +15,7 @@ class AuthenticatedUserResource extends JsonResource
             'ci' => $this->ci,
             'username' => $this->username,
             'status' => $this->estado,
+            'is_admin' => $this->isAdministrator(),
             'role' => $this->whenLoaded('role', fn (): ?array => $this->role ? [
                 'id' => $this->role->id_rol,
                 'name' => $this->role->nombre_rol,

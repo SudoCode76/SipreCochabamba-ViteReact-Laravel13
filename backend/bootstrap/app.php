@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureAuthenticatedUserIsActive;
+use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserIsAdministrator;
 use App\Support\ApiResponse;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => EnsureUserIsAdministrator::class,
             'active_user' => EnsureAuthenticatedUserIsActive::class,
+            'db_permission' => EnsureUserHasPermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

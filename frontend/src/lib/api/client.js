@@ -33,6 +33,9 @@ apiClient.interceptors.response.use(
       // Optionally redirect to login
       window.location.href = "/login";
     }
+    if (error.response && error.response.status === 403) {
+      error.message = error.response.data?.message || "No tiene permisos para realizar esta acción.";
+    }
     return Promise.reject(error);
   }
 );

@@ -3,10 +3,12 @@
 namespace App\Services\Items\Analysis;
 
 use App\Models\User;
-use Illuminate\Database\Eloquent\Builder;
+use App\Services\Permissions\PermissionResolverService;
 
 class ItemAnalysisPermissionService
 {
+    public function __construct(private readonly PermissionResolverService $permissions) {}
+
     public function resolve(User $user, string $mode = 'fndr'): array
     {
         $config = $this->modeConfig($mode);
@@ -15,16 +17,18 @@ class ItemAnalysisPermissionService
             return [
                 'can_view' => true,
                 'can_create' => true,
+                'can_edit' => true,
                 'can_view_price_analysis' => true,
                 'can_recalculate' => true,
             ];
         }
 
         return [
-            'can_view' => true,
-            'can_create' => $this->has($user, 'ITEMS', ['REGISTRAR_ITEM']),
-            'can_view_price_analysis' => $this->has($user, 'ITEMS', [$config['analysis_function'], 'ANALISIS_PRECIO']),
-            'can_recalculate' => $this->has($user, 'ITEMS', [$config['recalculation_function']]),
+            'can_view' => $this->permissions->allows($user, 'ITEMS', [$config['screen_function']]),
+            'can_create' => $this->permissions->allows($user, 'ITEMS', ['REGISTRAR_ITEM']),
+            'can_edit' => $this->permissions->allows($user, 'ITEMS', ['EDITAR_ITEM', 'REGISTRAR_ITEM']),
+            'can_view_price_analysis' => $this->permissions->allows($user, 'ITEMS', [$config['analysis_function'], 'ANALISIS_PRECIO']),
+            'can_recalculate' => $this->permissions->allows($user, 'ITEMS', [$config['recalculation_function']]),
         ];
     }
 
@@ -63,19 +67,5 @@ class ItemAnalysisPermissionService
             ],
             default => throw new \InvalidArgumentException('Modo de items no soportado.'),
         };
-    }
-
-    private function has(User $user, string $className, array $functionNames): bool
-    {
-        return $user->activePermissions()
-            ->whereHas('systemFunction', function (Builder $query) use ($className, $functionNames): void {
-                $query->whereRaw('UPPER(TRIM(clase)) = ?', [strtoupper(trim($className))])
-                    ->where(function (Builder $query) use ($functionNames): void {
-                        foreach ($functionNames as $functionName) {
-                            $query->orWhereRaw('UPPER(TRIM(nombre_funcion)) = ?', [strtoupper(trim($functionName))]);
-                        }
-                    });
-            })
-            ->exists();
     }
 }

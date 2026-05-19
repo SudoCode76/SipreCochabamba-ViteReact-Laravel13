@@ -200,7 +200,7 @@ class ProjectController extends Controller
 
     public function incidencePrice(IncidencePriceRequest $request, Item $item): JsonResponse
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar precios por incidencia.')) {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_incidence_summary', 'No tiene permisos para consultar precios por incidencia.')) {
             return $response;
         }
 
@@ -245,7 +245,7 @@ class ProjectController extends Controller
 
     public function budgetByGroup(Project $project): JsonResponse
     {
-        if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view_reports', 'No tiene permisos para consultar presupuesto por rubros.')) {
+        if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view_budget_by_group', 'No tiene permisos para consultar presupuesto por rubros.')) {
             return $response;
         }
 
@@ -258,7 +258,7 @@ class ProjectController extends Controller
 
     public function budgetByGroupPdf(Project $project): \Illuminate\Http\Response
     {
-        if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view_reports', 'No tiene permisos para consultar presupuesto por rubros.')) {
+        if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view_budget_by_group', 'No tiene permisos para consultar presupuesto por rubros.')) {
             abort(403, $response->getData()->message ?? 'No tiene permisos para consultar presupuesto por rubros.');
         }
 
@@ -269,7 +269,7 @@ class ProjectController extends Controller
 
     public function incidenceSummary(ProjectFormatRequest $request, Project $project): JsonResponse
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar el resumen de incidencia.')) {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_incidence_summary', 'No tiene permisos para consultar el resumen de incidencia.')) {
             return $response;
         }
 
@@ -282,7 +282,7 @@ class ProjectController extends Controller
 
     public function incidenceSummaryPdf(ProjectFormatRequest $request, Project $project): \Illuminate\Http\Response
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar el resumen de incidencia.')) {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_incidence_summary', 'No tiene permisos para consultar el resumen de incidencia.')) {
             abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el resumen de incidencia.');
         }
 
@@ -295,7 +295,7 @@ class ProjectController extends Controller
 
     public function generalBudgetPdf(ProjectFormatRequest $request, Project $project): \Illuminate\Http\Response
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar el presupuesto general.')) {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_general_budget', 'No tiene permisos para consultar el presupuesto general.')) {
             abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el presupuesto general.');
         }
 
@@ -308,7 +308,7 @@ class ProjectController extends Controller
 
     public function inputBreakdownPdf(ProjectInputBreakdownRequest $request, Project $project): \Illuminate\Http\Response
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar el desglose de insumos del proyecto.')) {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_input_breakdown', 'No tiene permisos para consultar el desglose de insumos del proyecto.')) {
             abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el desglose de insumos del proyecto.');
         }
 
@@ -321,7 +321,7 @@ class ProjectController extends Controller
 
     public function inputsReportPdf(Request $request, Project $project): \Illuminate\Http\Response
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar el reporte de insumos del proyecto.')) {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_inputs_report', 'No tiene permisos para consultar el reporte de insumos del proyecto.')) {
             abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el reporte de insumos del proyecto.');
         }
 
@@ -332,7 +332,7 @@ class ProjectController extends Controller
 
     public function breakdownCalculation(ProjectFormatRequest $request, Project $project): JsonResponse
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para calcular el desglose del proyecto.')) {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_input_breakdown', 'No tiene permisos para calcular el desglose del proyecto.')) {
             return $response;
         }
 
@@ -345,7 +345,7 @@ class ProjectController extends Controller
 
     public function unitPrices(ProjectFormatRequest $request, Project $project): JsonResponse
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar precios unitarios del proyecto.')) {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_unit_prices', 'No tiene permisos para consultar precios unitarios del proyecto.')) {
             return $response;
         }
 

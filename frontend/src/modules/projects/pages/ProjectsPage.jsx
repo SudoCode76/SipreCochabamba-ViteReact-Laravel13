@@ -263,8 +263,32 @@ export default function ProjectsPage() {
     queryFn: () => projectService.list({ page, perPage, search: deferredSearch }),
     placeholderData: (previousData) => previousData,
   });
+  const { data: contextData } = useQuery({
+    queryKey: ["projects-context"],
+    queryFn: projectService.context,
+    retry: false,
+  });
 
   const projects = data?.data?.items ?? [];
+  const permissions = contextData?.data?.permissions ?? {};
+  const canEditProject = Boolean(permissions.can_edit);
+  const canSyncProjectItems = Boolean(permissions.can_sync_items);
+  const canViewHistory = Boolean(permissions.can_view);
+  const canViewBudgetByGroup = Boolean(permissions.can_view_budget_by_group);
+  const canRecalculateBudget = Boolean(permissions.can_recalculate_budget);
+  const canViewIncidenceSummary = Boolean(permissions.can_view_incidence_summary);
+  const canViewGeneralBudget = Boolean(permissions.can_view_general_budget);
+  const canViewInputBreakdown = Boolean(permissions.can_view_input_breakdown);
+  const canViewInputsReport = Boolean(permissions.can_view_inputs_report);
+  const hasProjectRowActions = canEditProject
+    || canSyncProjectItems
+    || canViewHistory
+    || canViewBudgetByGroup
+    || canRecalculateBudget
+    || canViewIncidenceSummary
+    || canViewGeneralBudget
+    || canViewInputBreakdown
+    || canViewInputsReport;
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
   const historyProjectId = historyProject?.id_proyecto;
@@ -816,45 +840,68 @@ export default function ProjectsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-72 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-lg">
-                              <DropdownMenuItem
-                                className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
-                                onClick={() => openEdit(project)}
-                              >
-                                <Pencil className="h-4 w-4 text-muted-foreground" />
-                                <span>Editar Proyecto</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openItems(project)}>
-                                <ListPlus className="h-4 w-4 text-muted-foreground" />
-                                <span>Agregar Items al Proyecto</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openHistory(project)}>
-                                <History className="h-4 w-4 text-muted-foreground" />
-                                <span>Historial</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => void handleOpenBudgetByGroupPdf(project)}>
-                                <Calculator className="h-4 w-4 text-muted-foreground" />
-                                <span>Presupuesto por Rubros</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openRecalculate(project)}>
-                                <RefreshCw className="h-4 w-4 text-muted-foreground" />
-                                <span>Recalcular Precio por Rubro</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openIncidenceSummary(project)}>
-                                <PieChart className="h-4 w-4 text-muted-foreground" />
-                                <span>Resumen por Insidencia</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openGeneralBudget(project)}>
-                                <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
-                                <span>Presupuesto General</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openInputBreakdown(project)}>
-                                <Layers className="h-4 w-4 text-muted-foreground" />
-                                <span>Desglose de Insumos del Proyecto</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => void handleOpenInputsReportPdf(project)}>
-                                <ClipboardList className="h-4 w-4 text-muted-foreground" />
-                                <span>Reporte de Insumos</span>
-                              </DropdownMenuItem>
+                              {canEditProject && (
+                                <DropdownMenuItem
+                                  className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
+                                  onClick={() => openEdit(project)}
+                                >
+                                  <Pencil className="h-4 w-4 text-muted-foreground" />
+                                  <span>Editar Proyecto</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canSyncProjectItems && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openItems(project)}>
+                                  <ListPlus className="h-4 w-4 text-muted-foreground" />
+                                  <span>Agregar Items al Proyecto</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewHistory && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openHistory(project)}>
+                                  <History className="h-4 w-4 text-muted-foreground" />
+                                  <span>Historial</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewBudgetByGroup && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => void handleOpenBudgetByGroupPdf(project)}>
+                                  <Calculator className="h-4 w-4 text-muted-foreground" />
+                                  <span>Presupuesto por Rubros</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canRecalculateBudget && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openRecalculate(project)}>
+                                  <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                                  <span>Recalcular Precio por Rubro</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewIncidenceSummary && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openIncidenceSummary(project)}>
+                                  <PieChart className="h-4 w-4 text-muted-foreground" />
+                                  <span>Resumen por Insidencia</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewGeneralBudget && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openGeneralBudget(project)}>
+                                  <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                                  <span>Presupuesto General</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewInputBreakdown && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openInputBreakdown(project)}>
+                                  <Layers className="h-4 w-4 text-muted-foreground" />
+                                  <span>Desglose de Insumos del Proyecto</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewInputsReport && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => void handleOpenInputsReportPdf(project)}>
+                                  <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                                  <span>Reporte de Insumos</span>
+                                </DropdownMenuItem>
+                              )}
+                              {!hasProjectRowActions && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 text-muted-foreground" disabled>
+                                  Sin acciones disponibles
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>

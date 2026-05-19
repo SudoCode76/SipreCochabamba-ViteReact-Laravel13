@@ -266,7 +266,7 @@ class GeneralAndObrasItemApiTest extends TestCase
 
     public function test_edit_item_updates_only_base_information_following_legacy_rules(): void
     {
-        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX', 'EDITAR_ITEM']));
 
         $this->createUnitMeasure(['id_unidad_medida' => 1, 'descripcion' => 'Metro', 'abreviatura' => 'M']);
         $this->createUnitMeasure(['id_unidad_medida' => 2, 'descripcion' => 'Global', 'abreviatura' => 'GLB']);
@@ -320,7 +320,7 @@ class GeneralAndObrasItemApiTest extends TestCase
 
     public function test_edit_item_preserves_existing_unit_when_unit_measure_is_not_sent(): void
     {
-        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX', 'EDITAR_ITEM']));
 
         $this->createUnitMeasure(['id_unidad_medida' => 1]);
         $this->createGroup();
@@ -344,7 +344,7 @@ class GeneralAndObrasItemApiTest extends TestCase
 
     public function test_edit_item_rejects_invalid_subgroup_and_global_duplicate_name(): void
     {
-        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX', 'EDITAR_ITEM']));
 
         $this->createUnitMeasure(['id_unidad_medida' => 1]);
         $this->createGroup(['id_grupo' => 1]);
@@ -376,7 +376,7 @@ class GeneralAndObrasItemApiTest extends TestCase
     public function test_can_show_item_file_data_and_update_files_without_replacing_missing_attachment(): void
     {
         Storage::fake('public');
-        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX', 'EDITAR_ITEM']));
 
         $this->createUnitMeasure();
         $this->createGroup();
@@ -410,7 +410,7 @@ class GeneralAndObrasItemApiTest extends TestCase
     public function test_can_update_both_item_files_and_reject_oversized_upload(): void
     {
         Storage::fake('public');
-        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX', 'EDITAR_ITEM']));
 
         $this->createUnitMeasure();
         $this->createGroup();
