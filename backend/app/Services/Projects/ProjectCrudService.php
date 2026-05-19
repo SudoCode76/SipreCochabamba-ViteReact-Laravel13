@@ -10,13 +10,17 @@ use Illuminate\Validation\ValidationException;
 
 class ProjectCrudService
 {
+    public function __construct(
+        private readonly ProjectHistoryService $projectHistoryService,
+    ) {}
+
     public function create(StoreProjectRequest $request, User $user): Project
     {
         $this->ensureProjectNameIsUnique($request->string('nombre_proyecto')->toString());
 
         $responsable = User::query()->find((int) $request->integer('responsable'));
 
-        return Project::query()->create([
+        $project = Project::query()->create([
             'nombre_proyecto' => $request->string('nombre_proyecto')->toString(),
             'fecha' => $request->date('fecha')->toDateString(),
             'ubicacion' => $request->string('ubicacion')->toString(),
@@ -35,13 +39,34 @@ class ProjectCrudService
             'zona' => $request->filled('zona') ? $request->string('zona')->toString() : null,
             'otb' => $request->filled('otb') ? $request->string('otb')->toString() : null,
         ]);
+
+        $this->projectHistoryService->recordCreated($project, $user, $request->ip());
+
+        return $project;
     }
 
-    public function update(UpdateProjectRequest $request, Project $project): Project
+    public function update(UpdateProjectRequest $request, Project $project, User $user): Project
     {
         $this->ensureProjectNameIsUnique($request->string('nombre_proyecto')->toString(), $project->id_proyecto);
 
         $responsable = User::query()->find((int) $request->integer('responsable'));
+        $original = $project->only([
+            'nombre_proyecto',
+            'fecha',
+            'ubicacion',
+            'responsable',
+            'solicitante',
+            'observaciones',
+            'aprobado',
+            'fecha_aprob',
+            'estado',
+            'nombre_responsable',
+            'latitud',
+            'longitud',
+            'distrito',
+            'zona',
+            'otb',
+        ]);
 
         $project->update([
             'nombre_proyecto' => $request->string('nombre_proyecto')->toString(),
@@ -61,7 +86,30 @@ class ProjectCrudService
             'otb' => $request->filled('otb') ? $request->string('otb')->toString() : null,
         ]);
 
-        return $project->refresh();
+        $project = $project->refresh();
+        $this->projectHistoryService->recordUpdated($project, $user, $request->ip(), $this->changedFields($original, $project));
+
+        return $project;
+    }
+
+    private function changedFields(array $original, Project $project): array
+    {
+        $changes = [];
+
+        foreach ($original as $field => $oldValue) {
+            $newValue = $project->{$field};
+            $normalizedOld = $oldValue instanceof \DateTimeInterface ? $oldValue->format('Y-m-d') : $oldValue;
+            $normalizedNew = $newValue instanceof \DateTimeInterface ? $newValue->format('Y-m-d') : $newValue;
+
+            if ((string) $normalizedOld !== (string) $normalizedNew) {
+                $changes[$field] = [
+                    'from' => $normalizedOld,
+                    'to' => $normalizedNew,
+                ];
+            }
+        }
+
+        return $changes;
     }
 
     private function ensureProjectNameIsUnique(string $projectName, ?int $ignoredProjectId = null): void

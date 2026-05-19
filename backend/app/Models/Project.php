@@ -65,6 +65,11 @@ class Project extends Model
         return $this->hasMany(ProjectItem::class, 'id_proyecto', 'id_proyecto');
     }
 
+    public function history(): HasMany
+    {
+        return $this->hasMany(ProjectHistory::class, 'id_proyecto', 'id_proyecto');
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('estado', 'AC');

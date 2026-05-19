@@ -92,6 +92,13 @@ class ProjectApiTest extends TestCase
 
         $projectId = $create->json('data.project.id_proyecto');
 
+        $this->assertDatabaseHas('proyecto_historial', [
+            'id_proyecto' => $projectId,
+            'id_usuario' => 1,
+            'usuario_nombre' => 'Usuario Demo',
+            'accion' => 'created',
+        ]);
+
         $this->putJson('/api/v1/projects/'.$projectId, [
             'nombre_proyecto' => 'PROYECTO EDITADO',
             'fecha' => '2026-05-01',
@@ -110,10 +117,24 @@ class ProjectApiTest extends TestCase
             'proceso' => 'PROYECTOS: se actualizo el proyecto PROYECTO EDITADO',
         ]);
 
+        $this->assertDatabaseHas('proyecto_historial', [
+            'id_proyecto' => $projectId,
+            'id_usuario' => 1,
+            'usuario_nombre' => 'Usuario Demo',
+            'accion' => 'updated',
+        ]);
+
         $this->getJson('/api/v1/projects/'.$projectId)
             ->assertOk()
             ->assertJsonPath('data.project.id_proyecto', $projectId)
             ->assertJsonPath('data.project.aprobado', 'RV');
+
+        $this->getJson('/api/v1/projects/'.$projectId.'/history')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.action', 'updated')
+            ->assertJsonPath('data.items.0.user_name', 'Usuario Demo')
+            ->assertJsonPath('data.items.1.action', 'created')
+            ->assertJsonPath('data.meta.total', 2);
     }
 
     public function test_cannot_create_duplicate_project_name_even_with_different_case(): void
@@ -170,6 +191,12 @@ class ProjectApiTest extends TestCase
             ],
         ])->assertOk();
 
+        $this->assertDatabaseHas('proyecto_historial', [
+            'id_proyecto' => 1,
+            'id_usuario' => 1,
+            'accion' => 'items_synced',
+        ]);
+
         $this->getJson('/api/v1/projects/1/items?format=PCA')
             ->assertOk()
             ->assertJsonPath('data.items.0.id_item', 2)
@@ -178,7 +205,7 @@ class ProjectApiTest extends TestCase
         $this->getJson('/api/v1/projects/items/1/incidence-price?format=PCA')
             ->assertOk()
             ->assertJsonPath('data.item.id_item', 1)
-            ->assertJsonPath('data.item.precio', 63.8266);
+            ->assertJsonPath('data.item.precio', 63.83);
 
         $this->getJson('/api/v1/search/items?search=ITEM')
             ->assertOk()
@@ -237,6 +264,12 @@ class ProjectApiTest extends TestCase
 
         $this->assertStringStartsWith('%PDF', $pdf->getContent());
 
+        $this->assertDatabaseHas('proyecto_historial', [
+            'id_proyecto' => 1,
+            'id_usuario' => 1,
+            'accion' => 'pdf_generated',
+        ]);
+
         $this->createInputLog(['id_log' => 1, 'id_insumo' => 1, 'precio' => 8, 'tipo' => 1, 'descripcion' => 'Material 1', 'fecha' => '2026-04-01']);
         $this->createInputLog(['id_log' => 2, 'id_insumo' => 2, 'precio' => 4, 'tipo' => 2, 'descripcion' => 'Mano 1', 'fecha' => '2026-04-01']);
         $this->createInputLog(['id_log' => 3, 'id_insumo' => 3, 'precio' => 3, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-04-01']);
@@ -247,6 +280,12 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.items.0.materiales', 16)
             ->assertJsonPath('data.items.0.mano_obra', 12)
             ->assertJsonPath('data.items.0.herramientas', 3);
+
+        $this->assertDatabaseHas('proyecto_historial', [
+            'id_proyecto' => 1,
+            'id_usuario' => 1,
+            'accion' => 'budget_recalculated',
+        ]);
 
         $this->getJson('/api/v1/projects/1/incidence-summary?format=PCA')
             ->assertOk()
@@ -497,6 +536,7 @@ class ProjectApiTest extends TestCase
 
         $this->getJson('/api/v1/projects/context')->assertForbidden();
         $this->getJson('/api/v1/projects')->assertForbidden();
+        $this->getJson('/api/v1/projects/1/history')->assertForbidden();
         $this->postJson('/api/v1/projects', [
             'nombre_proyecto' => 'nuevo proyecto',
             'fecha' => '2026-04-30',

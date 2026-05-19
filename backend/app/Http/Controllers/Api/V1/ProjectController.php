@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Project\BudgetRecalculationRequest;
 use App\Http\Requests\Project\IncidencePriceRequest;
+use App\Http\Requests\Project\IndexProjectHistoryRequest;
 use App\Http\Requests\Project\IndexProjectRequest;
 use App\Http\Requests\Project\ProjectFormatRequest;
 use App\Http\Requests\Project\ProjectInputBreakdownRequest;
@@ -12,6 +13,7 @@ use App\Http\Requests\Project\ShowProjectItemsRequest;
 use App\Http\Requests\Project\StoreProjectRequest;
 use App\Http\Requests\Project\SyncProjectItemsRequest;
 use App\Http\Requests\Project\UpdateProjectRequest;
+use App\Http\Resources\Project\ProjectHistoryResource;
 use App\Models\Item;
 use App\Models\Project;
 use App\Models\User;
@@ -23,6 +25,7 @@ use App\Services\Projects\ProjectCrudService;
 use App\Services\Projects\ProjectIncidenceSummaryPdfService;
 use App\Services\Projects\ProjectInputBreakdownPdfService;
 use App\Services\Projects\ProjectGeneralBudgetPdfService;
+use App\Services\Projects\ProjectHistoryService;
 use App\Services\Projects\ProjectItemService;
 use App\Services\Projects\ProjectListService;
 use App\Services\Projects\ProjectPermissionService;
@@ -42,6 +45,7 @@ class ProjectController extends Controller
         private readonly ProjectGeneralBudgetPdfService $projectGeneralBudgetPdfService,
         private readonly ProjectInputBreakdownPdfService $projectInputBreakdownPdfService,
         private readonly ProjectPermissionService $projectPermissionService,
+        private readonly ProjectHistoryService $projectHistoryService,
         private readonly AuditService $auditService,
     ) {}
 
@@ -122,7 +126,7 @@ class ProjectController extends Controller
             return $response;
         }
 
-        $project = $this->projectCrudService->update($request, $project);
+        $project = $this->projectCrudService->update($request, $project, $request->user());
         $project->load(['creator', 'requester']);
         $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se actualizo el proyecto '.$project->nombre_proyecto);
 
@@ -141,7 +145,7 @@ class ProjectController extends Controller
             return $response;
         }
 
-        $project = $this->projectItemService->sync($project, $request->validated('items'), $request->user());
+        $project = $this->projectItemService->sync($project, $request->validated('items'), $request->user(), $request->ip());
         $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se sincronizaron los items del proyecto '.$project->nombre_proyecto);
 
         return response()->json([
@@ -170,6 +174,28 @@ class ProjectController extends Controller
         ]);
     }
 
+    public function history(IndexProjectHistoryRequest $request, Project $project): JsonResponse
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view', 'No tiene permisos para ver el historial del proyecto.')) {
+            return $response;
+        }
+
+        $history = $this->projectHistoryService->list($project, $request->validated());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Historial del proyecto obtenido correctamente.',
+            'data' => [
+                'items' => ProjectHistoryResource::collection($history->getCollection())->resolve(),
+                'meta' => [
+                    'current_page' => $history->currentPage(),
+                    'per_page' => $history->perPage(),
+                    'total' => $history->total(),
+                ],
+            ],
+        ]);
+    }
+
     public function incidencePrice(IncidencePriceRequest $request, Item $item): JsonResponse
     {
         if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar precios por incidencia.')) {
@@ -192,6 +218,7 @@ class ProjectController extends Controller
         }
 
         $data = $this->projectBudgetService->budgetRecalculation($project, $request->date('fecha'));
+        $this->projectHistoryService->recordBudgetRecalculated($project, $request->user(), $request->ip(), $request->date('fecha')->toDateString(), $data);
         $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se recalculo el presupuesto del proyecto '.$project->nombre_proyecto);
 
         return response()->json([
@@ -220,6 +247,8 @@ class ProjectController extends Controller
             abort(403, $response->getData()->message ?? 'No tiene permisos para consultar presupuesto por rubros.');
         }
 
+        $this->projectHistoryService->recordPdfGenerated($project, request()->user(), request()->ip(), 'Presupuesto por rubros');
+
         return $this->projectBudgetByGroupPdfService->stream($project);
     }
 
@@ -242,6 +271,10 @@ class ProjectController extends Controller
             abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el resumen de incidencia.');
         }
 
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Resumen por incidencia', [
+            'format' => $request->validated('format'),
+        ]);
+
         return $this->projectIncidenceSummaryPdfService->stream($project, $request->validated('format'));
     }
 
@@ -251,6 +284,10 @@ class ProjectController extends Controller
             abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el presupuesto general.');
         }
 
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Presupuesto general', [
+            'format' => $request->validated('format'),
+        ]);
+
         return $this->projectGeneralBudgetPdfService->stream($project, $request->validated('format'));
     }
 
@@ -259,6 +296,10 @@ class ProjectController extends Controller
         if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar el desglose de insumos del proyecto.')) {
             abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el desglose de insumos del proyecto.');
         }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Desglose de insumos del proyecto', [
+            'type' => (int) $request->validated('type'),
+        ]);
 
         return $this->projectInputBreakdownPdfService->stream($project, (int) $request->validated('type'));
     }

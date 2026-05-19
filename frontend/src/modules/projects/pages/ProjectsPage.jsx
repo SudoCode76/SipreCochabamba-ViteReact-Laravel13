@@ -2,7 +2,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, X, Loader2 } from "lucide-react";
+import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, X, Loader2, History } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,36 @@ const approvalClass = {
   RV: "bg-blue-500 text-white",
   AP: "bg-emerald-600 text-white",
 };
+
+const historyActionLabels = {
+  created: "Creacion",
+  updated: "Actualizacion",
+  items_synced: "Items",
+  budget_recalculated: "Recalculo",
+  pdf_generated: "PDF",
+};
+
+const historyActionOptions = [
+  { value: "", label: "Todas las acciones" },
+  { value: "created", label: "Creacion" },
+  { value: "updated", label: "Actualizacion" },
+  { value: "items_synced", label: "Items sincronizados" },
+  { value: "budget_recalculated", label: "Presupuesto recalculado" },
+  { value: "pdf_generated", label: "PDF generado" },
+];
+
+const formatHistoryDate = (value) => {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("es-BO", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+};
+
+const hasMetadata = (metadata) => metadata && Object.keys(metadata).length > 0;
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -49,6 +79,15 @@ export default function ProjectsPage() {
   const [inputBreakdownProject, setInputBreakdownProject] = useState(null);
   const [inputBreakdownType, setInputBreakdownType] = useState("1");
   const [inputBreakdownStatus, setInputBreakdownStatus] = useState(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyProject, setHistoryProject] = useState(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyFilters, setHistoryFilters] = useState({
+    action: "",
+    user: "",
+    dateFrom: "",
+    dateTo: "",
+  });
   const [feedback, setFeedback] = useState(null);
   const deferredSearch = useDeferredValue(search.trim());
 
@@ -61,6 +100,31 @@ export default function ProjectsPage() {
   const projects = data?.data?.items ?? [];
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
+  const historyProjectId = historyProject?.id_proyecto;
+
+  const {
+    data: historyData,
+    isLoading: historyLoading,
+    isFetching: historyFetching,
+    isError: historyIsError,
+    error: historyError,
+  } = useQuery({
+    queryKey: ["project-history", historyProjectId, historyPage, historyFilters],
+    queryFn: () => projectService.history(historyProjectId, {
+      page: historyPage,
+      perPage: 10,
+      action: historyFilters.action,
+      user: historyFilters.user,
+      dateFrom: historyFilters.dateFrom,
+      dateTo: historyFilters.dateTo,
+    }),
+    enabled: historyOpen && Boolean(historyProjectId),
+    placeholderData: (previousData) => previousData,
+  });
+
+  const historyItems = historyData?.data?.items ?? [];
+  const historyMeta = historyData?.data?.meta ?? { current_page: 1, per_page: 10, total: 0 };
+  const historyTotalPages = Math.max(1, Math.ceil((historyMeta.total || 0) / (historyMeta.per_page || 10)));
 
   const visiblePages = useMemo(() => {
     const start = Math.max(1, meta.current_page - 2);
@@ -99,6 +163,39 @@ export default function ProjectsPage() {
 
   const openItems = (project) => {
     navigate(`/Proyecto/${project.id_proyecto}/items`);
+  };
+
+  const openHistory = (project) => {
+    setHistoryProject(project);
+    setHistoryPage(1);
+    setHistoryOpen(true);
+  };
+
+  const closeHistory = () => {
+    setHistoryOpen(false);
+    setHistoryProject(null);
+    setHistoryPage(1);
+    setHistoryFilters({
+      action: "",
+      user: "",
+      dateFrom: "",
+      dateTo: "",
+    });
+  };
+
+  const updateHistoryFilter = (key, value) => {
+    setHistoryPage(1);
+    setHistoryFilters((current) => ({ ...current, [key]: value }));
+  };
+
+  const clearHistoryFilters = () => {
+    setHistoryPage(1);
+    setHistoryFilters({
+      action: "",
+      user: "",
+      dateFrom: "",
+      dateTo: "",
+    });
   };
 
   const openRecalculate = (project) => {
@@ -519,6 +616,10 @@ export default function ProjectsPage() {
                                 <ListPlus className="h-4 w-4 text-muted-foreground" />
                                 <span>Agregar Items al Proyecto</span>
                               </DropdownMenuItem>
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openHistory(project)}>
+                                <History className="h-4 w-4 text-muted-foreground" />
+                                <span>Historial</span>
+                              </DropdownMenuItem>
                               <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => void handleOpenBudgetByGroupPdf(project)}>
                                 <Calculator className="h-4 w-4 text-muted-foreground" />
                                 <span>Presupuesto por Rubros</span>
@@ -599,6 +700,168 @@ export default function ProjectsPage() {
           )}
         </CardContent>
       </Card>
+
+      {historyOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-3xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-2xl tracking-[-0.04em]">
+                      <History className="h-5 w-5" />
+                      Historial
+                    </CardTitle>
+                    <CardDescription>{historyProject?.nombre_proyecto || "Proyecto seleccionado"}</CardDescription>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeHistory}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 sm:p-6">
+                <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_1fr]">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="project-history-action">Accion</Label>
+                    <select
+                      id="project-history-action"
+                      value={historyFilters.action}
+                      onChange={(event) => updateHistoryFilter("action", event.target.value)}
+                      className="h-10 rounded-xl border border-border/80 bg-background px-3 text-sm"
+                    >
+                      {historyActionOptions.map((option) => (
+                        <option key={option.value || "all"} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="project-history-from">Desde</Label>
+                    <Input
+                      id="project-history-from"
+                      type="date"
+                      value={historyFilters.dateFrom}
+                      onChange={(event) => updateHistoryFilter("dateFrom", event.target.value)}
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="project-history-to">Hasta</Label>
+                    <Input
+                      id="project-history-to"
+                      type="date"
+                      value={historyFilters.dateTo}
+                      onChange={(event) => updateHistoryFilter("dateTo", event.target.value)}
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-end">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label htmlFor="project-history-user">Usuario</Label>
+                    <Input
+                      id="project-history-user"
+                      value={historyFilters.user}
+                      onChange={(event) => updateHistoryFilter("user", event.target.value)}
+                      placeholder="Nombre o ID de usuario"
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+
+                  <Button type="button" variant="outline" className="rounded-full" onClick={clearHistoryFilters}>
+                    Limpiar filtros
+                  </Button>
+                </div>
+
+                {historyIsError && (
+                  <Alert variant="destructive" className="mt-4 rounded-2xl">
+                    <AlertDescription>{historyError?.response?.data?.message || "No se pudo cargar el historial del proyecto."}</AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="mt-6 space-y-4">
+                  {(historyLoading || historyFetching) && historyItems.length === 0 && (
+                    <div className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-border/80 px-4 py-10 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cargando historial...
+                    </div>
+                  )}
+
+                  {!historyLoading && historyItems.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-border/80 px-4 py-10 text-center text-sm text-muted-foreground">
+                      No hay movimientos registrados para este proyecto.
+                    </div>
+                  )}
+
+                  {historyItems.map((entry) => (
+                    <div key={entry.id} className="relative rounded-2xl border border-border/70 bg-background/85 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-white">
+                              {historyActionLabels[entry.action] || entry.action}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">{formatHistoryDate(entry.occurred_at)}</span>
+                          </div>
+                          <h3 className="mt-3 text-base font-semibold text-foreground">{entry.title}</h3>
+                          <p className="mt-1 text-sm leading-6 text-muted-foreground">{entry.detail || "Sin detalle adicional."}</p>
+                        </div>
+
+                        <div className="shrink-0 text-left text-xs text-muted-foreground sm:text-right">
+                          <div className="font-medium text-foreground">{entry.user_name || "Usuario no registrado"}</div>
+                          <div>{entry.ip || "Sin IP"}</div>
+                        </div>
+                      </div>
+
+                      {hasMetadata(entry.metadata) && (
+                        <details className="mt-4 rounded-xl border border-border/70 bg-muted/20 p-3">
+                          <summary className="cursor-pointer text-sm font-medium text-foreground">Ver detalle tecnico</summary>
+                          <pre className="mt-3 max-h-72 overflow-auto rounded-xl bg-slate-950 p-3 text-xs leading-5 text-slate-100">
+                            {JSON.stringify(entry.metadata, null, 2)}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                  <span>{historyMeta.total || 0} movimientos registrados</span>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-full text-muted-foreground"
+                      onClick={() => setHistoryPage((current) => Math.max(1, current - 1))}
+                      disabled={historyMeta.current_page <= 1 || historyFetching}
+                    >
+                      <ChevronLeft data-icon="inline-start" />
+                      Anterior
+                    </Button>
+                    <span className="min-w-16 text-center">Pag. {historyMeta.current_page}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-full text-muted-foreground"
+                      onClick={() => setHistoryPage((current) => Math.min(historyTotalPages, current + 1))}
+                      disabled={historyMeta.current_page >= historyTotalPages || historyFetching}
+                    >
+                      Siguiente
+                      <ChevronRight data-icon="inline-end" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {editOpen && createPortal(
         <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">

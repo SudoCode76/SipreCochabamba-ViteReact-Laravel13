@@ -15,6 +15,15 @@ trait InteractsWithLegacyAuth
 {
     protected function setUpLegacyAuthSchema(): void
     {
+        Schema::disableForeignKeyConstraints();
+        Schema::dropIfExists('permiso');
+        Schema::dropIfExists('usuario');
+        Schema::dropIfExists('unidad');
+        Schema::dropIfExists('rol');
+        Schema::dropIfExists('funcion');
+        Schema::dropIfExists('auditoria');
+        Schema::enableForeignKeyConstraints();
+
         Schema::create('auditoria', function (Blueprint $table): void {
             $table->increments('id_auditoria');
             $table->string('nombre_completo', 50)->nullable();

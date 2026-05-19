@@ -10,6 +10,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/projects/create-context', [ProjectController::class, 'context']);
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::post('/projects', [ProjectController::class, 'store']);
+    Route::get('/projects/{project}/history', [ProjectController::class, 'history']);
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
     Route::put('/projects/{project}', [ProjectController::class, 'update']);
     Route::post('/projects/{project}/items/sync', [ProjectController::class, 'syncItems']);
