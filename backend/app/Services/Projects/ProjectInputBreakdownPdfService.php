@@ -39,6 +39,7 @@ class ProjectInputBreakdownPdfService
                     'id_item_insumo' => (int) $row->id_item_insumo,
                     'id_insumo' => (int) $row->id_insumo,
                     'id_item' => (int) $row->id_item,
+                    'prioridad' => (int) $row->prioridad,
                     'nombre_item' => $row->nombre_item,
                     'descripcion' => $row->descripcion,
                     'unidad' => $row->unidad,
@@ -63,12 +64,14 @@ class ProjectInputBreakdownPdfService
             ->where('proyecto_item.estado', 'AC')
             ->where('proyecto_item.id_proyecto', $project->id_proyecto)
             ->where('insumo.tipo', $type)
-            ->orderBy('item_insumo.id_item_insumo')
+            ->where('insumo.estado', 'AC')
+            ->orderBy('proyecto_item.prioridad')
             ->select([
                 'item_insumo.id_item_insumo',
                 'item_insumo.id_insumo',
                 'item_insumo.id_item',
                 'item_insumo.cantidad',
+                'proyecto_item.prioridad',
                 'item.item as nombre_item',
                 'insumo.descripcion',
                 'insumo.precio',
@@ -80,6 +83,8 @@ class ProjectInputBreakdownPdfService
     private function buildHtml(Project $project, array $rows, int $type): string
     {
         $total = 0.0;
+        $lastItemName = null;
+        $position = 0;
         $html = '
  <style>
   .subseccion{
@@ -112,11 +117,20 @@ class ProjectInputBreakdownPdfService
  </thead>
  <tbody>';
 
-        foreach ($rows as $index => $row) {
+        foreach ($rows as $row) {
+            if ($lastItemName !== $row['nombre_item']) {
+                $html .= '
+          <tr bgcolor="#ccebe8">
+            <td colspan="6"><b>PR: '.$row['prioridad'].' &nbsp;&nbsp; ITEM: '.htmlentities((string) $row['nombre_item']).'</b></td>
+          </tr>';
+                $lastItemName = $row['nombre_item'];
+            }
+
+            $position++;
             $total += $row['parcial'];
             $html .= '
           <tr>
-            <td width="40">'.($index + 1).'</td>
+            <td width="40">'.$position.'</td>
             <td width="280">'.htmlentities((string) $row['descripcion']).'</td>
             <td width="60">'.htmlentities((string) ($row['unidad'] ?? '')).'</td>
             <td width="60" align="right">'.LegacyPdfFormat::number($row['cantidad'], 4).'</td>

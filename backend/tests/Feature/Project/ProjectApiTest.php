@@ -445,6 +445,49 @@ class ProjectApiTest extends TestCase
         }
     }
 
+    public function test_project_input_breakdown_pdf_rows_follow_project_item_priority(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material Item Uno']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 1, 'precio' => 20, 'descripcion' => 'Material Item Dos']);
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM UNO']);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM DOS', 'cod' => 'ITM-002']);
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 1]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 2, 'id_insumo' => 2, 'cantidad' => 1]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'prioridad' => 20]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'prioridad' => 10]);
+
+        $rows = app(\App\Services\Projects\ProjectInputBreakdownPdfService::class)
+            ->rows(\App\Models\Project::findOrFail(1), 1);
+
+        $this->assertSame(['ITEM DOS', 'ITEM UNO'], array_column($rows, 'nombre_item'));
+        $this->assertSame([10, 20], array_column($rows, 'prioridad'));
+    }
+
+    public function test_project_input_breakdown_pdf_uses_only_active_inputs_like_legacy(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material Activo', 'estado' => 'AC']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 1, 'precio' => 20, 'descripcion' => 'Material Inactivo', 'estado' => 'DC']);
+        $this->createItemRecord();
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 1]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 1]);
+        $this->createProjectItemRecord(['id_item' => 1, 'prioridad' => 1]);
+
+        $rows = app(\App\Services\Projects\ProjectInputBreakdownPdfService::class)
+            ->rows(\App\Models\Project::findOrFail(1), 1);
+
+        $this->assertSame(['Material Activo'], array_column($rows, 'descripcion'));
+    }
+
     public function test_non_admin_without_project_permissions_cannot_manage_projects(): void
     {
         $this->createLegacyAuthUser();
