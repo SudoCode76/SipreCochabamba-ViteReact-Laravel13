@@ -281,6 +281,14 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.items.0.mano_obra', 12)
             ->assertJsonPath('data.items.0.herramientas', 3);
 
+        $historicalPdf = $this->get('/api/v1/projects/1/budget-recalculation/pdf?fecha=2026-04-30');
+
+        $historicalPdf->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertHeader('content-disposition', 'inline; filename="presupuesto_por_rubros.pdf"');
+
+        $this->assertStringStartsWith('%PDF', $historicalPdf->getContent());
+
         $this->assertDatabaseHas('proyecto_historial', [
             'id_proyecto' => 1,
             'id_usuario' => 1,
@@ -322,6 +330,9 @@ class ProjectApiTest extends TestCase
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
         $this->createUnitMeasure();
+        $this->createInputType(['descripcion' => 'MATERIAL']);
+        $this->createInputType(['descripcion' => 'MANO DE OBRA']);
+        $this->createInputType(['descripcion' => 'HERRAMIENTA']);
         $this->createGroup();
         $this->createSubgroup();
         $this->createProjectRecord();
@@ -344,6 +355,59 @@ class ProjectApiTest extends TestCase
         $response->assertOk()
             ->assertHeader('content-type', 'application/pdf');
         $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_budget_recalculation_uses_legacy_complete_items_dataset(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material 1']);
+        $this->createItemRecord(['id_item' => 1, 'grupo' => 999, 'subgrupo' => 999]);
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
+        $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 1, 'precio' => 0, 'prioridad' => 1]);
+        $this->createInputLog(['id_log' => 1, 'id_insumo' => 1, 'precio' => 8, 'tipo' => 1, 'descripcion' => 'Material 1', 'fecha' => '2026-04-01']);
+
+        $data = app(\App\Services\Projects\ProjectBudgetService::class)
+            ->budgetRecalculation(\App\Models\Project::findOrFail(1), \Carbon\Carbon::parse('2026-04-30'));
+
+        $this->assertSame([], $data['items']);
+        $this->assertSame([
+            'materiales' => 0.0,
+            'mano_obra' => 0.0,
+            'herramientas' => 0.0,
+        ], $data['totals']);
+    }
+
+    public function test_budget_recalculation_reproduces_legacy_tools_log_selection(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        \Illuminate\Support\Facades\DB::table('tipo_insumo')->insert([
+            ['id_tipo' => 1, 'descripcion' => 'MATERIAL', 'estado' => 'AC'],
+            ['id_tipo' => 2, 'descripcion' => 'MANO DE OBRA', 'estado' => 'AC'],
+            ['id_tipo' => 3, 'descripcion' => 'HERRAMIENTA', 'estado' => 'AC'],
+        ]);
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'tipo' => 3, 'precio' => 50, 'descripcion' => 'Herramienta 1']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 3, 'precio' => 999, 'descripcion' => 'Herramienta 2']);
+        $this->createItemRecord();
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 1]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 1]);
+        $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 1, 'precio' => 0, 'prioridad' => 1]);
+        \Illuminate\Support\Facades\DB::table('log_insumo')->insert([
+            ['id_log' => 10, 'id_insumo' => 1, 'precio' => 100, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-04-01', 'estado' => 'AC'],
+            ['id_log' => 11, 'id_insumo' => 1, 'precio' => 50, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-04-02', 'estado' => 'AC'],
+            ['id_log' => 5, 'id_insumo' => 2, 'precio' => 999, 'tipo' => 3, 'descripcion' => 'Herramienta 2', 'fecha' => '2026-04-03', 'estado' => 'AC'],
+        ]);
+
+        $data = app(\App\Services\Projects\ProjectBudgetService::class)
+            ->budgetRecalculation(\App\Models\Project::findOrFail(1), \Carbon\Carbon::parse('2026-04-30'));
+
+        $this->assertSame(50.0, $data['items'][0]['herramientas']);
+        $this->assertSame(50.0, $data['totals']['herramientas']);
     }
 
     public function test_budget_by_group_pdf_data_orders_by_group_then_subgroup_like_legacy(): void
@@ -527,6 +591,85 @@ class ProjectApiTest extends TestCase
         $this->assertSame(['Material Activo'], array_column($rows, 'descripcion'));
     }
 
+    public function test_can_generate_consolidated_project_inputs_report_pdf(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material Repetido']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 2, 'precio' => 5, 'descripcion' => 'Mano Consolidada']);
+        $this->createInput(['id_insumo' => 3, 'tipo' => 3, 'precio' => 4, 'descripcion' => 'Herramienta Consolidada']);
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM UNO']);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM DOS', 'cod' => 'ITM-002']);
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 2, 'id_insumo' => 1, 'cantidad' => 3]);
+        $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 1]);
+        $this->createItemInputRecord(['id_item_insumo' => 4, 'id_item' => 2, 'id_insumo' => 3, 'cantidad' => 1]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'cantidad' => 2, 'prioridad' => 1]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'cantidad' => 1, 'prioridad' => 2]);
+
+        $rows = app(\App\Services\Projects\ProjectInputsReportPdfService::class)
+            ->rows(\App\Models\Project::findOrFail(1));
+
+        $this->assertSame(['Material Repetido', 'Mano Consolidada', 'Herramienta Consolidada'], array_column($rows, 'descripcion'));
+        $this->assertSame(7.0, $rows[0]['cantidad']);
+        $this->assertSame(70.0, $rows[0]['parcial']);
+
+        $response = $this->get('/api/v1/projects/1/inputs-report/pdf');
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertHeader('content-disposition', 'inline; filename="reporte_consolidado_insumos.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+
+        $this->assertDatabaseHas('proyecto_historial', [
+            'id_proyecto' => 1,
+            'id_usuario' => 1,
+            'accion' => 'pdf_generated',
+        ]);
+    }
+
+    public function test_consolidated_project_inputs_report_excludes_inactive_records(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material Activo', 'estado' => 'AC']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 1, 'precio' => 20, 'descripcion' => 'Insumo Inactivo', 'estado' => 'DC']);
+        $this->createInput(['id_insumo' => 3, 'tipo' => 1, 'precio' => 30, 'descripcion' => 'Relacion Inactiva', 'estado' => 'AC']);
+        $this->createInput(['id_insumo' => 4, 'tipo' => 1, 'precio' => 40, 'descripcion' => 'Proyecto Item Inactivo', 'estado' => 'AC']);
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM ACTIVO']);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM INACTIVO PROYECTO', 'cod' => 'ITM-002']);
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 1]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 1]);
+        $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1, 'estado' => 'DC']);
+        $this->createItemInputRecord(['id_item_insumo' => 4, 'id_item' => 2, 'id_insumo' => 4, 'cantidad' => 1]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'cantidad' => 2, 'estado' => 'AC']);
+        $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'cantidad' => 2, 'estado' => 'DC']);
+
+        $rows = app(\App\Services\Projects\ProjectInputsReportPdfService::class)
+            ->rows(\App\Models\Project::findOrFail(1));
+
+        $this->assertSame(['Material Activo'], array_column($rows, 'descripcion'));
+        $this->assertSame(2.0, $rows[0]['cantidad']);
+    }
+
+    public function test_consolidated_project_inputs_report_pdf_is_valid_when_project_has_no_inputs(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createProjectRecord();
+
+        $response = $this->get('/api/v1/projects/1/inputs-report/pdf');
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
     public function test_non_admin_without_project_permissions_cannot_manage_projects(): void
     {
         $this->createLegacyAuthUser();
@@ -537,6 +680,8 @@ class ProjectApiTest extends TestCase
         $this->getJson('/api/v1/projects/context')->assertForbidden();
         $this->getJson('/api/v1/projects')->assertForbidden();
         $this->getJson('/api/v1/projects/1/history')->assertForbidden();
+        $this->get('/api/v1/projects/1/inputs-report/pdf')->assertForbidden();
+        $this->get('/api/v1/projects/1/budget-recalculation/pdf?fecha=2026-04-30')->assertForbidden();
         $this->postJson('/api/v1/projects', [
             'nombre_proyecto' => 'nuevo proyecto',
             'fecha' => '2026-04-30',

@@ -67,12 +67,7 @@ class ProjectBudgetService
 
     public function budgetRecalculation(Project $project, CarbonInterface $date): array
     {
-        $rows = $this->activeProjectItems($project)
-            ->sortBy([
-                fn (ProjectItem $item) => $item->item?->groupCatalog?->nombre_grupo,
-                fn (ProjectItem $item) => $item->item?->subgroupCatalog?->descripcion,
-            ])
-            ->values();
+        $rows = $this->activeProjectItemsForLegacyBudgetPdf($project);
 
         return $this->buildHistoricalBudgetRows($rows, $date);
     }
@@ -210,6 +205,7 @@ class ProjectBudgetService
             ->whereNotNull('proyecto_item.id_item')
             ->orderBy('grupo.nombre_grupo')
             ->orderBy('sub_grupo.descripcion')
+            ->orderBy('proyecto_item.id_proyecto_item')
             ->get();
     }
 
@@ -320,7 +316,7 @@ class ProjectBudgetService
             ->join('tipo_insumo', 'tipo_insumo.id_tipo', '=', 'log_insumo.tipo')
             ->join('proyecto_item', 'proyecto_item.id_item', '=', 'item_insumo.id_item')
             ->join('proyecto', 'proyecto.id_proyecto', '=', 'proyecto_item.id_proyecto')
-            ->whereDate('log_insumo.fecha', '<=', $date->toDateString())
+            ->where('log_insumo.fecha', '<=', $date->toDateString())
             ->where('log_insumo.tipo', $type)
             ->where('proyecto_item.estado', 'AC')
             ->where('item_insumo.estado', 'AC')
@@ -338,16 +334,26 @@ class ProjectBudgetService
             ])
             ->get();
 
-        $seen = [];
+        $lastInputId = null;
+        $lastLogId = 0;
         $total = 0.0;
 
         foreach ($rows as $row) {
-            if (isset($seen[$row->id_insumo])) {
+            if ((int) $row->id_insumo === $lastInputId) {
+                if ($type !== 3) {
+                    $lastLogId = 0;
+                }
+
+                $lastInputId = (int) $row->id_insumo;
+
                 continue;
             }
 
-            $seen[$row->id_insumo] = true;
-            $total += round((float) $row->cantidad, 4) * round((float) $row->precio, 2);
+            if ((int) $row->id_log >= $lastLogId) {
+                $total += round((float) $row->cantidad, 4) * round((float) $row->precio, 2);
+                $lastLogId = (int) $row->id_log;
+                $lastInputId = (int) $row->id_insumo;
+            }
         }
 
         return round($total, 4);

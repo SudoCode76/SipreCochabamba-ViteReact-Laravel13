@@ -1,8 +1,8 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, X, Loader2, History } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, ClipboardList, X, Loader2, History } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,9 +55,175 @@ const formatHistoryDate = (value) => {
 
 const hasMetadata = (metadata) => metadata && Object.keys(metadata).length > 0;
 
+const historyFieldLabels = {
+  name: "Nombre",
+  nombre_proyecto: "Nombre",
+  location: "Ubicacion",
+  ubicacion: "Ubicacion",
+  status: "Estado",
+  estado: "Estado",
+  approval_status: "Aprobacion",
+  aprobado: "Aprobacion",
+  responsible: "Responsable",
+  responsable: "Responsable",
+  requester_id: "Solicitante",
+  solicitante: "Solicitante",
+  fecha: "Fecha",
+  observaciones: "Observaciones",
+  precio: "Precio",
+  cantidad: "Cantidad",
+  prioridad: "Prioridad",
+  report_type: "Reporte",
+  format: "Formato",
+  type: "Tipo",
+  reference_date: "Fecha de referencia",
+  total: "Total",
+  direct_cost: "Costo directo",
+  materiales: "Materiales",
+  mano_obra: "Mano de obra",
+  herramientas: "Herramientas",
+};
+
+const historyStatusLabels = {
+  AC: "Activo",
+  DC: "Inactivo",
+  PD: "Pendiente",
+  RV: "Revisado",
+  AP: "Aprobado",
+  1: "Material",
+  2: "Mano de obra",
+  3: "Maquinaria y herramientas",
+};
+
+const labelHistoryField = (field) => historyFieldLabels[field] || field.replaceAll("_", " ");
+
+const formatHistoryValue = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  const normalized = String(value);
+
+  if (historyStatusLabels[normalized]) {
+    return historyStatusLabels[normalized];
+  }
+
+  if (typeof value === "number") {
+    return new Intl.NumberFormat("es-BO", { maximumFractionDigits: 4 }).format(value);
+  }
+
+  return normalized;
+};
+
+const metadataRow = (label, value) => (
+  <div key={label} className="rounded-xl border border-border/70 bg-background px-3 py-2">
+    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
+    <div className="mt-1 text-sm text-foreground">{formatHistoryValue(value)}</div>
+  </div>
+);
+
+const itemLabel = (item) => `Item #${item?.id_item || "-"}`;
+
+const renderChangedFields = (changes) => {
+  const entries = Object.entries(changes || {});
+
+  if (entries.length === 0) {
+    return <p className="text-sm text-muted-foreground">No se registraron cambios en campos visibles.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {entries.map(([field, change]) => (
+        <div key={field} className="rounded-xl border border-border/70 bg-background px-3 py-2">
+          <div className="text-sm font-medium text-foreground">{labelHistoryField(field)}</div>
+          <div className="mt-1 text-sm text-muted-foreground">
+            Antes: <span className="text-foreground">{formatHistoryValue(change?.from)}</span>
+            <span className="px-2">-&gt;</span>
+            Ahora: <span className="text-foreground">{formatHistoryValue(change?.to)}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const renderItemChangeList = (title, items, mode) => {
+  if (!items?.length) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+      {items.map((item, index) => (
+        <div key={`${title}-${item.id_item || index}`} className="rounded-xl border border-border/70 bg-background px-3 py-2">
+          <div className="text-sm font-medium text-foreground">{itemLabel(item)}</div>
+          {mode === "updated" ? (
+            <div className="mt-2">{renderChangedFields(item.changes)}</div>
+          ) : (
+            <div className="mt-1 grid gap-2 sm:grid-cols-3">
+              {metadataRow("Cantidad", item.cantidad)}
+              {metadataRow("Precio", item.precio)}
+              {metadataRow("Prioridad", item.prioridad)}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const renderHistoryMetadata = (entry) => {
+  const metadata = entry.metadata || {};
+
+  if (entry.action === "created" && metadata.project) {
+    return (
+      <dl className="grid gap-2 sm:grid-cols-2">
+        {Object.entries(metadata.project).map(([field, value]) => metadataRow(labelHistoryField(field), value))}
+      </dl>
+    );
+  }
+
+  if (entry.action === "updated") {
+    return renderChangedFields(metadata.changes);
+  }
+
+  if (entry.action === "items_synced") {
+    return (
+      <div className="space-y-4">
+        {renderItemChangeList("Items agregados", metadata.added, "created")}
+        {renderItemChangeList("Items modificados", metadata.updated, "updated")}
+        {renderItemChangeList("Items quitados", metadata.removed, "removed")}
+      </div>
+    );
+  }
+
+  if (entry.action === "budget_recalculated") {
+    return (
+      <dl className="grid gap-2 sm:grid-cols-2">
+        {metadata.reference_date && metadataRow("Fecha de referencia", metadata.reference_date)}
+        {Object.entries(metadata.totals || {}).map(([field, value]) => metadataRow(labelHistoryField(field), value))}
+      </dl>
+    );
+  }
+
+  if (entry.action === "pdf_generated") {
+    return (
+      <dl className="grid gap-2 sm:grid-cols-2">
+        {Object.entries(metadata).map(([field, value]) => metadataRow(labelHistoryField(field), value))}
+      </dl>
+    );
+  }
+
+  return (
+    <dl className="grid gap-2 sm:grid-cols-2">
+      {Object.entries(metadata).map(([field, value]) => metadataRow(labelHistoryField(field), value))}
+    </dl>
+  );
+};
+
 export default function ProjectsPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [perPage, setPerPage] = useState(15);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -67,6 +233,7 @@ export default function ProjectsPage() {
   const [recalculateProject, setRecalculateProject] = useState(null);
   const [recalculateDate, setRecalculateDate] = useState("");
   const [recalculateStatus, setRecalculateStatus] = useState(null);
+  const [recalculatePending, setRecalculatePending] = useState(false);
   const [incidenceOpen, setIncidenceOpen] = useState(false);
   const [incidenceProject, setIncidenceProject] = useState(null);
   const [incidenceFormat, setIncidenceFormat] = useState("PCA");
@@ -210,21 +377,8 @@ export default function ProjectsPage() {
     setRecalculateProject(null);
     setRecalculateDate("");
     setRecalculateStatus(null);
+    setRecalculatePending(false);
   };
-
-  const recalculateMutation = useMutation({
-    mutationFn: ({ projectId, payload }) => projectService.budgetRecalculation(projectId, payload),
-    onSuccess: async (response) => {
-      await queryClient.invalidateQueries({ queryKey: ["projects"] });
-      setRecalculateStatus({
-        type: "success",
-        message: response?.message || "Precio del proyecto recalculado correctamente.",
-      });
-      window.setTimeout(() => {
-        closeRecalculate();
-      }, 800);
-    },
-  });
 
   const handleRecalculateSubmit = async (event) => {
     event.preventDefault();
@@ -233,19 +387,42 @@ export default function ProjectsPage() {
     }
 
     setRecalculateStatus(null);
+    setRecalculatePending(true);
+    const popup = window.open("", "_blank");
+
+    if (popup) {
+      popup.document.write("<p>Generando PDF...</p>");
+    }
 
     try {
-      await recalculateMutation.mutateAsync({
-        projectId: recalculateProject.id_proyecto,
-        payload: { fecha: recalculateDate },
-      });
-    } catch (mutationError) {
-      const fieldErrors = mutationError?.response?.data?.errors;
+      const blob = await projectService.downloadBudgetRecalculationPdf(recalculateProject.id_proyecto, recalculateDate);
+
+      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
+        throw new Error("La respuesta no contiene un PDF valido.");
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        window.open(url, "_blank");
+      }
+
+      closeRecalculate();
+    } catch (pdfError) {
+      if (popup) {
+        popup.close();
+      }
+
+      const fieldErrors = pdfError?.response?.data?.errors;
       const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
       setRecalculateStatus({
         type: "error",
-        message: firstFieldError || mutationError?.response?.data?.message || "No se pudo recalcular el precio del proyecto.",
+        message: firstFieldError || pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el presupuesto recalculado del proyecto.",
       });
+    } finally {
+      setRecalculatePending(false);
     }
   };
 
@@ -279,6 +456,40 @@ export default function ProjectsPage() {
       setFeedback({
         type: "error",
         message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el presupuesto por rubros.",
+      });
+    }
+  };
+
+  const handleOpenInputsReportPdf = async (project) => {
+    setFeedback(null);
+    const popup = window.open("", "_blank");
+
+    if (popup) {
+      popup.document.write("<p>Generando PDF...</p>");
+    }
+
+    try {
+      const blob = await projectService.downloadInputsReportPdf(project.id_proyecto);
+
+      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
+        throw new Error("La respuesta no contiene un PDF valido.");
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        window.open(url, "_blank");
+      }
+    } catch (pdfError) {
+      if (popup) {
+        popup.close();
+      }
+
+      setFeedback({
+        type: "error",
+        message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el reporte de insumos del proyecto.",
       });
     }
   };
@@ -640,6 +851,10 @@ export default function ProjectsPage() {
                                 <Layers className="h-4 w-4 text-muted-foreground" />
                                 <span>Desglose de Insumos del Proyecto</span>
                               </DropdownMenuItem>
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => void handleOpenInputsReportPdf(project)}>
+                                <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                                <span>Reporte de Insumos</span>
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
@@ -819,10 +1034,10 @@ export default function ProjectsPage() {
 
                       {hasMetadata(entry.metadata) && (
                         <details className="mt-4 rounded-xl border border-border/70 bg-muted/20 p-3">
-                          <summary className="cursor-pointer text-sm font-medium text-foreground">Ver detalle tecnico</summary>
-                          <pre className="mt-3 max-h-72 overflow-auto rounded-xl bg-slate-950 p-3 text-xs leading-5 text-slate-100">
-                            {JSON.stringify(entry.metadata, null, 2)}
-                          </pre>
+                          <summary className="cursor-pointer text-sm font-medium text-foreground">Ver detalles</summary>
+                          <div className="mt-3">
+                            {renderHistoryMetadata(entry)}
+                          </div>
                         </details>
                       )}
                     </div>
@@ -948,11 +1163,11 @@ export default function ProjectsPage() {
                     <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={closeRecalculate}>
                       Cancelar
                     </Button>
-                    <Button type="submit" className="rounded-full bg-foreground text-background hover:bg-foreground/90" disabled={recalculateMutation.isPending}>
-                      {recalculateMutation.isPending ? (
+                    <Button type="submit" className="rounded-full bg-foreground text-background hover:bg-foreground/90" disabled={recalculatePending}>
+                      {recalculatePending ? (
                         <>
                           <Loader2 className="mr-2 size-4 animate-spin" />
-                          Recalculando...
+                          Generando PDF...
                         </>
                       ) : "Recalcular"}
                     </Button>

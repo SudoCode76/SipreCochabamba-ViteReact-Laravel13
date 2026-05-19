@@ -42,6 +42,14 @@ export const projectService = {
     return response.data;
   },
 
+  downloadBudgetRecalculationPdf: async (projectId, fecha) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/budget-recalculation/pdf`, {
+      params: { fecha },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
   downloadBudgetByGroupPdf: async (projectId) => {
     const response = await apiClient.get(`/v1/projects/${projectId}/budget-by-group/pdf`, {
       responseType: "blob",
@@ -68,6 +76,13 @@ export const projectService = {
   downloadInputBreakdownPdf: async (projectId, type) => {
     const response = await apiClient.get(`/v1/projects/${projectId}/input-breakdown/pdf`, {
       params: { type },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  downloadInputsReportPdf: async (projectId) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/inputs-report/pdf`, {
       responseType: "blob",
     });
     return response.data;

@@ -16,6 +16,19 @@ class ProjectBudgetByGroupPdfService
     public function stream(Project $project): Response
     {
         $budget = $this->projectBudgetService->budgetByGroupPdfData($project);
+
+        return $this->streamBudget($project, $budget);
+    }
+
+    public function streamHistorical(Project $project, array $budget): Response
+    {
+        return $this->streamBudget($project, array_merge([
+            'items_proyecto_count' => count($budget['items'] ?? []),
+        ], $budget));
+    }
+
+    private function streamBudget(Project $project, array $budget): Response
+    {
         $items = $budget['items'] ?? [];
 
         $pdf = $this->makePdf();

@@ -24,6 +24,7 @@ use App\Services\Projects\ProjectContextService;
 use App\Services\Projects\ProjectCrudService;
 use App\Services\Projects\ProjectIncidenceSummaryPdfService;
 use App\Services\Projects\ProjectInputBreakdownPdfService;
+use App\Services\Projects\ProjectInputsReportPdfService;
 use App\Services\Projects\ProjectGeneralBudgetPdfService;
 use App\Services\Projects\ProjectHistoryService;
 use App\Services\Projects\ProjectItemService;
@@ -44,6 +45,7 @@ class ProjectController extends Controller
         private readonly ProjectIncidenceSummaryPdfService $projectIncidenceSummaryPdfService,
         private readonly ProjectGeneralBudgetPdfService $projectGeneralBudgetPdfService,
         private readonly ProjectInputBreakdownPdfService $projectInputBreakdownPdfService,
+        private readonly ProjectInputsReportPdfService $projectInputsReportPdfService,
         private readonly ProjectPermissionService $projectPermissionService,
         private readonly ProjectHistoryService $projectHistoryService,
         private readonly AuditService $auditService,
@@ -228,6 +230,19 @@ class ProjectController extends Controller
         ]);
     }
 
+    public function budgetRecalculationPdf(BudgetRecalculationRequest $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_recalculate_budget', 'No tiene permisos para recalcular el presupuesto del proyecto.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para recalcular el presupuesto del proyecto.');
+        }
+
+        $data = $this->projectBudgetService->budgetRecalculation($project, $request->date('fecha'));
+        $this->projectHistoryService->recordBudgetRecalculated($project, $request->user(), $request->ip(), $request->date('fecha')->toDateString(), $data);
+        $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se recalculo el presupuesto del proyecto '.$project->nombre_proyecto);
+
+        return $this->projectBudgetByGroupPdfService->streamHistorical($project, $data);
+    }
+
     public function budgetByGroup(Project $project): JsonResponse
     {
         if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view_reports', 'No tiene permisos para consultar presupuesto por rubros.')) {
@@ -302,6 +317,17 @@ class ProjectController extends Controller
         ]);
 
         return $this->projectInputBreakdownPdfService->stream($project, (int) $request->validated('type'));
+    }
+
+    public function inputsReportPdf(Request $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar el reporte de insumos del proyecto.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el reporte de insumos del proyecto.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Reporte consolidado de insumos');
+
+        return $this->projectInputsReportPdfService->stream($project);
     }
 
     public function breakdownCalculation(ProjectFormatRequest $request, Project $project): JsonResponse
