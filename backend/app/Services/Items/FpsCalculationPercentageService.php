@@ -12,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class FpsCalculationPercentageService
 {
+    public function __construct(private readonly CalculationFormatPermissionService $permissions) {}
+
     public function context(User $user): array
     {
         return [
@@ -19,11 +21,7 @@ class FpsCalculationPercentageService
                 ['code' => 'AC', 'label' => 'ACTIVO'],
                 ['code' => 'DC', 'label' => 'INACTIVO'],
             ],
-            'permissions' => [
-                'can_view' => $user->isAdministrator(),
-                'can_create' => $user->isAdministrator(),
-                'can_update' => $user->isAdministrator(),
-            ],
+            'permissions' => $this->permissions->resolve($user, 'FPS'),
             'filters' => ['search', 'description', 'code', 'status', 'page', 'per_page'],
             'endpoints' => [
                 'list' => '/api/v1/calculation-percentages/fps',

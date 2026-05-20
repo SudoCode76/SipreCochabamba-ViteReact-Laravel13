@@ -8,7 +8,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/subgroups/by-group/{group}', [SubgroupController::class, 'byGroup']);
 });
 
-Route::middleware(['auth:sanctum', 'active_user', 'admin'])->group(function (): void {
+Route::middleware(['auth:sanctum', 'active_user', 'db_permission:PARAMETROS,SUBGRUPOS|SUB_GRUPOS|SUB_GRUPO'])->group(function (): void {
     Route::get('/subgroups/context', [SubgroupController::class, 'context']);
     Route::post('/subgroups', [SubgroupController::class, 'store']);
     Route::get('/subgroups/{subgroup}', [SubgroupController::class, 'show']);

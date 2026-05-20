@@ -4,7 +4,7 @@ use App\Http\Controllers\Api\V1\InputController;
 use App\Http\Controllers\Api\V1\SearchController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum', 'active_user', 'admin'])->group(function (): void {
+Route::middleware(['auth:sanctum', 'active_user', 'db_permission:INSUMO,INSUMO|INPUTS|INPUTS_ADMIN|LISTA_INSUMO'])->group(function (): void {
     Route::get('/inputs/context', [InputController::class, 'context']);
     Route::get('/inputs', [InputController::class, 'index']);
     Route::post('/inputs', [InputController::class, 'store']);

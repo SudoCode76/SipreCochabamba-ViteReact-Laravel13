@@ -3,7 +3,7 @@
 use App\Http\Controllers\Api\V1\GroupController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum', 'active_user', 'admin'])->group(function (): void {
+Route::middleware(['auth:sanctum', 'active_user', 'db_permission:PARAMETROS,GRUPOS|GRUPO'])->group(function (): void {
     Route::get('/groups', [GroupController::class, 'index']);
     Route::get('/groups/context', [GroupController::class, 'context']);
     Route::post('/groups', [GroupController::class, 'store']);

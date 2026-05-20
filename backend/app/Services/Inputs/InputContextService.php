@@ -8,6 +8,8 @@ use App\Models\User;
 
 class InputContextService
 {
+    public function __construct(private readonly InputPermissionService $permissions) {}
+
     public function execute(User $user): array
     {
         $types = InputType::query()
@@ -43,13 +45,13 @@ class InputContextService
                 ['code' => 'DC', 'label' => 'INACTIVO'],
             ],
             'permissions' => [
-                'can_view' => $user->isAdministrator(),
-                'can_create' => $user->isAdministrator(),
-                'can_update' => $user->isAdministrator(),
-                'can_delete' => $user->isAdministrator(),
-                'can_view_history' => $user->isAdministrator(),
-                'can_view_logs' => $user->isAdministrator(),
-                'can_manage_quotes' => $user->isAdministrator(),
+                'can_view' => $this->permissions->allows($user, ['INSUMO', 'INPUTS', 'INPUTS_ADMIN', 'LISTA_INSUMO']),
+                'can_create' => $this->permissions->allows($user, ['INSUMO', 'INPUTS_ADMIN']),
+                'can_update' => $this->permissions->allows($user, ['INSUMO', 'INPUTS_ADMIN']),
+                'can_delete' => $this->permissions->allows($user, ['INSUMO', 'INPUTS_ADMIN']),
+                'can_view_history' => $this->permissions->allows($user, ['INSUMO', 'INPUTS_ADMIN']),
+                'can_view_logs' => $this->permissions->allows($user, ['INSUMO', 'INPUTS_ADMIN']),
+                'can_manage_quotes' => $this->permissions->allows($user, ['INSUMO', 'INPUTS_ADMIN']),
             ],
         ];
     }

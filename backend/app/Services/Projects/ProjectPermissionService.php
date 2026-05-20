@@ -29,17 +29,17 @@ class ProjectPermissionService
         }
 
         $resolved = $this->permissions->resolveMap($user, 'PROYECTO', [
-            'can_view' => ['INDEX'],
-            'can_create' => ['REGISTRAR_PROYECTO'],
-            'can_edit' => ['EDITAR_PROYECTO'],
+            'can_view' => ['INDEX', 'PROYECTO'],
+            'can_create' => ['REGISTRAR_PROYECTO', 'NUEVO_PROYECTO'],
+            'can_edit' => ['EDITAR_PROYECTO', 'EDIT_PROYECTO'],
             'can_sync_items' => ['REGISTRAR_ITEM_PROYECTO'],
             'can_recalculate_budget' => ['RECAL_PRESUPUESTO_RUBRO'],
             'can_view_budget_by_group' => ['PRESUPUESTO_RUBRO'],
             'can_view_incidence_summary' => ['RESUMEN_INCIDENCIA'],
             'can_view_general_budget' => ['PRESUPUESTO_GENERAL', 'PRESUPUESTO_RUBRO'],
-            'can_view_input_breakdown' => ['DESGLOSE_ITEMS'],
+            'can_view_input_breakdown' => ['DESGLOSE_ITEMS', 'CALCULAR_DESGLOSE'],
             'can_view_inputs_report' => ['REPORTE_INSUMOS', 'DESGLOSE_ITEMS'],
-            'can_view_unit_prices' => ['PRECIOS_UNITARIOS', 'PRESUPUESTO_RUBRO'],
+            'can_view_unit_prices' => ['PRECIOS_UNITARIOS', 'IMPRIMIR_PRECIOS_UNITARIOS', 'PRESUPUESTO_RUBRO'],
         ]);
 
         $resolved['can_view_reports'] = $resolved['can_view_budget_by_group']

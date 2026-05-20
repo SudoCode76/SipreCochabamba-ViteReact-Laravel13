@@ -12,12 +12,15 @@ use App\Models\Item;
 use App\Models\SubgroupCatalog;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Services\Parameters\ParameterPermissionService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class SubgroupService
 {
+    public function __construct(private readonly ParameterPermissionService $permissions) {}
+
     public function context(User $user): array
     {
         return [
@@ -35,12 +38,7 @@ class SubgroupService
                 ['code' => 'AC', 'label' => 'ACTIVO'],
                 ['code' => 'DC', 'label' => 'INACTIVO'],
             ],
-            'permissions' => [
-                'can_view' => $user->isAdministrator(),
-                'can_create' => $user->isAdministrator(),
-                'can_update' => $user->isAdministrator(),
-                'can_delete' => $user->isAdministrator(),
-            ],
+            'permissions' => $this->permissions->resolve($user, ['SUBGRUPOS', 'SUB_GRUPOS', 'SUB_GRUPO'], canDelete: true),
         ];
     }
 

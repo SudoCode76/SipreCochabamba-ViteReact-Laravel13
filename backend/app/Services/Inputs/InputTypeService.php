@@ -7,10 +7,13 @@ use App\Http\Requests\Input\UpdateInputTypeRequest;
 use App\Models\InputType;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Services\Parameters\ParameterPermissionService;
 use Illuminate\Validation\ValidationException;
 
 class InputTypeService
 {
+    public function __construct(private readonly ParameterPermissionService $permissions) {}
+
     public function context(User $user): array
     {
         return [
@@ -18,11 +21,7 @@ class InputTypeService
                 ['code' => 'AC', 'label' => 'ACTIVO'],
                 ['code' => 'DC', 'label' => 'INACTIVO'],
             ],
-            'permissions' => [
-                'can_view' => $user->isAdministrator(),
-                'can_create' => $user->isAdministrator(),
-                'can_update' => $user->isAdministrator(),
-            ],
+            'permissions' => $this->permissions->resolve($user, ['TIPOINSUMO', 'TIPO_INSUMO', 'INPUT_TYPES']),
         ];
     }
 

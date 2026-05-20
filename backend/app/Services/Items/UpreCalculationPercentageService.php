@@ -12,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class UpreCalculationPercentageService
 {
+    public function __construct(private readonly CalculationFormatPermissionService $permissions) {}
+
     public function context(User $user): array
     {
         return [
@@ -19,11 +21,7 @@ class UpreCalculationPercentageService
                 ['code' => 'AC', 'label' => 'ACTIVO'],
                 ['code' => 'DC', 'label' => 'INACTIVO'],
             ],
-            'permissions' => [
-                'can_view' => $user->isAdministrator(),
-                'can_create' => $user->isAdministrator(),
-                'can_update' => $user->isAdministrator(),
-            ],
+            'permissions' => $this->permissions->resolve($user, 'UPRE'),
             'filters' => ['search', 'description', 'code', 'status', 'page', 'per_page'],
             'endpoints' => [
                 'list' => '/api/v1/calculation-percentages/upre',

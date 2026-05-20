@@ -12,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class PromanCalculationPercentageService
 {
+    public function __construct(private readonly CalculationFormatPermissionService $permissions) {}
+
     public function context(User $user): array
     {
         return [
@@ -19,11 +21,7 @@ class PromanCalculationPercentageService
                 ['code' => 'AC', 'label' => 'ACTIVO'],
                 ['code' => 'DC', 'label' => 'INACTIVO'],
             ],
-            'permissions' => [
-                'can_view' => $user->isAdministrator(),
-                'can_create' => $user->isAdministrator(),
-                'can_update' => $user->isAdministrator(),
-            ],
+            'permissions' => $this->permissions->resolve($user, 'PROMAN'),
             'filters' => ['search', 'description', 'code', 'status', 'page', 'per_page'],
             'endpoints' => [
                 'list' => '/api/v1/calculation-percentages/proman',
