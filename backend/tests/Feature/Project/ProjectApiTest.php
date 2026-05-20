@@ -398,7 +398,7 @@ class ProjectApiTest extends TestCase
         $this->createItemRecord();
         $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 1, 'precio' => 0, 'prioridad' => 1]);
 
-        $data = app(\App\Services\Projects\ProjectBudgetService::class)
+        $data = app(\App\Modules\Projects\Services\ProjectBudgetService::class)
             ->budgetByGroupPdfData(\App\Models\Project::findOrFail(1));
 
         $this->assertSame(1, $data['items_proyecto_count']);
@@ -427,7 +427,7 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 1, 'precio' => 0, 'prioridad' => 1]);
         $this->createInputLog(['id_log' => 1, 'id_insumo' => 1, 'precio' => 8, 'tipo' => 1, 'descripcion' => 'Material 1', 'fecha' => '2026-04-01']);
 
-        $data = app(\App\Services\Projects\ProjectBudgetService::class)
+        $data = app(\App\Modules\Projects\Services\ProjectBudgetService::class)
             ->budgetRecalculation(\App\Models\Project::findOrFail(1), \Carbon\Carbon::parse('2026-04-30'));
 
         $this->assertSame([], $data['items']);
@@ -462,7 +462,7 @@ class ProjectApiTest extends TestCase
             ['id_log' => 5, 'id_insumo' => 2, 'precio' => 999, 'tipo' => 3, 'descripcion' => 'Herramienta 2', 'fecha' => '2026-04-03', 'estado' => 'AC'],
         ]);
 
-        $data = app(\App\Services\Projects\ProjectBudgetService::class)
+        $data = app(\App\Modules\Projects\Services\ProjectBudgetService::class)
             ->budgetRecalculation(\App\Models\Project::findOrFail(1), \Carbon\Carbon::parse('2026-04-30'));
 
         $this->assertSame(50.0, $data['items'][0]['herramientas']);
@@ -486,7 +486,7 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'prioridad' => 1]);
         $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'prioridad' => 99]);
 
-        $data = app(\App\Services\Projects\ProjectBudgetService::class)
+        $data = app(\App\Modules\Projects\Services\ProjectBudgetService::class)
             ->budgetByGroupPdfData(\App\Models\Project::findOrFail(1));
 
         $this->assertSame(['ITEM ALFA', 'ITEM ZETA'], array_column($data['items'], 'descripcion'));
@@ -547,10 +547,10 @@ class ProjectApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
         $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 2, 'precio' => 9999, 'prioridad' => 1]);
 
-        $items = app(\App\Services\Projects\ProjectBudgetService::class)->generalBudgetPdfItems(
+        $items = app(\App\Modules\Projects\Services\ProjectBudgetService::class)->generalBudgetPdfItems(
             \App\Models\Project::findOrFail(1),
             'PCA',
-            app(\App\Services\Projects\ProjectLegacyUnitPriceService::class),
+            app(\App\Modules\Projects\Services\ProjectLegacyUnitPriceService::class),
         );
 
         $this->assertEqualsWithDelta(63.826645668056706, $items[0]['precio'], 0.000001);
@@ -591,7 +591,7 @@ class ProjectApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
         $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 2, 'prioridad' => 1]);
 
-        $service = app(\App\Services\Projects\ProjectInputBreakdownPdfService::class);
+        $service = app(\App\Modules\Projects\Services\ProjectInputBreakdownPdfService::class);
         $this->assertSame('Material 1', $service->rows(\App\Models\Project::findOrFail(1), 1)[0]['descripcion']);
         $this->assertSame(20.0, $service->rows(\App\Models\Project::findOrFail(1), 1)[0]['parcial']);
         $this->assertSame('Mano 1', $service->rows(\App\Models\Project::findOrFail(1), 2)[0]['descripcion']);
@@ -623,7 +623,7 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'prioridad' => 20]);
         $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'prioridad' => 10]);
 
-        $rows = app(\App\Services\Projects\ProjectInputBreakdownPdfService::class)
+        $rows = app(\App\Modules\Projects\Services\ProjectInputBreakdownPdfService::class)
             ->rows(\App\Models\Project::findOrFail(1), 1);
 
         $this->assertSame(['ITEM DOS', 'ITEM UNO'], array_column($rows, 'nombre_item'));
@@ -644,7 +644,7 @@ class ProjectApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 1]);
         $this->createProjectItemRecord(['id_item' => 1, 'prioridad' => 1]);
 
-        $rows = app(\App\Services\Projects\ProjectInputBreakdownPdfService::class)
+        $rows = app(\App\Modules\Projects\Services\ProjectInputBreakdownPdfService::class)
             ->rows(\App\Models\Project::findOrFail(1), 1);
 
         $this->assertSame(['Material Activo'], array_column($rows, 'descripcion'));
@@ -669,7 +669,7 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'cantidad' => 2, 'prioridad' => 1]);
         $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'cantidad' => 1, 'prioridad' => 2]);
 
-        $rows = app(\App\Services\Projects\ProjectInputsReportPdfService::class)
+        $rows = app(\App\Modules\Projects\Services\ProjectInputsReportPdfService::class)
             ->rows(\App\Models\Project::findOrFail(1));
 
         $this->assertSame(['Material Repetido', 'Mano Consolidada', 'Herramienta Consolidada'], array_column($rows, 'descripcion'));
@@ -710,7 +710,7 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'cantidad' => 2, 'estado' => 'AC']);
         $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'cantidad' => 2, 'estado' => 'DC']);
 
-        $rows = app(\App\Services\Projects\ProjectInputsReportPdfService::class)
+        $rows = app(\App\Modules\Projects\Services\ProjectInputsReportPdfService::class)
             ->rows(\App\Models\Project::findOrFail(1));
 
         $this->assertSame(['Material Activo'], array_column($rows, 'descripcion'));

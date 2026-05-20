@@ -8,7 +8,7 @@ use App\Http\Requests\Item\StoreCalculationPercentageRequest;
 use App\Http\Requests\Item\UpdateCalculationPercentageRequest;
 use App\Http\Resources\Item\CalculationPercentageResource;
 use App\Models\PromanCalculationPercentage;
-use App\Services\Items\PromanCalculationPercentageService;
+use App\Modules\Items\Services\PromanCalculationPercentageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

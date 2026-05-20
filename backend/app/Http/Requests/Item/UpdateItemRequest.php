@@ -5,6 +5,7 @@ namespace App\Http\Requests\Item;
 use App\Models\SubgroupCatalog;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Unique;
 
 class UpdateItemRequest extends FormRequest
 {
@@ -47,7 +48,7 @@ class UpdateItemRequest extends FormRequest
                 'required',
                 'string',
                 'max:100',
-                Rule::unique('item', 'item')->ignore($itemId, 'id_item'),
+                $this->uniqueItemRule($itemId),
             ],
             'unit_measure_id' => ['nullable', 'integer', 'exists:unidad_medida,id_unidad_medida'],
             'status' => ['required', 'string', 'size:2', 'in:AC,DC'],
@@ -74,5 +75,18 @@ class UpdateItemRequest extends FormRequest
                 $validator->errors()->add('subgroup_id', 'El subgrupo no pertenece al grupo seleccionado.');
             }
         });
+    }
+
+    private function uniqueItemRule(int $itemId): Unique
+    {
+        $rule = Rule::unique('item', 'item')->ignore($itemId, 'id_item');
+
+        if ($this->user()?->isAdministrator()) {
+            $rule
+                ->where('grupo', (int) $this->integer('group_id'))
+                ->where('subgrupo', (int) $this->integer('subgroup_id'));
+        }
+
+        return $rule;
     }
 }

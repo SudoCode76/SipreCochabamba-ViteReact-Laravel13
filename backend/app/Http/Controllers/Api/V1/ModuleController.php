@@ -7,7 +7,7 @@ use App\Http\Requests\Project\StoreModuleRequest;
 use App\Http\Requests\Project\UpdateModuleRequest;
 use App\Http\Resources\Project\ModuleResource;
 use App\Models\ModuleCatalog;
-use App\Services\Projects\ModuleService;
+use App\Modules\Parameters\Services\ModuleService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
