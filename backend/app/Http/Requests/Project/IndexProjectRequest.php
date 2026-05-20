@@ -19,6 +19,7 @@ class IndexProjectRequest extends FormRequest
             'approval_status' => ['nullable', 'string', 'size:2', 'in:PD,RV,AP'],
             'responsable_id' => ['nullable', 'integer', 'exists:usuario,id_usuario'],
             'solicitante_id' => ['nullable', 'integer', 'exists:usuario,id_usuario'],
+            'order' => ['nullable', 'string', 'in:legacy,recent,oldest'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];

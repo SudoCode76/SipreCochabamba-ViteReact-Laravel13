@@ -1,9 +1,9 @@
 import apiClient from "@/lib/api/client";
 
 export const projectService = {
-  list: async ({ page = 1, perPage = 15, search = "" } = {}) => {
+  list: async ({ page = 1, perPage = 15, search = "", order = "legacy" } = {}) => {
     const response = await apiClient.get("/v1/projects", {
-      params: { page, per_page: perPage, search },
+      params: { page, per_page: perPage, search, order },
     });
     return response.data;
   },

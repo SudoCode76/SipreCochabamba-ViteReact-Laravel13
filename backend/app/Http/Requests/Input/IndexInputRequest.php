@@ -19,6 +19,7 @@ class IndexInputRequest extends FormRequest
             'type_id' => ['nullable', 'integer', 'exists:tipo_insumo,id_tipo'],
             'unit_measure_id' => ['nullable', 'integer', 'exists:unidad_medida,id_unidad_medida'],
             'status' => ['nullable', 'string', 'size:2', 'in:AC,DC,DP'],
+            'order' => ['nullable', 'string', 'in:legacy,recent,oldest'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];
     }

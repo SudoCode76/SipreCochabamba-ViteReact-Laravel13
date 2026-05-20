@@ -75,6 +75,45 @@ class GeneralAndObrasItemApiTest extends TestCase
             ->assertJsonPath('data.items.2.id_item', 1);
     }
 
+    public function test_general_list_can_be_sorted_by_recent_and_oldest_dates(): void
+    {
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+
+        $this->createUnitMeasure();
+        $this->createGroup(['id_grupo' => 1, 'nombre_grupo' => 'B GRUPO']);
+        $this->createGroup(['id_grupo' => 2, 'nombre_grupo' => 'A GRUPO']);
+        $this->createSubgroup(['id_subgrupo' => 1, 'id_grupo' => 1, 'descripcion' => 'B SUB']);
+        $this->createSubgroup(['id_subgrupo' => 2, 'id_grupo' => 1, 'descripcion' => 'A SUB']);
+        $this->createSubgroup(['id_subgrupo' => 3, 'id_grupo' => 2, 'descripcion' => 'C SUB']);
+        $this->seedGeneralPercentages();
+
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 1, 'descripcion' => 'Material']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 2, 'precio' => 1, 'descripcion' => 'Mano']);
+        $this->createInput(['id_insumo' => 3, 'tipo' => 3, 'precio' => 1, 'descripcion' => 'Herramienta']);
+
+        $this->createItemRecord(['id_item' => 1, 'item' => 'Z ITEM', 'grupo' => 1, 'subgrupo' => 1, 'fecha_item' => '2026-01-10']);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'A ITEM', 'grupo' => 1, 'subgrupo' => 2, 'fecha_item' => '2026-02-10']);
+        $this->createItemRecord(['id_item' => 3, 'item' => 'M ITEM', 'grupo' => 2, 'subgrupo' => 3, 'fecha_item' => '2026-03-10']);
+
+        foreach ([1, 2, 3] as $itemId) {
+            $this->createItemInputRecord(['id_item_insumo' => ($itemId * 10) + 1, 'id_item' => $itemId, 'id_insumo' => 1, 'cantidad' => 1]);
+            $this->createItemInputRecord(['id_item_insumo' => ($itemId * 10) + 2, 'id_item' => $itemId, 'id_insumo' => 2, 'cantidad' => 1]);
+            $this->createItemInputRecord(['id_item_insumo' => ($itemId * 10) + 3, 'id_item' => $itemId, 'id_insumo' => 3, 'cantidad' => 1]);
+        }
+
+        $this->getJson('/api/v1/items?per_page=10&order=recent')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_item', 3)
+            ->assertJsonPath('data.items.1.id_item', 2)
+            ->assertJsonPath('data.items.2.id_item', 1);
+
+        $this->getJson('/api/v1/items?per_page=10&order=oldest')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_item', 1)
+            ->assertJsonPath('data.items.1.id_item', 2)
+            ->assertJsonPath('data.items.2.id_item', 3);
+    }
+
     public function test_general_list_calculated_price_matches_legacy_pca_rules(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
