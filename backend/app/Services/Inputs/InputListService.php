@@ -11,9 +11,20 @@ class InputListService
     public function execute(array $filters): LengthAwarePaginator
     {
         $query = Input::query()
-            ->with(['type', 'unitMeasure', 'creator'])
-            ->orderBy('tipo')
-            ->orderBy('descripcion');
+            ->with(['type', 'unitMeasure', 'creator']);
+
+        $order = strtolower((string) ($filters['order'] ?? 'legacy'));
+
+        if ($order === 'recent') {
+            $query->orderByDesc('fecha')
+                ->orderByDesc('id_insumo');
+        } elseif ($order === 'oldest') {
+            $query->orderBy('fecha')
+                ->orderBy('id_insumo');
+        } else {
+            $query->orderBy('tipo')
+                ->orderBy('descripcion');
+        }
 
         $search = $filters['search'] ?? $filters['description'] ?? null;
 

@@ -11,8 +11,19 @@ class ProjectListService
     public function execute(array $filters): LengthAwarePaginator
     {
         $query = Project::query()
-            ->with(['creator', 'requester'])
-            ->orderBy('nombre_proyecto');
+            ->with(['creator', 'requester']);
+
+        $order = strtolower((string) ($filters['order'] ?? 'legacy'));
+
+        if ($order === 'recent') {
+            $query->orderByDesc('id_proyecto')
+                ->orderByDesc('fecha');
+        } elseif ($order === 'oldest') {
+            $query->orderBy('id_proyecto')
+                ->orderBy('fecha');
+        } else {
+            $query->orderBy('nombre_proyecto');
+        }
 
         if (! empty($filters['search'])) {
             $search = Str::lower(trim((string) $filters['search']));

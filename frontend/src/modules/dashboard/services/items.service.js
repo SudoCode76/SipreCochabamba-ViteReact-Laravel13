@@ -1,11 +1,12 @@
 import apiClient from "@/lib/api/client";
 
 export const itemsService = {
-  list: async ({ page = 1, perPage = 10, search = "" } = {}) => {
+  list: async ({ page = 1, perPage = 10, search = "", order = "legacy" } = {}) => {
     const response = await apiClient.get("/v1/items", {
       params: {
         page,
         per_page: perPage,
+        order,
         ...(search ? { search } : {}),
       },
     });

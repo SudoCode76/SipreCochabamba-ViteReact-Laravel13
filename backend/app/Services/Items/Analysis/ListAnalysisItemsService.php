@@ -16,14 +16,25 @@ class ListAnalysisItemsService
     public function execute(array $filters, string $mode = 'fndr'): LengthAwarePaginator
     {
         $query = Item::query()
-            ->with(['groupCatalog', 'subgroupCatalog', 'unitMeasure'])
-            ->orderBy('groupCatalog.nombre_grupo')
-            ->orderBy('subgroupCatalog.descripcion')
-            ->orderBy('item.item')
-            ->orderBy('item.id_item');
+            ->with(['groupCatalog', 'subgroupCatalog', 'unitMeasure']);
 
         $query->join('grupo as groupCatalog', 'groupCatalog.id_grupo', '=', 'item.grupo')
             ->join('sub_grupo as subgroupCatalog', 'subgroupCatalog.id_subgrupo', '=', 'item.subgrupo');
+
+        $order = strtolower((string) ($filters['order'] ?? 'legacy'));
+
+        if ($order === 'recent') {
+            $query->orderByDesc('item.fecha_item')
+                ->orderByDesc('item.id_item');
+        } elseif ($order === 'oldest') {
+            $query->orderBy('item.fecha_item')
+                ->orderBy('item.id_item');
+        } else {
+            $query->orderBy('groupCatalog.nombre_grupo')
+                ->orderBy('subgroupCatalog.descripcion')
+                ->orderBy('item.item')
+                ->orderBy('item.id_item');
+        }
 
         if (! empty($filters['search'])) {
             $search = Str::lower(trim((string) $filters['search']));

@@ -29,6 +29,7 @@ const statusClass = {
 export default function InputsPage() {
   const queryClient = useQueryClient();
   const [perPage, setPerPage] = useState(15);
+  const [order, setOrder] = useState("legacy");
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -67,8 +68,8 @@ export default function InputsPage() {
   });
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["inputs", { page, perPage, description: search }],
-    queryFn: () => inputsService.list({ page, perPage, description: search }),
+    queryKey: ["inputs", { page, perPage, description: search, order }],
+    queryFn: () => inputsService.list({ page, perPage, description: search, order }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -216,6 +217,11 @@ export default function InputsPage() {
 
   const handlePerPageChange = (event) => {
     setPerPage(Number(event.target.value));
+    setPage(1);
+  };
+
+  const handleOrderChange = (event) => {
+    setOrder(event.target.value);
     setPage(1);
   };
 
@@ -487,6 +493,24 @@ export default function InputsPage() {
                     <option value={15}>15</option>
                     <option value={25}>25</option>
                     <option value={50}>50</option>
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Orden
+                </span>
+                <div className="relative">
+                  <select
+                    className="h-12 min-w-36 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20"
+                    value={order}
+                    onChange={handleOrderChange}
+                  >
+                    <option value="legacy">Predeterminado</option>
+                    <option value="recent">Recientes</option>
+                    <option value="oldest">Antiguos</option>
                   </select>
                   <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
                 </div>
