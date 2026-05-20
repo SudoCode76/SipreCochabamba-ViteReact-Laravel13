@@ -17,6 +17,7 @@ class ProjectItemService
         private readonly ProjectLegacyUnitPriceService $legacyUnitPriceService,
         private readonly ProjectFormatResolver $formatResolver,
         private readonly ProjectHistoryService $projectHistoryService,
+        private readonly ModuleService $moduleService,
     ) {}
 
     public function sync(Project $project, array $items, User $user, ?string $ip = null): Project
@@ -28,8 +29,11 @@ class ProjectItemService
         ];
 
         DB::transaction(function () use ($project, $items, $user, &$historySummary): void {
-            $incomingIds = collect($items)
-                ->map(fn (array $item): int => (int) $item['id_item'])
+            $generalModule = $this->moduleService->ensureGeneral();
+            $incomingProjectItemIds = collect($items)
+                ->pluck('id_proyecto_item')
+                ->filter()
+                ->map(fn (int|string $id): int => (int) $id)
                 ->unique()
                 ->values();
 
@@ -37,11 +41,15 @@ class ProjectItemService
                 ->where('id_proyecto', $project->id_proyecto)
                 ->whereNotNull('id_item')
                 ->get()
-                ->keyBy(fn (ProjectItem $item): int => (int) $item->id_item);
+                ->keyBy(fn (ProjectItem $item): int => (int) $item->id_proyecto_item);
+            $existingProjectItemIds = $existing->keys()->map(fn (int|string $id): int => (int) $id)->values();
 
             foreach ($items as $itemData) {
                 $itemId = (int) $itemData['id_item'];
+                $projectItemId = isset($itemData['id_proyecto_item']) ? (int) $itemData['id_proyecto_item'] : null;
                 $payload = [
+                    'id_item' => $itemId,
+                    'id_modulo' => isset($itemData['id_modulo']) ? (int) $itemData['id_modulo'] : $generalModule->id_modulo,
                     'precio' => (float) $itemData['precio'],
                     'cantidad' => (float) $itemData['cantidad'],
                     'prioridad' => isset($itemData['prioridad']) ? (int) $itemData['prioridad'] : null,
@@ -50,17 +58,10 @@ class ProjectItemService
                     'fecha' => now()->toDateString(),
                 ];
 
-                $existingItem = $existing->get($itemId);
-
-                if ($existingItem instanceof ProjectItem && strtoupper((string) $existingItem->estado) === 'AC') {
-                    $this->trackUpdatedProjectItem($historySummary, $existingItem, $payload);
-                    $existingItem->update($payload);
-
-                    continue;
-                }
+                $existingItem = $projectItemId ? $existing->get($projectItemId) : null;
 
                 if ($existingItem instanceof ProjectItem) {
-                    $historySummary['added'][] = $this->historyItemPayload($itemId, $payload);
+                    $this->trackUpdatedProjectItem($historySummary, $existingItem, $payload);
                     $existingItem->update($payload);
 
                     continue;
@@ -69,20 +70,21 @@ class ProjectItemService
                 $historySummary['added'][] = $this->historyItemPayload($itemId, $payload);
                 ProjectItem::query()->create(array_merge($payload, [
                     'id_proyecto' => $project->id_proyecto,
-                    'id_item' => $itemId,
                 ]));
             }
 
             $removedItems = ProjectItem::query()
                 ->where('id_proyecto', $project->id_proyecto)
                 ->whereNotNull('id_item')
-                ->whereNotIn('id_item', $incomingIds->all())
+                ->whereIn('id_proyecto_item', $existingProjectItemIds->all())
+                ->when($incomingProjectItemIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id_proyecto_item', $incomingProjectItemIds->all()))
                 ->where('estado', 'AC')
                 ->get();
 
             foreach ($removedItems as $removedItem) {
                 $historySummary['removed'][] = [
                     'id_item' => $removedItem->id_item,
+                    'id_modulo' => $removedItem->id_modulo,
                     'cantidad' => $removedItem->cantidad,
                     'precio' => $removedItem->precio,
                     'prioridad' => $removedItem->prioridad,
@@ -115,11 +117,13 @@ class ProjectItemService
     public function listProjectItems(Project $project, string $format): array
     {
         $items = ProjectItem::query()
-            ->with(['item.groupCatalog', 'item.subgroupCatalog', 'item.unitMeasure'])
+            ->with(['module', 'item.groupCatalog', 'item.subgroupCatalog', 'item.unitMeasure'])
             ->where('id_proyecto', $project->id_proyecto)
             ->where('estado', 'AC')
             ->whereNotNull('id_item')
+            ->orderByRaw('COALESCE(id_modulo, 0)')
             ->orderBy('prioridad')
+            ->orderBy('id_proyecto_item')
             ->get();
 
         return $items->map(function (ProjectItem $projectItem) use ($format): array {
@@ -130,6 +134,11 @@ class ProjectItemService
                 'id_proyecto_item' => $projectItem->id_proyecto_item,
                 'id_proyecto' => $projectItem->id_proyecto,
                 'id_item' => $projectItem->id_item,
+                'id_modulo' => $projectItem->id_modulo,
+                'modulo' => $projectItem->module ? [
+                    'id_modulo' => $projectItem->module->id_modulo,
+                    'nombre_modulo' => $projectItem->module->nombre_modulo,
+                ] : null,
                 'prioridad' => $projectItem->prioridad,
                 'cantidad' => round((float) $projectItem->cantidad, 2),
                 'precio' => $price,
@@ -193,7 +202,7 @@ class ProjectItemService
     {
         $changes = [];
 
-        foreach (['precio', 'cantidad', 'prioridad', 'estado'] as $field) {
+        foreach (['id_item', 'id_modulo', 'precio', 'cantidad', 'prioridad', 'estado'] as $field) {
             $oldValue = $existingItem->{$field};
             $newValue = $payload[$field] ?? null;
 
@@ -219,6 +228,7 @@ class ProjectItemService
     {
         return [
             'id_item' => $itemId,
+            'id_modulo' => $payload['id_modulo'],
             'cantidad' => $payload['cantidad'],
             'precio' => $payload['precio'],
             'prioridad' => $payload['prioridad'],

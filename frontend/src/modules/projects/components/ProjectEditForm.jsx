@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, MapPin, Save } from "lucide-react";
 
@@ -81,7 +81,7 @@ function ensureSelectedOption(options, value, label) {
 
 export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
   const queryClient = useQueryClient();
-  const [formData, setFormData] = useState(emptyForm);
+  const [draftFormData, setFormData] = useState(null);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -97,13 +97,12 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
   });
 
   const project = projectData?.data?.project;
-
-  useEffect(() => {
+  const initialFormData = useMemo(() => {
     if (!project) {
-      return;
+      return emptyForm;
     }
 
-    setFormData({
+    return {
       nombre_proyecto: project.nombre_proyecto ?? "",
       ubicacion: project.ubicacion ?? "",
       latitud: project.latitud ?? "",
@@ -117,8 +116,9 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
       observaciones: project.observaciones ?? "",
       estado: project.estado ?? "AC",
       aprobado: project.aprobado ?? "PD",
-    });
-  }, [projectData]);
+    };
+  }, [project]);
+  const formData = draftFormData ?? initialFormData;
 
   const responsibleOptions = ensureSelectedOption(
     contextData?.data?.responsible_options ?? [],
@@ -134,7 +134,7 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
   const conditions = contextData?.data?.conditions ?? [];
 
   const handleChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...(prev ?? formData), [field]: value }));
   };
 
   const handleSubmit = async (event) => {

@@ -34,7 +34,7 @@ export default function PriceRecalculationPage() {
       });
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       setStatus({ type: "success", message: "Precio recalculado correctamente." });
       setTimeout(() => {
         navigate(-1);

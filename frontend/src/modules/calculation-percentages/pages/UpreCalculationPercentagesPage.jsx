@@ -6,7 +6,6 @@ import {
   Loader2,
   Percent,
   Pencil,
-  Plus,
   RefreshCcw,
   Search,
   X,
@@ -107,8 +106,6 @@ export default function UpreCalculationPercentagesPage() {
   const items = useMemo(() => listQuery.data?.data?.items ?? [], [listQuery.data]);
   const meta = listQuery.data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0, from: 0, to: 0, last_page: 1 };
   const statuses = contextQuery.data?.data?.statuses ?? [];
-  const permissions = contextQuery.data?.data?.permissions ?? {};
-
   const totalPages = Math.max(1, meta.last_page || Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
   const visiblePages = useMemo(() => {
     const start = Math.max(1, meta.current_page - 2);
@@ -126,11 +123,6 @@ export default function UpreCalculationPercentagesPage() {
   const closeForm = () => {
     setIsFormOpen(false);
     resetForm();
-  };
-
-  const openCreate = () => {
-    resetForm();
-    setIsFormOpen(true);
   };
 
   const openEdit = async (id) => {

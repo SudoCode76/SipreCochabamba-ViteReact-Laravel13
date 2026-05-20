@@ -212,6 +212,65 @@ class ProjectApiTest extends TestCase
             ->assertJsonCount(2, 'data.items');
     }
 
+    public function test_project_items_can_be_grouped_by_module_and_repeated(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->seedGeneralPercentages();
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material 1']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 2, 'precio' => 5, 'descripcion' => 'Mano 1']);
+        $this->createInput(['id_insumo' => 3, 'tipo' => 3, 'precio' => 4, 'descripcion' => 'Herramienta 1']);
+        $this->createItemRecord();
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 3]);
+        $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
+
+        \Illuminate\Support\Facades\DB::table('modulo')->insert([
+            ['id_modulo' => 2, 'nombre_modulo' => 'Modulo 1', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
+            ['id_modulo' => 3, 'nombre_modulo' => 'Modulo 2', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
+        ]);
+
+        $this->postJson('/api/v1/projects/1/items/sync', [
+            'items' => [
+                ['id_item' => 1, 'id_modulo' => 2, 'precio' => 10, 'cantidad' => 2, 'prioridad' => 1],
+                ['id_item' => 1, 'id_modulo' => 3, 'precio' => 10, 'cantidad' => 3, 'prioridad' => 2],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.project.precio', 50);
+
+        $this->getJson('/api/v1/projects/1/items?format=PCA')
+            ->assertOk()
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.items.0.id_item', 1)
+            ->assertJsonPath('data.items.0.modulo.nombre_modulo', 'Modulo 1')
+            ->assertJsonPath('data.items.1.id_item', 1)
+            ->assertJsonPath('data.items.1.modulo.nombre_modulo', 'Modulo 2');
+
+        $this->postJson('/api/v1/projects/1/items/sync', [
+            'items' => [
+                ['id_proyecto_item' => 1, 'id_item' => 1, 'id_modulo' => 2, 'precio' => 10, 'cantidad' => 5, 'prioridad' => 1],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.project.precio', 50);
+
+        $this->assertDatabaseHas('proyecto_item', [
+            'id_proyecto_item' => 1,
+            'id_modulo' => 2,
+            'cantidad' => 5,
+            'estado' => 'AC',
+        ]);
+
+        $this->assertDatabaseHas('proyecto_item', [
+            'id_proyecto_item' => 2,
+            'id_modulo' => 3,
+            'estado' => 'DC',
+        ]);
+    }
+
     public function test_can_create_project_without_optional_coordinates_and_observations(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

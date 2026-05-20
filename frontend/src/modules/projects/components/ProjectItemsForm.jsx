@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronsUpDown, Loader2, Plus, Save, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { modulesService } from "@/modules/modules/services/modules.service";
 import { projectService } from "../services/project.service";
 
 const formatOptions = [
@@ -17,10 +18,15 @@ const formatOptions = [
 
 const emptyDraft = {
   itemId: "",
+  moduleId: "",
   cantidad: "1",
   prioridad: "",
   precio: "",
 };
+
+function createRowKey() {
+  return `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 function formatNumber(value, digits = 2) {
   const numericValue = Number(value || 0);
@@ -31,13 +37,20 @@ function formatNumber(value, digits = 2) {
   }).format(Number.isFinite(numericValue) ? numericValue : 0);
 }
 
-function buildRow(detail, draft) {
+function buildRow(detail, draft, module) {
   const cantidad = Number(draft.cantidad || 0);
   const prioridad = draft.prioridad === "" ? null : Number(draft.prioridad);
   const precio = Number(draft.precio || detail?.precio || 0);
 
   return {
+    client_row_id: createRowKey(),
+    id_proyecto_item: null,
     id_item: detail.id_item,
+    id_modulo: module?.id_modulo ? Number(module.id_modulo) : null,
+    modulo: module ? {
+      id_modulo: module.id_modulo,
+      nombre_modulo: module.nombre_modulo,
+    } : null,
     item: detail.item,
     prioridad,
     cantidad,
@@ -65,6 +78,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   const [format, setFormat] = useState("PCA");
   const [draft, setDraft] = useState(emptyDraft);
   const [rows, setRows] = useState([]);
+  const [rowsDirty, setRowsDirty] = useState(false);
   const [search, setSearch] = useState("");
   const [itemComboboxOpen, setItemComboboxOpen] = useState(false);
   const [error, setError] = useState(null);
@@ -81,6 +95,11 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
     enabled: Boolean(projectId),
   });
 
+  const { data: modulesData } = useQuery({
+    queryKey: ["project-modules"],
+    queryFn: modulesService.activeForProjects,
+  });
+
   const { data: searchData, isFetching: isSearching } = useQuery({
     queryKey: ["project-item-search", search],
     queryFn: () => projectService.searchItems(search.trim()),
@@ -92,28 +111,24 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
     enabled: Boolean(draft.itemId),
   });
 
-  useEffect(() => {
+  const queryRows = useMemo(() => {
     const items = itemsData?.data?.items;
 
     if (!items) {
-      return;
+      return [];
     }
 
-    setRows(items);
+    return items.map((item) => ({
+      ...item,
+      client_row_id: item.id_proyecto_item ? `project-item-${item.id_proyecto_item}` : createRowKey(),
+    }));
   }, [itemsData]);
 
-  useEffect(() => {
-    const detail = selectedItemData?.data?.item;
-
-    if (!detail) {
-      return;
-    }
-
-    setDraft((current) => ({
-      ...current,
-      precio: detail.precio != null ? String(detail.precio) : current.precio,
-    }));
-  }, [selectedItemData]);
+  const moduleOptions = useMemo(
+    () => (modulesData?.data?.items ?? []).filter((module) => module.estado === "AC"),
+    [modulesData],
+  );
+  const generalModule = moduleOptions.find((module) => String(module.nombre_modulo || "").trim().toLowerCase() === "general") ?? moduleOptions[0] ?? null;
 
   const syncMutation = useMutation({
     mutationFn: (payload) => projectService.syncItems(projectId, payload),
@@ -121,6 +136,8 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
       const updatedProject = response?.data?.project;
 
       queryClient.invalidateQueries({ queryKey: ["project-items", projectId] });
+      setRows([]);
+      setRowsDirty(false);
       queryClient.setQueryData(["project", projectId], (current) => {
         if (!updatedProject) {
           return current;
@@ -171,11 +188,39 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   const currentProject = projectData?.data?.project;
   const displayProjectName = currentProject?.nombre_proyecto || projectName || "-";
   const selectedOption = itemOptions.find((option) => Number(option.id) === Number(draft.itemId));
+  const effectiveModuleId = draft.moduleId || (generalModule ? String(generalModule.id_modulo) : "");
+  const selectedModule = moduleOptions.find((module) => Number(module.id_modulo) === Number(effectiveModuleId)) ?? generalModule;
+  const effectiveRows = rowsDirty ? rows : queryRows;
+  const effectivePrice = draft.precio || (selectedDetail?.precio != null ? String(selectedDetail.precio) : "");
 
   const total = useMemo(
-    () => rows.reduce((acc, row) => acc + (Number(row.cantidad || 0) * Number(row.precio || 0)), 0),
-    [rows],
+    () => effectiveRows.reduce((acc, row) => acc + (Number(row.cantidad || 0) * Number(row.precio || 0)), 0),
+    [effectiveRows],
   );
+
+  const groupedRows = useMemo(() => {
+    const groups = new Map();
+
+    effectiveRows.forEach((row) => {
+      const moduleId = row.id_modulo ?? "sin-modulo";
+      const moduleName = row.modulo?.nombre_modulo ?? "Sin módulo";
+
+      if (!groups.has(moduleId)) {
+        groups.set(moduleId, {
+          id: moduleId,
+          name: moduleName,
+          rows: [],
+          subtotal: 0,
+        });
+      }
+
+      const group = groups.get(moduleId);
+      group.rows.push(row);
+      group.subtotal += Number(row.cantidad || 0) * Number(row.precio || 0);
+    });
+
+    return Array.from(groups.values());
+  }, [effectiveRows]);
 
   const handleDraftChange = (field, value) => {
     setError(null);
@@ -208,17 +253,19 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
       return;
     }
 
-    if (!(Number(draft.precio) >= 0)) {
+    if (!(Number(effectivePrice) >= 0)) {
       setError("El precio debe ser mayor o igual a 0.");
       return;
     }
 
-    const nextRow = buildRow(selectedDetail, draft);
+    const nextRow = buildRow(selectedDetail, {
+      ...draft,
+      moduleId: effectiveModuleId,
+      precio: effectivePrice,
+    }, selectedModule);
 
-    setRows((current) => {
-      const filtered = current.filter((row) => Number(row.id_item) !== Number(nextRow.id_item));
-      return [...filtered, nextRow];
-    });
+    setRows([...effectiveRows, nextRow]);
+    setRowsDirty(true);
 
     setDraft(emptyDraft);
     setSearch("");
@@ -226,8 +273,9 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
     setError(null);
   };
 
-  const handleRemove = (itemId) => {
-    setRows((current) => current.filter((row) => Number(row.id_item) !== Number(itemId)));
+  const handleRemove = (rowKey) => {
+    setRows(effectiveRows.filter((row) => (row.id_proyecto_item ?? row.client_row_id) !== rowKey));
+    setRowsDirty(true);
   };
 
   const handleViewSpecification = (row) => {
@@ -241,7 +289,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   };
 
   const handleOrder = () => {
-    setRows((current) => [...current].sort((a, b) => {
+    setRows([...effectiveRows].sort((a, b) => {
       const left = a.prioridad ?? Number.MAX_SAFE_INTEGER;
       const right = b.prioridad ?? Number.MAX_SAFE_INTEGER;
 
@@ -251,20 +299,23 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
 
       return String(a.item || "").localeCompare(String(b.item || ""));
     }));
+    setRowsDirty(true);
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (rows.length === 0) {
+    if (effectiveRows.length === 0) {
       setError("Agrega al menos un item antes de guardar.");
       return;
     }
 
     setError(null);
     await syncMutation.mutateAsync({
-      items: rows.map((row, index) => ({
+      items: effectiveRows.map((row, index) => ({
         id_item: row.id_item,
+        id_proyecto_item: row.id_proyecto_item ?? undefined,
+        id_modulo: row.id_modulo ?? (generalModule?.id_modulo ?? undefined),
         precio: Number(row.precio || 0),
         cantidad: Number(row.cantidad || 0),
         prioridad: row.prioridad ?? index + 1,
@@ -313,7 +364,23 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_0.6fr_0.6fr_0.6fr_0.6fr]">
+      <div className="grid gap-4 lg:grid-cols-[0.75fr_1.3fr_0.55fr_0.55fr_0.55fr_0.55fr]">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="modulo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Módulo</Label>
+          <select
+            id="modulo"
+            value={effectiveModuleId}
+            onChange={(event) => handleDraftChange("moduleId", event.target.value)}
+            className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4"
+          >
+            {moduleOptions.map((module) => (
+              <option key={module.id_modulo} value={module.id_modulo}>
+                {module.nombre_modulo}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex flex-col gap-2">
           <Label htmlFor="project-item-search" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Item</Label>
           <div className="relative">
@@ -374,7 +441,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
             type="number"
             min="0"
             step="0.0001"
-            value={draft.precio}
+            value={effectivePrice}
             className="h-12 rounded-2xl border-border/80 bg-muted/40 text-muted-foreground"
             disabled
             readOnly
@@ -455,35 +522,45 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {effectiveRows.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">No hay items agregados al proyecto.</td>
                 </tr>
-              ) : rows.map((row, index) => {
-                const partial = Number(row.cantidad || 0) * Number(row.precio || 0);
-
-                return (
-                  <tr key={row.id_item} className="border-t border-border/60">
-                    <td className="px-3 py-3">{row.prioridad ?? index + 1}</td>
-                    <td className="px-3 py-3">{row.grupo?.nombre_grupo ?? "-"}</td>
-                    <td className="px-3 py-3">{row.subgrupo?.descripcion ?? "-"}</td>
-                    <td className="px-3 py-3">{row.item}</td>
-                    <td className="px-3 py-3">{row.unidad?.abreviatura ?? row.unidad?.nombre_unidad_medida ?? "-"}</td>
-                    <td className="px-3 py-3 text-right">{formatNumber(row.cantidad)}</td>
-                    <td className="px-3 py-3 text-right">{formatNumber(row.precio, 2)}</td>
-                    <td className="px-3 py-3 text-right">{formatNumber(partial, 2)}</td>
-                    <td className="px-3 py-3">
-                      <Button type="button" variant="outline" className="rounded-full" onClick={() => handleViewSpecification(row)}>Ver</Button>
-                    </td>
-                    <td className="px-3 py-3 text-center">{row.prioridad ?? index + 1}</td>
-                    <td className="px-3 py-3 text-center">
-                      <Button type="button" variant="ghost" className="rounded-full text-destructive hover:text-destructive" onClick={() => handleRemove(row.id_item)}>
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </td>
+              ) : groupedRows.map((group) => (
+                <Fragment key={`module-${group.id}`}>
+                  <tr className="border-t border-border/60 bg-teal-800 text-white">
+                    <td colSpan={7} className="px-3 py-3 font-semibold uppercase tracking-[0.12em]">{group.name}</td>
+                    <td className="px-3 py-3 text-right font-semibold">{formatNumber(group.subtotal, 2)}</td>
+                    <td colSpan={3} className="px-3 py-3" />
                   </tr>
-                );
-              })}
+                  {group.rows.map((row, index) => {
+                    const partial = Number(row.cantidad || 0) * Number(row.precio || 0);
+                    const rowKey = row.id_proyecto_item ?? row.client_row_id;
+
+                    return (
+                      <tr key={rowKey} className="border-t border-border/60">
+                        <td className="px-3 py-3">{row.prioridad ?? index + 1}</td>
+                        <td className="px-3 py-3">{row.grupo?.nombre_grupo ?? "-"}</td>
+                        <td className="px-3 py-3">{row.subgrupo?.descripcion ?? "-"}</td>
+                        <td className="px-3 py-3">{row.item}</td>
+                        <td className="px-3 py-3">{row.unidad?.abreviatura ?? row.unidad?.nombre_unidad_medida ?? "-"}</td>
+                        <td className="px-3 py-3 text-right">{formatNumber(row.cantidad)}</td>
+                        <td className="px-3 py-3 text-right">{formatNumber(row.precio, 2)}</td>
+                        <td className="px-3 py-3 text-right">{formatNumber(partial, 2)}</td>
+                        <td className="px-3 py-3">
+                          <Button type="button" variant="outline" className="rounded-full" onClick={() => handleViewSpecification(row)}>Ver</Button>
+                        </td>
+                        <td className="px-3 py-3 text-center">{row.prioridad ?? index + 1}</td>
+                        <td className="px-3 py-3 text-center">
+                          <Button type="button" variant="ghost" className="rounded-full text-destructive hover:text-destructive" onClick={() => handleRemove(rowKey)}>
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </Fragment>
+              ))}
             </tbody>
             <tfoot>
               <tr className="bg-slate-400/70 font-semibold text-slate-950">

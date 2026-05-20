@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, MoreHorizontal, Pencil, Percent, Trash2, X } from "lucide-react";
+import { Boxes, Loader2, MoreHorizontal, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -11,104 +11,100 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { calculationPercentagesService } from "@/modules/calculation-percentages/services/calculation-percentages.service";
+import { modulesService } from "../services/modules.service";
 
 const statusClass = {
   AC: "bg-emerald-600 text-white",
   DC: "bg-rose-600 text-white",
 };
 
-export default function CalculationPercentagesPage() {
+export default function ModulesPage() {
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedModule, setSelectedModule] = useState(null);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["calculation-percentages"],
-    queryFn: calculationPercentagesService.list,
+    queryKey: ["modules"],
+    queryFn: modulesService.list,
   });
 
   const createMutation = useMutation({
-    mutationFn: calculationPercentagesService.create,
+    mutationFn: modulesService.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calculation-percentages"] });
+      queryClient.invalidateQueries({ queryKey: ["modules"] });
       closeForm();
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: calculationPercentagesService.update,
+    mutationFn: modulesService.update,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calculation-percentages"] });
+      queryClient.invalidateQueries({ queryKey: ["modules"] });
       closeForm();
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: calculationPercentagesService.remove,
+    mutationFn: modulesService.remove,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calculation-percentages"] });
+      queryClient.invalidateQueries({ queryKey: ["modules"] });
       closeDelete();
     },
   });
 
-  const items = data?.data?.items ?? (Array.isArray(data?.data) ? data.data : []);
+  const items = data?.data?.items ?? [];
 
-  const openEdit = (item) => {
-    setSelectedItem(item);
+  const openNew = () => {
+    setSelectedModule({ nombre_modulo: "", estado: "AC" });
+    setFormOpen(true);
+  };
+
+  const openEdit = (module) => {
+    setSelectedModule(module);
     setFormOpen(true);
   };
 
   const closeForm = () => {
     setFormOpen(false);
-    setSelectedItem(null);
+    setSelectedModule(null);
   };
 
-  const openDelete = (item) => {
-    setSelectedItem(item);
+  const openDelete = (module) => {
+    setSelectedModule(module);
     setDeleteOpen(true);
   };
 
   const closeDelete = () => {
     setDeleteOpen(false);
-    setSelectedItem(null);
+    setSelectedModule(null);
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const payload = {
-      codigo: String(formData.get("codigo") || "").trim(),
-      descripcion: String(formData.get("descripcion") || "").trim(),
-      porcentaje: Number(formData.get("porcentaje")),
-      observacion: String(formData.get("observacion") || "").trim(),
+      nombre_modulo: String(formData.get("nombre_modulo") || "").trim(),
       estado: String(formData.get("estado") || "AC"),
     };
 
     try {
-      const itemId = selectedItem?.id || selectedItem?.id_porcentaje;
-      if (itemId) {
-        await updateMutation.mutateAsync({ id: itemId, payload });
+      if (selectedModule?.id_modulo) {
+        await updateMutation.mutateAsync({ id: selectedModule.id_modulo, payload });
         return;
       }
 
       await createMutation.mutateAsync(payload);
     } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudo guardar el porcentaje.");
+      alert(mutationError?.response?.data?.message || "No se pudo guardar el modulo.");
     }
   };
 
-  const handleDelete = async (event) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const autorizacion = String(formData.get("autorizacion") || "").trim();
-
+  const handleDelete = async () => {
     try {
-      const itemId = selectedItem?.id || selectedItem?.id_porcentaje;
-      await deleteMutation.mutateAsync({ id: itemId, autorizacion });
+      await deleteMutation.mutateAsync(selectedModule.id_modulo);
     } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudo eliminar el porcentaje.");
+      alert(mutationError?.response?.data?.message || "No se pudo eliminar el modulo.");
     }
   };
 
@@ -120,24 +116,28 @@ export default function CalculationPercentagesPage() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex size-11 items-center justify-center rounded-2xl bg-sky-600 text-white">
-                  <Percent className="size-5" />
+                  <Boxes className="size-5" />
                 </div>
-                <CardTitle className="text-2xl tracking-[-0.04em]">Porcentajes de Cálculo</CardTitle>
+                <CardTitle className="text-2xl tracking-[-0.04em]">Módulos</CardTitle>
               </div>
+              <Button className="bg-sky-600 hover:bg-sky-700" onClick={openNew}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo
+              </Button>
             </div>
           </CardHeader>
 
           <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
             {isLoading && (
               <div className="flex items-center justify-center rounded-2xl border border-border/70 bg-background/70 p-8 text-muted-foreground">
-                <Loader2 className="mr-2 size-4 animate-spin" /> Cargando porcentajes...
+                <Loader2 className="mr-2 size-4 animate-spin" /> Cargando módulos...
               </div>
             )}
 
             {isError && (
               <Alert variant="destructive" className="rounded-2xl">
                 <AlertDescription>
-                  {error?.response?.data?.message || "No se pudieron cargar los porcentajes."}
+                  {error?.response?.data?.message || "No se pudieron cargar los módulos."}
                 </AlertDescription>
               </Alert>
             )}
@@ -149,27 +149,20 @@ export default function CalculationPercentagesPage() {
                     <thead>
                       <tr className="border-b border-border/70 bg-muted/30 text-left">
                         <th className="px-5 py-4 font-semibold text-foreground">N°</th>
-                        <th className="px-5 py-4 font-semibold text-foreground">Codigo</th>
-                        <th className="px-5 py-4 font-semibold text-foreground">Descripción</th>
-                        <th className="px-5 py-4 font-semibold text-foreground">%</th>
+                        <th className="px-5 py-4 font-semibold text-foreground">Nombre</th>
                         <th className="px-5 py-4 font-semibold text-foreground">Estado</th>
                         <th className="px-5 py-4 font-semibold text-foreground text-center">Opciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {items.map((item, index) => {
-                        const code = item.codigo || item.code || item.display_id || "-";
-                        const description = item.descripcion || item.description || "-";
-                        const percentage = item.porcentaje || item.percentage || 0;
-                        const status = item.estado || item.status || "DC";
+                        const status = item.estado || "DC";
                         const statusLabelText = item.status_label || (status === "AC" ? "ACTIVO" : "INACTIVO");
 
                         return (
-                          <tr key={item.id || item.id_porcentaje || index} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
+                          <tr key={item.id_modulo || index} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
                             <td className="px-5 py-4 align-top text-foreground">{index + 1}</td>
-                            <td className="px-5 py-4 align-top text-foreground font-medium">{code}</td>
-                            <td className="px-5 py-4 align-top text-foreground">{description}</td>
-                            <td className="px-5 py-4 align-top text-foreground font-semibold">{percentage}%</td>
+                            <td className="px-5 py-4 align-top text-foreground">{item.nombre_modulo?.trim()}</td>
                             <td className="px-5 py-4 align-top">
                               <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClass[status] || "bg-slate-500 text-white"}`}>
                                 {statusLabelText}
@@ -183,14 +176,18 @@ export default function CalculationPercentagesPage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-48 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-lg">
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openEdit(item)}>
-                                    <Pencil className="h-4 w-4 text-muted-foreground" />
-                                    <span>Editar</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer text-destructive" onClick={() => openDelete(item)}>
-                                    <Trash2 className="h-4 w-4" />
-                                    <span>Eliminar</span>
-                                  </DropdownMenuItem>
+                                  {item.available_actions?.edit && (
+                                    <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openEdit(item)}>
+                                      <Pencil className="h-4 w-4 text-muted-foreground" />
+                                      <span>Editar</span>
+                                    </DropdownMenuItem>
+                                  )}
+                                  {item.available_actions?.delete && (
+                                    <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer text-destructive" onClick={() => openDelete(item)}>
+                                      <Trash2 className="h-4 w-4" />
+                                      <span>Eliminar</span>
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </td>
@@ -199,8 +196,8 @@ export default function CalculationPercentagesPage() {
                       })}
                       {items.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">
-                            No se encontraron porcentajes de cálculo.
+                          <td colSpan={4} className="px-5 py-8 text-center text-muted-foreground">
+                            No se encontraron módulos.
                           </td>
                         </tr>
                       )}
@@ -220,7 +217,7 @@ export default function CalculationPercentagesPage() {
               <CardHeader className="border-b border-border/70 bg-muted/20">
                 <div className="flex items-start justify-between gap-4">
                   <CardTitle className="text-2xl tracking-[-0.04em]">
-                    {(selectedItem?.id || selectedItem?.id_porcentaje) ? "Editar porcentaje" : "Registrar nuevo porcentaje"}
+                    {selectedModule?.id_modulo ? "Editar módulo" : "Registrar nuevo módulo"}
                   </CardTitle>
                   <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeForm}>
                     <X />
@@ -228,53 +225,16 @@ export default function CalculationPercentagesPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-5 sm:p-6">
-                {selectedItem && (
+                {selectedModule && (
                   <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
-                    <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="grid gap-5">
                       <div className="flex flex-col gap-2">
-                        <Label htmlFor="codigo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Codigo</Label>
-                        <Input
-                          id="codigo"
-                          name="codigo"
-                          defaultValue={selectedItem.codigo || selectedItem.code || ""}
-                          className="h-12 rounded-2xl border-border/80 bg-background/90"
-                          required
-                        />
+                        <Label htmlFor="nombre_modulo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Nombre</Label>
+                        <Input id="nombre_modulo" name="nombre_modulo" defaultValue={selectedModule.nombre_modulo?.trim() || ""} className="h-12 rounded-2xl border-border/80 bg-background/90" required />
                       </div>
                       <div className="flex flex-col gap-2">
-                        <Label htmlFor="porcentaje" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Porcentaje (%)</Label>
-                        <Input
-                          id="porcentaje"
-                          name="porcentaje"
-                          type="number"
-                          step="0.01"
-                          defaultValue={selectedItem.porcentaje || selectedItem.percentage || ""}
-                          className="h-12 rounded-2xl border-border/80 bg-background/90"
-                          required
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2 sm:col-span-2">
-                        <Label htmlFor="descripcion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Descripción</Label>
-                        <Input
-                          id="descripcion"
-                          name="descripcion"
-                          defaultValue={selectedItem.descripcion || selectedItem.description || ""}
-                          className="h-12 rounded-2xl border-border/80 bg-background/90"
-                          required
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2 sm:col-span-2">
-                        <Label htmlFor="observacion" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Observación</Label>
-                        <Input
-                          id="observacion"
-                          name="observacion"
-                          defaultValue={selectedItem.observacion || selectedItem.observation || ""}
-                          className="h-12 rounded-2xl border-border/80 bg-background/90"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2 sm:col-span-2">
                         <Label htmlFor="estado" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Estado</Label>
-                        <select id="estado" name="estado" defaultValue={selectedItem.estado || selectedItem.status || "AC"} className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4">
+                        <select id="estado" name="estado" defaultValue={selectedModule.estado || "AC"} className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4">
                           <option value="AC">ACTIVO</option>
                           <option value="DC">INACTIVO</option>
                         </select>
@@ -284,7 +244,7 @@ export default function CalculationPercentagesPage() {
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={closeForm}>Cancelar</Button>
                       <Button type="submit" className="rounded-full bg-foreground text-background hover:bg-foreground/90" disabled={createMutation.isPending || updateMutation.isPending}>
-                        {(createMutation.isPending || updateMutation.isPending) ? "Guardando..." : "Guardar cambios"}
+                        {createMutation.isPending || updateMutation.isPending ? "Guardando..." : "Guardar cambios"}
                       </Button>
                     </div>
                   </form>
@@ -301,27 +261,21 @@ export default function CalculationPercentagesPage() {
           <div className="w-full max-w-lg rounded-3xl border border-border/70 bg-background p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold text-foreground">Eliminar porcentaje</h3>
-                <p className="text-sm text-muted-foreground">Ingresa la autorizacion aprobada para eliminar <strong>{selectedItem?.descripcion || selectedItem?.description}</strong>.</p>
+                <h3 className="text-lg font-semibold text-foreground">Eliminar módulo</h3>
+                <p className="text-sm text-muted-foreground">Se eliminará <strong>{selectedModule?.nombre_modulo?.trim()}</strong> si no tiene items activos asociados.</p>
               </div>
               <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeDelete}>
                 <X className="size-4" />
               </Button>
             </div>
 
-            <form className="mt-6 space-y-4" onSubmit={handleDelete}>
-              <div className="space-y-2">
-                <Label htmlFor="autorizacion">Nro. autorizacion</Label>
-                <Input id="autorizacion" name="autorizacion" placeholder="Ej. AUT-2026-001" required />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={closeDelete}>Cancelar</Button>
-                <Button type="submit" variant="destructive" disabled={deleteMutation.isPending}>
-                  {deleteMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-                  Eliminar
-                </Button>
-              </div>
-            </form>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={closeDelete}>Cancelar</Button>
+              <Button type="button" variant="destructive" disabled={deleteMutation.isPending} onClick={handleDelete}>
+                {deleteMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                Eliminar
+              </Button>
+            </div>
           </div>
         </div>,
         document.body,

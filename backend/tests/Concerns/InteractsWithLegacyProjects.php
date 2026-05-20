@@ -5,6 +5,7 @@ namespace Tests\Concerns;
 use App\Models\Project;
 use App\Models\ProjectItem;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 trait InteractsWithLegacyProjects
@@ -15,6 +16,7 @@ trait InteractsWithLegacyProjects
         Schema::dropIfExists('proyecto_historial');
         Schema::dropIfExists('proyecto_item');
         Schema::dropIfExists('proyecto');
+        Schema::dropIfExists('modulo');
         Schema::enableForeignKeyConstraints();
 
         Schema::create('proyecto', function (Blueprint $table): void {
@@ -38,10 +40,31 @@ trait InteractsWithLegacyProjects
             $table->string('otb', 150)->nullable();
         });
 
+        Schema::create('modulo', function (Blueprint $table): void {
+            $table->increments('id_modulo');
+            $table->string('nombre_modulo', 150);
+            $table->string('estado', 2)->default('AC');
+            $table->unsignedInteger('id_usuario')->nullable();
+            $table->date('fecha')->nullable();
+        });
+
+        DB::table('modulo')->insert([
+            'id_modulo' => 1,
+            'nombre_modulo' => 'General',
+            'estado' => 'AC',
+            'id_usuario' => null,
+            'fecha' => now()->toDateString(),
+        ]);
+
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("SELECT setval(pg_get_serial_sequence('modulo', 'id_modulo'), COALESCE((SELECT MAX(id_modulo) FROM modulo), 1))");
+        }
+
         Schema::create('proyecto_item', function (Blueprint $table): void {
             $table->increments('id_proyecto_item');
             $table->unsignedInteger('id_proyecto')->nullable();
             $table->unsignedInteger('id_item')->nullable();
+            $table->unsignedInteger('id_modulo')->nullable();
             $table->string('estado', 2)->nullable();
             $table->double('cantidad')->nullable();
             $table->date('fecha')->nullable();
@@ -51,6 +74,7 @@ trait InteractsWithLegacyProjects
 
             $table->foreign('id_proyecto')->references('id_proyecto')->on('proyecto');
             $table->foreign('id_item')->references('id_item')->on('item');
+            $table->foreign('id_modulo')->references('id_modulo')->on('modulo');
         });
 
         Schema::create('proyecto_historial', function (Blueprint $table): void {
@@ -99,6 +123,7 @@ trait InteractsWithLegacyProjects
             'id_proyecto_item' => 1,
             'id_proyecto' => 1,
             'id_item' => 1,
+            'id_modulo' => 1,
             'estado' => 'AC',
             'cantidad' => 2,
             'fecha' => now()->toDateString(),

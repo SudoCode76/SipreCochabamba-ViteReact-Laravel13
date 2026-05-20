@@ -55,6 +55,7 @@ export const navigationSections = [
       { title: "Unidad de Medida", path: "/Unidad de Medida", icon: FolderKanban, accent: "sky", permission: { className: "PARAMETROS", functions: ["UNIDAD_MEDIDA", "UNIDAD"] } },
       { title: "Grupos", path: "/Grupos", icon: FolderKanban, accent: "sky", permission: { className: "PARAMETROS", functions: ["GRUPOS", "GRUPO"] } },
       { title: "Sub grupos", path: "/Sub grupos", icon: FolderKanban, accent: "sky", permission: { className: "PARAMETROS", functions: ["SUBGRUPOS", "SUB_GRUPOS", "SUB_GRUPO"] } },
+      { title: "Módulos", path: "/Modulos", icon: FolderKanban, accent: "sky", permission: { className: "PARAMETROS", functions: ["MODULOS"] } },
       { title: "% Calculo", path: "/parametros-calculo", icon: FolderKanban, accent: "sky", permission: { className: "PARAMETROS", functions: ["PORCENTAJE_CALCULO", "PARAMETROS_CALCULO"] } },
       { title: "% Calculo UPRE", path: "/parametros/upre", icon: FolderKanban, accent: "sky", permission: { className: "ITEMS", functions: ["UPRE"] } },
       { title: "% Calculo FPS", path: "/parametros/fps", icon: FolderKanban, accent: "sky", permission: { className: "ITEMS", functions: ["FPS"] } },
