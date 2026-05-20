@@ -11,6 +11,12 @@ trait InteractsWithLegacyProjects
 {
     protected function setUpLegacyProjectSchema(): void
     {
+        Schema::disableForeignKeyConstraints();
+        Schema::dropIfExists('proyecto_historial');
+        Schema::dropIfExists('proyecto_item');
+        Schema::dropIfExists('proyecto');
+        Schema::enableForeignKeyConstraints();
+
         Schema::create('proyecto', function (Blueprint $table): void {
             $table->increments('id_proyecto');
             $table->string('nombre_proyecto', 500)->nullable();
@@ -45,6 +51,21 @@ trait InteractsWithLegacyProjects
 
             $table->foreign('id_proyecto')->references('id_proyecto')->on('proyecto');
             $table->foreign('id_item')->references('id_item')->on('item');
+        });
+
+        Schema::create('proyecto_historial', function (Blueprint $table): void {
+            $table->increments('id_historial');
+            $table->unsignedInteger('id_proyecto');
+            $table->unsignedInteger('id_usuario')->nullable();
+            $table->string('usuario_nombre', 100)->nullable();
+            $table->string('accion', 50);
+            $table->string('titulo', 150);
+            $table->text('detalle')->nullable();
+            $table->json('metadata')->nullable();
+            $table->string('ip', 45)->nullable();
+            $table->timestamp('fecha_hora')->nullable();
+
+            $table->foreign('id_proyecto')->references('id_proyecto')->on('proyecto');
         });
     }
 

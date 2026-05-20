@@ -28,14 +28,46 @@ class ProjectBudgetService
         return $this->buildCurrentBudgetRows($rows);
     }
 
+    public function budgetByGroupPdfData(Project $project): array
+    {
+        $rows = $this->activeProjectItemsForLegacyBudgetPdf($project);
+
+        $items = $rows->map(function (ProjectItem $row): array {
+            $acc = $this->currentAccumulators($row->id_proyecto, $row->id_item);
+
+            return [
+                'id_proyecto' => $row->id_proyecto,
+                'nombre_proy' => $row->project?->nombre_proyecto,
+                'id_item' => $row->id_item,
+                'descripcion' => $row->item?->item,
+                'materiales' => $acc['materiales'],
+                'mano_obra' => $acc['mano_obra'],
+                'herramientas' => $acc['herramientas'],
+                'id_grupo' => $row->item?->groupCatalog?->id_grupo,
+                'grupo' => $row->item?->groupCatalog?->nombre_grupo,
+                'id_subgrupo' => $row->item?->subgroupCatalog?->id_subgrupo,
+                'subgrupo' => $row->item?->subgroupCatalog?->descripcion,
+            ];
+        })->values();
+
+        $completeItems = $items
+            ->filter(fn (array $item): bool => $item['materiales'] > 0 || $item['mano_obra'] > 0 || $item['herramientas'] > 0)
+            ->values();
+
+        return [
+            'items_proyecto_count' => $rows->count(),
+            'items' => $completeItems->all(),
+            'totals' => [
+                'materiales' => round($completeItems->sum('materiales'), 4),
+                'mano_obra' => round($completeItems->sum('mano_obra'), 4),
+                'herramientas' => round($completeItems->sum('herramientas'), 4),
+            ],
+        ];
+    }
+
     public function budgetRecalculation(Project $project, CarbonInterface $date): array
     {
-        $rows = $this->activeProjectItems($project)
-            ->sortBy([
-                fn (ProjectItem $item) => $item->item?->groupCatalog?->nombre_grupo,
-                fn (ProjectItem $item) => $item->item?->subgroupCatalog?->descripcion,
-            ])
-            ->values();
+        $rows = $this->activeProjectItemsForLegacyBudgetPdf($project);
 
         return $this->buildHistoricalBudgetRows($rows, $date);
     }
@@ -104,6 +136,29 @@ class ProjectBudgetService
         ];
     }
 
+    public function generalBudgetPdfItems(Project $project, string $format, ProjectLegacyUnitPriceService $legacyUnitPriceService): array
+    {
+        return $this->activeProjectItems($project)
+            ->sortBy(fn (ProjectItem $item) => $item->prioridad)
+            ->values()
+            ->map(function (ProjectItem $row) use ($format, $legacyUnitPriceService): array {
+                $price = $legacyUnitPriceService->resolve($row->item, $format);
+
+                return [
+                    'id_item' => $row->id_item,
+                    'nombre_item' => $row->item?->item,
+                    'nombre_grupo' => $row->item?->groupCatalog?->nombre_grupo,
+                    'nombre_subgrupo' => $row->item?->subgroupCatalog?->descripcion,
+                    'unidad' => $row->item?->unitMeasure?->abreviatura,
+                    'prioridad' => $row->prioridad,
+                    'cantidad' => round((float) $row->cantidad, 4),
+                    'precio' => $price,
+                    'parcial' => round(((float) $row->cantidad) * $price, 4),
+                ];
+            })
+            ->all();
+    }
+
     public function unitPrices(Project $project, string $format): array
     {
         $items = ProjectItem::query()
@@ -134,6 +189,23 @@ class ProjectBudgetService
             ->where('proyecto_item.estado', 'AC')
             ->whereNotNull('proyecto_item.id_item')
             ->whereHas('item')
+            ->get();
+    }
+
+    private function activeProjectItemsForLegacyBudgetPdf(Project $project): Collection
+    {
+        return ProjectItem::query()
+            ->select('proyecto_item.*')
+            ->join('item', 'item.id_item', '=', 'proyecto_item.id_item')
+            ->join('grupo', 'grupo.id_grupo', '=', 'item.grupo')
+            ->join('sub_grupo', 'sub_grupo.id_subgrupo', '=', 'item.subgrupo')
+            ->with(['project', 'item.groupCatalog', 'item.subgroupCatalog', 'item.unitMeasure'])
+            ->where('proyecto_item.id_proyecto', $project->id_proyecto)
+            ->where('proyecto_item.estado', 'AC')
+            ->whereNotNull('proyecto_item.id_item')
+            ->orderBy('grupo.nombre_grupo')
+            ->orderBy('sub_grupo.descripcion')
+            ->orderBy('proyecto_item.id_proyecto_item')
             ->get();
     }
 
@@ -244,7 +316,7 @@ class ProjectBudgetService
             ->join('tipo_insumo', 'tipo_insumo.id_tipo', '=', 'log_insumo.tipo')
             ->join('proyecto_item', 'proyecto_item.id_item', '=', 'item_insumo.id_item')
             ->join('proyecto', 'proyecto.id_proyecto', '=', 'proyecto_item.id_proyecto')
-            ->whereDate('log_insumo.fecha', '<=', $date->toDateString())
+            ->where('log_insumo.fecha', '<=', $date->toDateString())
             ->where('log_insumo.tipo', $type)
             ->where('proyecto_item.estado', 'AC')
             ->where('item_insumo.estado', 'AC')
@@ -262,16 +334,26 @@ class ProjectBudgetService
             ])
             ->get();
 
-        $seen = [];
+        $lastInputId = null;
+        $lastLogId = 0;
         $total = 0.0;
 
         foreach ($rows as $row) {
-            if (isset($seen[$row->id_insumo])) {
+            if ((int) $row->id_insumo === $lastInputId) {
+                if ($type !== 3) {
+                    $lastLogId = 0;
+                }
+
+                $lastInputId = (int) $row->id_insumo;
+
                 continue;
             }
 
-            $seen[$row->id_insumo] = true;
-            $total += round((float) $row->cantidad, 4) * round((float) $row->precio, 2);
+            if ((int) $row->id_log >= $lastLogId) {
+                $total += round((float) $row->cantidad, 4) * round((float) $row->precio, 2);
+                $lastLogId = (int) $row->id_log;
+                $lastInputId = (int) $row->id_insumo;
+            }
         }
 
         return round($total, 4);

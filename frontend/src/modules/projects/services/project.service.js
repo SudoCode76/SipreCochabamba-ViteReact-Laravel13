@@ -18,6 +18,20 @@ export const projectService = {
     return response.data;
   },
 
+  history: async (projectId, { page = 1, perPage = 10, action = "", user = "", dateFrom = "", dateTo = "" } = {}) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/history`, {
+      params: {
+        page,
+        per_page: perPage,
+        action: action || undefined,
+        user: user || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+      },
+    });
+    return response.data;
+  },
+
   update: async (projectId, payload) => {
     const response = await apiClient.put(`/v1/projects/${projectId}`, payload);
     return response.data;
@@ -25,6 +39,52 @@ export const projectService = {
 
   budgetRecalculation: async (projectId, payload) => {
     const response = await apiClient.post(`/v1/projects/${projectId}/budget-recalculation`, payload);
+    return response.data;
+  },
+
+  downloadBudgetRecalculationPdf: async (projectId, fecha) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/budget-recalculation/pdf`, {
+      params: { fecha },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  downloadBudgetByGroupPdf: async (projectId) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/budget-by-group/pdf`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  downloadIncidenceSummaryPdf: async (projectId, format) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/incidence-summary/pdf`, {
+      params: { format },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  downloadGeneralBudgetPdf: async (projectId, format) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/general-budget/pdf`, {
+      params: { format },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  downloadInputBreakdownPdf: async (projectId, type) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/input-breakdown/pdf`, {
+      params: { type },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  downloadInputsReportPdf: async (projectId) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/inputs-report/pdf`, {
+      responseType: "blob",
+    });
     return response.data;
   },
 

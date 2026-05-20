@@ -42,6 +42,7 @@ export default function InputsPage() {
   const [editError, setEditError] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
   const [quoteError, setQuoteError] = useState(null);
+  const [quoteSuccess, setQuoteSuccess] = useState(null);
   const [viewSearch, setViewSearch] = useState("");
   const [viewPerPage, setViewPerPage] = useState(25);
   const [createForm, setCreateForm] = useState({
@@ -89,6 +90,15 @@ export default function InputsPage() {
     enabled: viewOpen && Boolean(selectedInput?.id_insumo),
   });
 
+  const { data: currentQuoteData, isLoading: currentQuoteLoading } = useQuery({
+    queryKey: ["input-current-quote", selectedInput?.id_insumo],
+    queryFn: async () => {
+      const response = await apiClient.get(`/v1/inputs/${selectedInput.id_insumo}/quotes/current`);
+      return response.data;
+    },
+    enabled: quoteOpen && Boolean(selectedInput?.id_insumo),
+  });
+
   const items = data?.data?.items ?? [];
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
@@ -96,6 +106,7 @@ export default function InputsPage() {
   const unitMeasures = contextData?.data?.unit_measures ?? [];
   const statuses = contextData?.data?.statuses ?? [];
   const quoteHistoryItems = quoteHistoryData?.data?.items ?? [];
+  const currentQuote = currentQuoteData?.data?.quote ?? null;
 
   const filteredQuoteHistory = quoteHistoryItems.filter((quote) => {
     const term = viewSearch.trim().toLowerCase();
@@ -109,6 +120,9 @@ export default function InputsPage() {
       quote.archivo,
       quote.archivo1,
       quote.archivo2,
+      quote.archivo_label,
+      quote.archivo1_label,
+      quote.archivo2_label,
     ].some((value) => String(value ?? "").toLowerCase().includes(term));
   });
 
@@ -167,8 +181,9 @@ export default function InputsPage() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["inputs"] });
       queryClient.invalidateQueries({ queryKey: ["input-quote-history", variables.id] });
-      closeQuote();
-      alert("Cotización registrada correctamente.");
+      queryClient.invalidateQueries({ queryKey: ["input-current-quote", variables.id] });
+      setQuoteError(null);
+      setQuoteSuccess("Cotización registrada correctamente.");
     },
   });
 
@@ -230,6 +245,7 @@ export default function InputsPage() {
   const handleOpenQuote = (item) => {
     setSelectedInput(item);
     setQuoteError(null);
+    setQuoteSuccess(null);
     setQuoteOpen(true);
   };
 
@@ -279,6 +295,7 @@ export default function InputsPage() {
   const closeQuote = () => {
     setQuoteOpen(false);
     setQuoteError(null);
+    setQuoteSuccess(null);
     setSelectedInput(null);
   };
 
@@ -380,6 +397,7 @@ export default function InputsPage() {
     }
 
     setQuoteError(null);
+    setQuoteSuccess(null);
 
     try {
       await quoteMutation.mutateAsync({
@@ -391,6 +409,27 @@ export default function InputsPage() {
       const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
       setQuoteError(firstFieldError || err.response?.data?.message || "No se pudo registrar la cotización.");
     }
+  };
+
+  const renderQuoteFile = (quote, field) => {
+    const path = quote?.[field];
+    const url = quote?.[`${field}_url`];
+    const available = quote?.[`${field}_available`];
+    const label = quote?.[`${field}_label`];
+
+    if (!path) {
+      return <span className="text-muted-foreground">Sin archivo</span>;
+    }
+
+    if (!available || !url) {
+      return <span className="text-muted-foreground">No disponible</span>;
+    }
+
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline">
+        {label ?? "Ver archivo"}
+      </a>
+    );
   };
 
   const handleRequestDeleteAuthorization = async () => {
@@ -800,25 +839,53 @@ export default function InputsPage() {
                     </Alert>
                   )}
 
+                  {quoteSuccess && (
+                    <Alert className="rounded-2xl border-emerald-200 bg-emerald-50 text-emerald-900">
+                      <AlertDescription>{quoteSuccess}</AlertDescription>
+                    </Alert>
+                  )}
+
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="quote_input_name" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Insumo</Label>
                     <Input id="quote_input_name" value={selectedInput?.descripcion ?? ""} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled />
                   </div>
 
+                  <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+                    <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cotizaciones vigentes</p>
+                    {currentQuoteLoading ? (
+                      <p className="text-sm text-muted-foreground"><Loader2 className="mr-2 inline size-4 animate-spin" /> Cargando cotizaciones...</p>
+                    ) : (
+                      <div className="grid gap-3 text-sm md:grid-cols-3">
+                        <div>
+                          <p className="mb-1 font-medium text-foreground">Propuesta oficial</p>
+                          {renderQuoteFile(currentQuote, "archivo")}
+                        </div>
+                        <div>
+                          <p className="mb-1 font-medium text-foreground">Alternativa 1</p>
+                          {renderQuoteFile(currentQuote, "archivo1")}
+                        </div>
+                        <div>
+                          <p className="mb-1 font-medium text-foreground">Alternativa 2</p>
+                          {renderQuoteFile(currentQuote, "archivo2")}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid gap-6 md:grid-cols-3">
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="quote_valido" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cotización Válida</Label>
-                      <Input id="quote_valido" name="valido" type="file" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                      <Input id="quote_valido" name="valido" type="file" accept="application/pdf,.pdf" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
                     </div>
 
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="quote_propuesto_1" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cotización Propuesta 1</Label>
-                      <Input id="quote_propuesto_1" name="propuesto_1" type="file" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                      <Input id="quote_propuesto_1" name="propuesto_1" type="file" accept="application/pdf,.pdf" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
                     </div>
 
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="quote_propuesto_2" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cotización Propuesta 2</Label>
-                      <Input id="quote_propuesto_2" name="propuesto_2" type="file" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                      <Input id="quote_propuesto_2" name="propuesto_2" type="file" accept="application/pdf,.pdf" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
                     </div>
                   </div>
 
@@ -1164,13 +1231,13 @@ export default function InputsPage() {
                             <td className="px-5 py-4 align-top text-foreground">{index + 1}</td>
                             <td className="px-5 py-4 align-top text-muted-foreground">{quote.fecha ?? "-"}</td>
                             <td className="px-5 py-4 align-top">
-                              {quote.archivo ? <a href={`/storage/${quote.archivo}`} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline">Ver archivo</a> : <span className="text-muted-foreground">Sin archivo</span>}
+                              {renderQuoteFile(quote, "archivo")}
                             </td>
                             <td className="px-5 py-4 align-top">
-                              {quote.archivo1 ? <a href={`/storage/${quote.archivo1}`} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline">Ver archivo</a> : <span className="text-muted-foreground">Sin archivo</span>}
+                              {renderQuoteFile(quote, "archivo1")}
                             </td>
                             <td className="px-5 py-4 align-top">
-                              {quote.archivo2 ? <a href={`/storage/${quote.archivo2}`} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline">Ver archivo</a> : <span className="text-muted-foreground">Sin archivo</span>}
+                              {renderQuoteFile(quote, "archivo2")}
                             </td>
                           </tr>
                         ))}

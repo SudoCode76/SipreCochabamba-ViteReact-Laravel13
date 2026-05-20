@@ -5,11 +5,18 @@ namespace App\Services\InputRequests;
 use App\Models\InputType;
 use App\Models\UnitMeasure;
 use App\Models\User;
+use App\Services\Inputs\InputPermissionService;
 
 class InputRequestContextService
 {
+    public function __construct(private readonly InputPermissionService $permissions) {}
+
     public function execute(User $user): array
     {
+        $canView = $this->permissions->allows($user, ['SOLICITUD', 'NUEVA_SOLICITUD', 'INPUT_QUOTES', 'SOLICITUD_INSUMO', 'LISTAR_SOLICITUD_INSUMO']);
+        $canCreate = $this->permissions->allows($user, ['NUEVA_SOLICITUD', 'CREAR_SOLICITUD_INSUMO']);
+        $canManage = $this->permissions->allows($user, ['SOLICITUD', 'GESTIONAR_SOLICITUD_INSUMO']);
+
         return [
             'types' => InputType::query()
                 ->active()
@@ -27,12 +34,12 @@ class InputRequestContextService
                 ['code' => 'RC', 'label' => 'RECHAZADO'],
             ],
             'permissions' => [
-                'can_view' => $user->isAdministrator(),
-                'can_create' => $user->isAdministrator(),
-                'can_update' => $user->isAdministrator(),
-                'can_manage' => $user->isAdministrator(),
-                'can_revert' => $user->isAdministrator(),
-                'can_view_quotes' => $user->isAdministrator(),
+                'can_view' => $canView,
+                'can_create' => $canCreate,
+                'can_update' => $canCreate,
+                'can_manage' => $canManage,
+                'can_revert' => $canManage,
+                'can_view_quotes' => $canView || $canManage,
             ],
             'endpoints' => [
                 'list' => '/api/v1/input-requests',

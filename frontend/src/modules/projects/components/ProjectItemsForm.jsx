@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { ChevronsUpDown, Loader2, Plus, Save, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,9 +53,10 @@ function buildRow(detail, draft) {
     unidad: detail.nombre_unidad_medida ? {
       id_unidad_medida: detail.id_unidad_medida,
       nombre_unidad_medida: detail.nombre_unidad_medida,
-      abreviatura: detail.nombre_unidad_medida,
+      abreviatura: detail.abreviatura_unidad_medida ?? detail.nombre_unidad_medida,
     } : null,
     especificacion: detail.especificacion,
+    especificacion_url: detail.especificacion_url,
   };
 }
 
@@ -65,6 +66,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   const [draft, setDraft] = useState(emptyDraft);
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState("");
+  const [itemComboboxOpen, setItemComboboxOpen] = useState(false);
   const [error, setError] = useState(null);
 
   const { data: projectData } = useQuery({
@@ -168,6 +170,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   const selectedDetail = selectedItemData?.data?.item ?? null;
   const currentProject = projectData?.data?.project;
   const displayProjectName = currentProject?.nombre_proyecto || projectName || "-";
+  const selectedOption = itemOptions.find((option) => Number(option.id) === Number(draft.itemId));
 
   const total = useMemo(
     () => rows.reduce((acc, row) => acc + (Number(row.cantidad || 0) * Number(row.precio || 0)), 0),
@@ -177,6 +180,21 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   const handleDraftChange = (field, value) => {
     setError(null);
     setDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleItemSearchChange = (value) => {
+    setSearch(value);
+    setItemComboboxOpen(true);
+
+    if (draft.itemId) {
+      handleDraftChange("itemId", "");
+    }
+  };
+
+  const handleItemSelect = (option) => {
+    setSearch(option.text);
+    setItemComboboxOpen(false);
+    handleDraftChange("itemId", String(option.id));
   };
 
   const handleAdd = () => {
@@ -204,11 +222,22 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
 
     setDraft(emptyDraft);
     setSearch("");
+    setItemComboboxOpen(false);
     setError(null);
   };
 
   const handleRemove = (itemId) => {
     setRows((current) => current.filter((row) => Number(row.id_item) !== Number(itemId)));
+  };
+
+  const handleViewSpecification = (row) => {
+    if (!row.especificacion_url) {
+      setError("No existe el PDF de especificacion para este item.");
+      return;
+    }
+
+    setError(null);
+    window.open(row.especificacion_url, "_blank", "noopener,noreferrer");
   };
 
   const handleOrder = () => {
@@ -287,31 +316,69 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
       <div className="grid gap-4 lg:grid-cols-[1.3fr_0.6fr_0.6fr_0.6fr_0.6fr]">
         <div className="flex flex-col gap-2">
           <Label htmlFor="project-item-search" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Item</Label>
-          <div className="flex flex-col gap-2">
+          <div className="relative">
             <Input
               id="project-item-search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              role="combobox"
+              aria-expanded={itemComboboxOpen}
+              aria-controls="project-item-options"
+              value={search || selectedOption?.text || ""}
+              onChange={(event) => handleItemSearchChange(event.target.value)}
+              onFocus={() => setItemComboboxOpen(true)}
               placeholder="Buscar item..."
-              className="h-12 rounded-2xl border-border/80 bg-background/90"
+              className="h-12 rounded-2xl border-border/80 bg-background/90 pr-11"
             />
-            <select
-              value={draft.itemId}
-              onChange={(event) => handleDraftChange("itemId", event.target.value)}
-              className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4 text-sm outline-none"
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full text-muted-foreground"
+              onClick={() => setItemComboboxOpen((current) => !current)}
             >
-              <option value="">--- Seleccionar ---</option>
-              {itemOptions.map((option) => (
-                <option key={option.id} value={option.id}>{option.text}</option>
-              ))}
-            </select>
-            {isSearching && <span className="text-xs text-muted-foreground">Buscando items...</span>}
+              <ChevronsUpDown className="size-4" />
+            </Button>
+
+            {itemComboboxOpen && (
+              <div
+                id="project-item-options"
+                className="absolute z-30 mt-2 max-h-64 w-full overflow-y-auto rounded-2xl border border-border/80 bg-white p-1 shadow-xl"
+              >
+                {isSearching && (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">Buscando items...</div>
+                )}
+
+                {!isSearching && itemOptions.length === 0 && (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">No se encontraron items.</div>
+                )}
+
+                {!isSearching && itemOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-muted ${Number(option.id) === Number(draft.itemId) ? "bg-muted font-semibold" : ""}`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => handleItemSelect(option)}
+                  >
+                    {option.text}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="precio" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Precio</Label>
-          <Input id="precio" type="number" min="0" step="0.0001" value={draft.precio} onChange={(event) => handleDraftChange("precio", event.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" />
+          <Input
+            id="precio"
+            type="number"
+            min="0"
+            step="0.0001"
+            value={draft.precio}
+            className="h-12 rounded-2xl border-border/80 bg-muted/40 text-muted-foreground"
+            disabled
+            readOnly
+          />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -326,7 +393,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
 
         <div className="flex flex-col gap-2">
           <Label className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Unidad de medida</Label>
-          <Input value={selectedDetail?.nombre_unidad_medida ?? ""} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled readOnly />
+          <Input value={selectedDetail?.abreviatura_unidad_medida ?? ""} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled readOnly />
           {isLoadingItem && <span className="text-xs text-muted-foreground">Cargando precio actual...</span>}
         </div>
       </div>
@@ -403,10 +470,10 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
                     <td className="px-3 py-3">{row.item}</td>
                     <td className="px-3 py-3">{row.unidad?.abreviatura ?? row.unidad?.nombre_unidad_medida ?? "-"}</td>
                     <td className="px-3 py-3 text-right">{formatNumber(row.cantidad)}</td>
-                    <td className="px-3 py-3 text-right">{formatNumber(row.precio, 4)}</td>
-                    <td className="px-3 py-3 text-right">{formatNumber(partial, 4)}</td>
+                    <td className="px-3 py-3 text-right">{formatNumber(row.precio, 2)}</td>
+                    <td className="px-3 py-3 text-right">{formatNumber(partial, 2)}</td>
                     <td className="px-3 py-3">
-                      <Button type="button" variant="outline" className="rounded-full" onClick={() => alert(row.especificacion || "El item no tiene especificacion registrada.")}>Ver</Button>
+                      <Button type="button" variant="outline" className="rounded-full" onClick={() => handleViewSpecification(row)}>Ver</Button>
                     </td>
                     <td className="px-3 py-3 text-center">{row.prioridad ?? index + 1}</td>
                     <td className="px-3 py-3 text-center">
@@ -421,7 +488,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
             <tfoot>
               <tr className="bg-slate-400/70 font-semibold text-slate-950">
                 <td colSpan={7} className="px-3 py-4 text-left">Total</td>
-                <td className="px-3 py-4 text-right">{formatNumber(total, 4)}</td>
+                <td className="px-3 py-4 text-right">{formatNumber(total, 2)}</td>
                 <td colSpan={3} className="px-3 py-4" />
               </tr>
             </tfoot>

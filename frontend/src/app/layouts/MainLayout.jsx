@@ -5,6 +5,7 @@ import { navigationSections } from "@/app/navigation";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/modules/auth/hooks/useAuth";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { canAccessNavigationItem } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 
 function isSectionActive(section, pathname) {
@@ -18,6 +19,17 @@ function isSectionActive(section, pathname) {
 export default function MainLayout() {
   const location = useLocation();
   const { user, logout, isLoggingOut } = useAuth();
+  const visibleNavigationSections = navigationSections
+    .map((section) => {
+      if (!section.children) {
+        return canAccessNavigationItem(user, section) ? section : null;
+      }
+
+      const children = section.children.filter((child) => canAccessNavigationItem(user, child));
+
+      return children.length > 0 ? { ...section, children } : null;
+    })
+    .filter(Boolean);
 
   return (
     <div className="relative min-h-screen bg-background text-foreground">
@@ -40,7 +52,7 @@ export default function MainLayout() {
           </Link>
 
           <nav className="hidden items-center gap-2 lg:flex">
-            {navigationSections.map((section) => {
+            {visibleNavigationSections.map((section) => {
               const active = isSectionActive(section, location.pathname);
 
               if (section.children) {

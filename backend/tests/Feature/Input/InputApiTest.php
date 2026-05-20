@@ -291,7 +291,11 @@ class InputApiTest extends TestCase
             ->assertJsonPath('data.quote.id_insumo', 1)
             ->assertJsonPath('data.quote.condicion', 'CREDITO')
             ->assertJsonPath('data.quote.id_log_insumo', 1)
-            ->assertJsonPath('data.quote.id_solicitud', 8);
+            ->assertJsonPath('data.quote.id_solicitud', 8)
+            ->assertJsonPath('data.quote.archivo_available', true)
+            ->assertJsonPath('data.quote.archivo_label', 'Propuesta oficial vigente')
+            ->assertJsonPath('data.quote.archivo1_label', 'Propuesta alternativa 1 vigente')
+            ->assertJsonPath('data.quote.archivo2_label', 'Propuesta alternativa 2 vigente');
 
         $this->assertDatabaseHas('cotizaciones', [
             'id_insumo' => 1,
@@ -299,6 +303,47 @@ class InputApiTest extends TestCase
             'id_log_insumo' => 1,
             'id_solicitud' => 8,
         ]);
+    }
+
+    public function test_quote_upload_requires_pdf_under_legacy_limit_and_at_least_one_file(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput();
+
+        $this->postJson('/api/v1/inputs/1/quotes', [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['valido', 'propuesto_1', 'propuesto_2']);
+
+        $this->postJson('/api/v1/inputs/1/quotes', [
+            'valido' => UploadedFile::fake()->create('quote.txt', 100, 'text/plain'),
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['valido']);
+
+        $this->postJson('/api/v1/inputs/1/quotes', [
+            'valido' => UploadedFile::fake()->create('quote.pdf', 4097, 'application/pdf'),
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['valido']);
+    }
+
+    public function test_quote_resource_marks_missing_legacy_files_as_unavailable(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput();
+        $this->createInputQuote([
+            'archivo' => 'public/archivos/cotizaciones/cotizacion_valida_legacy.pdf',
+            'archivo1' => 'public/archivos/cotizaciones/cotizacion_propuesto1_legacy.pdf',
+            'archivo2' => null,
+        ]);
+
+        $this->getJson('/api/v1/inputs/1/quotes/history')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.archivo_available', false)
+            ->assertJsonPath('data.items.0.archivo_url', null)
+            ->assertJsonPath('data.items.0.archivo_label', 'Propuesta oficial vigente')
+            ->assertJsonPath('data.items.0.archivo1_available', false)
+            ->assertJsonPath('data.items.0.archivo2_label', null);
     }
 
     public function test_admin_can_request_check_and_execute_logical_delete_with_authorization(): void

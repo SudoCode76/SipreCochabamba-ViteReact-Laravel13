@@ -212,6 +212,11 @@ class GeneralAndObrasItemApiTest extends TestCase
             ->assertJsonPath('data.item.subgroup.id', 1)
             ->assertJsonPath('data.item.unit_measure.id', 1);
 
+        $this->assertDatabaseHas('auditoria', [
+            'nombre_completo' => 'Usuario General',
+            'proceso' => 'ITEMS: se creo el item EXCAVACION COMUN',
+        ]);
+
         $this->assertDatabaseHas('item', [
             'item' => 'EXCAVACION COMUN',
             'id_unidad' => 1,
@@ -261,7 +266,7 @@ class GeneralAndObrasItemApiTest extends TestCase
 
     public function test_edit_item_updates_only_base_information_following_legacy_rules(): void
     {
-        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX', 'EDITAR_ITEM']));
 
         $this->createUnitMeasure(['id_unidad_medida' => 1, 'descripcion' => 'Metro', 'abreviatura' => 'M']);
         $this->createUnitMeasure(['id_unidad_medida' => 2, 'descripcion' => 'Global', 'abreviatura' => 'GLB']);
@@ -294,6 +299,11 @@ class GeneralAndObrasItemApiTest extends TestCase
             ->assertJsonPath('data.item.subgroup.id', 2)
             ->assertJsonPath('data.item.unit_measure.id', 2);
 
+        $this->assertDatabaseHas('auditoria', [
+            'nombre_completo' => 'Usuario General',
+            'proceso' => 'ITEMS: se actualizo el item ITEM EDITADO',
+        ]);
+
         $this->assertDatabaseHas('item', [
             'id_item' => 1,
             'item' => 'ITEM EDITADO',
@@ -310,7 +320,7 @@ class GeneralAndObrasItemApiTest extends TestCase
 
     public function test_edit_item_preserves_existing_unit_when_unit_measure_is_not_sent(): void
     {
-        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX', 'EDITAR_ITEM']));
 
         $this->createUnitMeasure(['id_unidad_medida' => 1]);
         $this->createGroup();
@@ -334,7 +344,7 @@ class GeneralAndObrasItemApiTest extends TestCase
 
     public function test_edit_item_rejects_invalid_subgroup_and_global_duplicate_name(): void
     {
-        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX', 'EDITAR_ITEM']));
 
         $this->createUnitMeasure(['id_unidad_medida' => 1]);
         $this->createGroup(['id_grupo' => 1]);
@@ -366,7 +376,7 @@ class GeneralAndObrasItemApiTest extends TestCase
     public function test_can_show_item_file_data_and_update_files_without_replacing_missing_attachment(): void
     {
         Storage::fake('public');
-        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX', 'EDITAR_ITEM']));
 
         $this->createUnitMeasure();
         $this->createGroup();
@@ -400,7 +410,7 @@ class GeneralAndObrasItemApiTest extends TestCase
     public function test_can_update_both_item_files_and_reject_oversized_upload(): void
     {
         Storage::fake('public');
-        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX', 'EDITAR_ITEM']));
 
         $this->createUnitMeasure();
         $this->createGroup();

@@ -1,8 +1,8 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, X, Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, ClipboardList, X, Loader2, History } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,9 +25,205 @@ const approvalClass = {
   AP: "bg-emerald-600 text-white",
 };
 
+const historyActionLabels = {
+  created: "Creacion",
+  updated: "Actualizacion",
+  items_synced: "Items",
+  budget_recalculated: "Recalculo",
+  pdf_generated: "PDF",
+};
+
+const historyActionOptions = [
+  { value: "", label: "Todas las acciones" },
+  { value: "created", label: "Creacion" },
+  { value: "updated", label: "Actualizacion" },
+  { value: "items_synced", label: "Items sincronizados" },
+  { value: "budget_recalculated", label: "Presupuesto recalculado" },
+  { value: "pdf_generated", label: "PDF generado" },
+];
+
+const formatHistoryDate = (value) => {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("es-BO", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+};
+
+const hasMetadata = (metadata) => metadata && Object.keys(metadata).length > 0;
+
+const historyFieldLabels = {
+  name: "Nombre",
+  nombre_proyecto: "Nombre",
+  location: "Ubicacion",
+  ubicacion: "Ubicacion",
+  status: "Estado",
+  estado: "Estado",
+  approval_status: "Aprobacion",
+  aprobado: "Aprobacion",
+  responsible: "Responsable",
+  responsable: "Responsable",
+  requester_id: "Solicitante",
+  solicitante: "Solicitante",
+  fecha: "Fecha",
+  observaciones: "Observaciones",
+  precio: "Precio",
+  cantidad: "Cantidad",
+  prioridad: "Prioridad",
+  report_type: "Reporte",
+  format: "Formato",
+  type: "Tipo",
+  reference_date: "Fecha de referencia",
+  total: "Total",
+  direct_cost: "Costo directo",
+  materiales: "Materiales",
+  mano_obra: "Mano de obra",
+  herramientas: "Herramientas",
+};
+
+const historyStatusLabels = {
+  AC: "Activo",
+  DC: "Inactivo",
+  PD: "Pendiente",
+  RV: "Revisado",
+  AP: "Aprobado",
+  1: "Material",
+  2: "Mano de obra",
+  3: "Maquinaria y herramientas",
+};
+
+const labelHistoryField = (field) => historyFieldLabels[field] || field.replaceAll("_", " ");
+
+const formatHistoryValue = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  const normalized = String(value);
+
+  if (historyStatusLabels[normalized]) {
+    return historyStatusLabels[normalized];
+  }
+
+  if (typeof value === "number") {
+    return new Intl.NumberFormat("es-BO", { maximumFractionDigits: 4 }).format(value);
+  }
+
+  return normalized;
+};
+
+const metadataRow = (label, value) => (
+  <div key={label} className="rounded-xl border border-border/70 bg-background px-3 py-2">
+    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
+    <div className="mt-1 text-sm text-foreground">{formatHistoryValue(value)}</div>
+  </div>
+);
+
+const itemLabel = (item) => `Item #${item?.id_item || "-"}`;
+
+const renderChangedFields = (changes) => {
+  const entries = Object.entries(changes || {});
+
+  if (entries.length === 0) {
+    return <p className="text-sm text-muted-foreground">No se registraron cambios en campos visibles.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {entries.map(([field, change]) => (
+        <div key={field} className="rounded-xl border border-border/70 bg-background px-3 py-2">
+          <div className="text-sm font-medium text-foreground">{labelHistoryField(field)}</div>
+          <div className="mt-1 text-sm text-muted-foreground">
+            Antes: <span className="text-foreground">{formatHistoryValue(change?.from)}</span>
+            <span className="px-2">-&gt;</span>
+            Ahora: <span className="text-foreground">{formatHistoryValue(change?.to)}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const renderItemChangeList = (title, items, mode) => {
+  if (!items?.length) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+      {items.map((item, index) => (
+        <div key={`${title}-${item.id_item || index}`} className="rounded-xl border border-border/70 bg-background px-3 py-2">
+          <div className="text-sm font-medium text-foreground">{itemLabel(item)}</div>
+          {mode === "updated" ? (
+            <div className="mt-2">{renderChangedFields(item.changes)}</div>
+          ) : (
+            <div className="mt-1 grid gap-2 sm:grid-cols-3">
+              {metadataRow("Cantidad", item.cantidad)}
+              {metadataRow("Precio", item.precio)}
+              {metadataRow("Prioridad", item.prioridad)}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const renderHistoryMetadata = (entry) => {
+  const metadata = entry.metadata || {};
+
+  if (entry.action === "created" && metadata.project) {
+    return (
+      <dl className="grid gap-2 sm:grid-cols-2">
+        {Object.entries(metadata.project).map(([field, value]) => metadataRow(labelHistoryField(field), value))}
+      </dl>
+    );
+  }
+
+  if (entry.action === "updated") {
+    return renderChangedFields(metadata.changes);
+  }
+
+  if (entry.action === "items_synced") {
+    return (
+      <div className="space-y-4">
+        {renderItemChangeList("Items agregados", metadata.added, "created")}
+        {renderItemChangeList("Items modificados", metadata.updated, "updated")}
+        {renderItemChangeList("Items quitados", metadata.removed, "removed")}
+      </div>
+    );
+  }
+
+  if (entry.action === "budget_recalculated") {
+    return (
+      <dl className="grid gap-2 sm:grid-cols-2">
+        {metadata.reference_date && metadataRow("Fecha de referencia", metadata.reference_date)}
+        {Object.entries(metadata.totals || {}).map(([field, value]) => metadataRow(labelHistoryField(field), value))}
+      </dl>
+    );
+  }
+
+  if (entry.action === "pdf_generated") {
+    return (
+      <dl className="grid gap-2 sm:grid-cols-2">
+        {Object.entries(metadata).map(([field, value]) => metadataRow(labelHistoryField(field), value))}
+      </dl>
+    );
+  }
+
+  return (
+    <dl className="grid gap-2 sm:grid-cols-2">
+      {Object.entries(metadata).map(([field, value]) => metadataRow(labelHistoryField(field), value))}
+    </dl>
+  );
+};
+
 export default function ProjectsPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [perPage, setPerPage] = useState(15);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -37,21 +233,89 @@ export default function ProjectsPage() {
   const [recalculateProject, setRecalculateProject] = useState(null);
   const [recalculateDate, setRecalculateDate] = useState("");
   const [recalculateStatus, setRecalculateStatus] = useState(null);
+  const [recalculatePending, setRecalculatePending] = useState(false);
+  const [incidenceOpen, setIncidenceOpen] = useState(false);
+  const [incidenceProject, setIncidenceProject] = useState(null);
+  const [incidenceFormat, setIncidenceFormat] = useState("PCA");
+  const [incidenceStatus, setIncidenceStatus] = useState(null);
+  const [generalBudgetOpen, setGeneralBudgetOpen] = useState(false);
+  const [generalBudgetProject, setGeneralBudgetProject] = useState(null);
+  const [generalBudgetFormat, setGeneralBudgetFormat] = useState("PCA");
+  const [generalBudgetStatus, setGeneralBudgetStatus] = useState(null);
+  const [inputBreakdownOpen, setInputBreakdownOpen] = useState(false);
+  const [inputBreakdownProject, setInputBreakdownProject] = useState(null);
+  const [inputBreakdownType, setInputBreakdownType] = useState("1");
+  const [inputBreakdownStatus, setInputBreakdownStatus] = useState(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyProject, setHistoryProject] = useState(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyFilters, setHistoryFilters] = useState({
+    action: "",
+    user: "",
+    dateFrom: "",
+    dateTo: "",
+  });
+  const [feedback, setFeedback] = useState(null);
   const deferredSearch = useDeferredValue(search.trim());
-
-  useEffect(() => {
-    setPage(1);
-  }, [deferredSearch, perPage]);
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
     queryKey: ["projects", { page, perPage, search: deferredSearch }],
     queryFn: () => projectService.list({ page, perPage, search: deferredSearch }),
     placeholderData: (previousData) => previousData,
   });
+  const { data: contextData } = useQuery({
+    queryKey: ["projects-context"],
+    queryFn: projectService.context,
+    retry: false,
+  });
 
   const projects = data?.data?.items ?? [];
+  const permissions = contextData?.data?.permissions ?? {};
+  const canEditProject = Boolean(permissions.can_edit);
+  const canSyncProjectItems = Boolean(permissions.can_sync_items);
+  const canViewHistory = Boolean(permissions.can_view);
+  const canViewBudgetByGroup = Boolean(permissions.can_view_budget_by_group);
+  const canRecalculateBudget = Boolean(permissions.can_recalculate_budget);
+  const canViewIncidenceSummary = Boolean(permissions.can_view_incidence_summary);
+  const canViewGeneralBudget = Boolean(permissions.can_view_general_budget);
+  const canViewInputBreakdown = Boolean(permissions.can_view_input_breakdown);
+  const canViewInputsReport = Boolean(permissions.can_view_inputs_report);
+  const hasProjectRowActions = canEditProject
+    || canSyncProjectItems
+    || canViewHistory
+    || canViewBudgetByGroup
+    || canRecalculateBudget
+    || canViewIncidenceSummary
+    || canViewGeneralBudget
+    || canViewInputBreakdown
+    || canViewInputsReport;
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
+  const historyProjectId = historyProject?.id_proyecto;
+
+  const {
+    data: historyData,
+    isLoading: historyLoading,
+    isFetching: historyFetching,
+    isError: historyIsError,
+    error: historyError,
+  } = useQuery({
+    queryKey: ["project-history", historyProjectId, historyPage, historyFilters],
+    queryFn: () => projectService.history(historyProjectId, {
+      page: historyPage,
+      perPage: 10,
+      action: historyFilters.action,
+      user: historyFilters.user,
+      dateFrom: historyFilters.dateFrom,
+      dateTo: historyFilters.dateTo,
+    }),
+    enabled: historyOpen && Boolean(historyProjectId),
+    placeholderData: (previousData) => previousData,
+  });
+
+  const historyItems = historyData?.data?.items ?? [];
+  const historyMeta = historyData?.data?.meta ?? { current_page: 1, per_page: 10, total: 0 };
+  const historyTotalPages = Math.max(1, Math.ceil((historyMeta.total || 0) / (historyMeta.per_page || 10)));
 
   const visiblePages = useMemo(() => {
     const start = Math.max(1, meta.current_page - 2);
@@ -64,7 +328,18 @@ export default function ProjectsPage() {
   const endRecord = Math.min(meta.current_page * meta.per_page, meta.total);
 
   const handlePerPageChange = (event) => {
+    setPage(1);
     setPerPage(Number(event.target.value));
+  };
+
+  const handleSearchChange = (event) => {
+    setPage(1);
+    setSearch(event.target.value);
+  };
+
+  const clearSearch = () => {
+    setPage(1);
+    setSearch("");
   };
 
   const openEdit = (project) => {
@@ -81,6 +356,39 @@ export default function ProjectsPage() {
     navigate(`/Proyecto/${project.id_proyecto}/items`);
   };
 
+  const openHistory = (project) => {
+    setHistoryProject(project);
+    setHistoryPage(1);
+    setHistoryOpen(true);
+  };
+
+  const closeHistory = () => {
+    setHistoryOpen(false);
+    setHistoryProject(null);
+    setHistoryPage(1);
+    setHistoryFilters({
+      action: "",
+      user: "",
+      dateFrom: "",
+      dateTo: "",
+    });
+  };
+
+  const updateHistoryFilter = (key, value) => {
+    setHistoryPage(1);
+    setHistoryFilters((current) => ({ ...current, [key]: value }));
+  };
+
+  const clearHistoryFilters = () => {
+    setHistoryPage(1);
+    setHistoryFilters({
+      action: "",
+      user: "",
+      dateFrom: "",
+      dateTo: "",
+    });
+  };
+
   const openRecalculate = (project) => {
     setRecalculateProject(project);
     setRecalculateDate("");
@@ -93,21 +401,8 @@ export default function ProjectsPage() {
     setRecalculateProject(null);
     setRecalculateDate("");
     setRecalculateStatus(null);
+    setRecalculatePending(false);
   };
-
-  const recalculateMutation = useMutation({
-    mutationFn: ({ projectId, payload }) => projectService.budgetRecalculation(projectId, payload),
-    onSuccess: async (response) => {
-      await queryClient.invalidateQueries({ queryKey: ["projects"] });
-      setRecalculateStatus({
-        type: "success",
-        message: response?.message || "Precio del proyecto recalculado correctamente.",
-      });
-      window.setTimeout(() => {
-        closeRecalculate();
-      }, 800);
-    },
-  });
 
   const handleRecalculateSubmit = async (event) => {
     event.preventDefault();
@@ -116,18 +411,277 @@ export default function ProjectsPage() {
     }
 
     setRecalculateStatus(null);
+    setRecalculatePending(true);
+    const popup = window.open("", "_blank");
+
+    if (popup) {
+      popup.document.write("<p>Generando PDF...</p>");
+    }
 
     try {
-      await recalculateMutation.mutateAsync({
-        projectId: recalculateProject.id_proyecto,
-        payload: { fecha: recalculateDate },
-      });
-    } catch (mutationError) {
-      const fieldErrors = mutationError?.response?.data?.errors;
+      const blob = await projectService.downloadBudgetRecalculationPdf(recalculateProject.id_proyecto, recalculateDate);
+
+      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
+        throw new Error("La respuesta no contiene un PDF valido.");
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        window.open(url, "_blank");
+      }
+
+      closeRecalculate();
+    } catch (pdfError) {
+      if (popup) {
+        popup.close();
+      }
+
+      const fieldErrors = pdfError?.response?.data?.errors;
       const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
       setRecalculateStatus({
         type: "error",
-        message: firstFieldError || mutationError?.response?.data?.message || "No se pudo recalcular el precio del proyecto.",
+        message: firstFieldError || pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el presupuesto recalculado del proyecto.",
+      });
+    } finally {
+      setRecalculatePending(false);
+    }
+  };
+
+  const handleOpenBudgetByGroupPdf = async (project) => {
+    setFeedback(null);
+    const popup = window.open("", "_blank");
+
+    if (popup) {
+      popup.document.write("<p>Generando PDF...</p>");
+    }
+
+    try {
+      const blob = await projectService.downloadBudgetByGroupPdf(project.id_proyecto);
+
+      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
+        throw new Error("La respuesta no contiene un PDF valido.");
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        window.open(url, "_blank");
+      }
+    } catch (pdfError) {
+      if (popup) {
+        popup.close();
+      }
+
+      setFeedback({
+        type: "error",
+        message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el presupuesto por rubros.",
+      });
+    }
+  };
+
+  const handleOpenInputsReportPdf = async (project) => {
+    setFeedback(null);
+    const popup = window.open("", "_blank");
+
+    if (popup) {
+      popup.document.write("<p>Generando PDF...</p>");
+    }
+
+    try {
+      const blob = await projectService.downloadInputsReportPdf(project.id_proyecto);
+
+      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
+        throw new Error("La respuesta no contiene un PDF valido.");
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        window.open(url, "_blank");
+      }
+    } catch (pdfError) {
+      if (popup) {
+        popup.close();
+      }
+
+      setFeedback({
+        type: "error",
+        message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el reporte de insumos del proyecto.",
+      });
+    }
+  };
+
+  const openIncidenceSummary = (project) => {
+    setIncidenceProject(project);
+    setIncidenceFormat("PCA");
+    setIncidenceStatus(null);
+    setIncidenceOpen(true);
+  };
+
+  const closeIncidenceSummary = () => {
+    setIncidenceOpen(false);
+    setIncidenceProject(null);
+    setIncidenceFormat("PCA");
+    setIncidenceStatus(null);
+  };
+
+  const handleIncidenceSummarySubmit = async (event) => {
+    event.preventDefault();
+
+    if (!incidenceProject?.id_proyecto) {
+      return;
+    }
+
+    setIncidenceStatus(null);
+    const popup = window.open("", "_blank");
+
+    if (popup) {
+      popup.document.write("<p>Generando PDF...</p>");
+    }
+
+    try {
+      const blob = await projectService.downloadIncidenceSummaryPdf(incidenceProject.id_proyecto, incidenceFormat);
+
+      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
+        throw new Error("La respuesta no contiene un PDF valido.");
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        window.open(url, "_blank");
+      }
+
+      closeIncidenceSummary();
+    } catch (pdfError) {
+      if (popup) {
+        popup.close();
+      }
+
+      setIncidenceStatus({
+        type: "error",
+        message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el resumen por incidencia.",
+      });
+    }
+  };
+
+  const openGeneralBudget = (project) => {
+    setGeneralBudgetProject(project);
+    setGeneralBudgetFormat("PCA");
+    setGeneralBudgetStatus(null);
+    setGeneralBudgetOpen(true);
+  };
+
+  const closeGeneralBudget = () => {
+    setGeneralBudgetOpen(false);
+    setGeneralBudgetProject(null);
+    setGeneralBudgetFormat("PCA");
+    setGeneralBudgetStatus(null);
+  };
+
+  const handleGeneralBudgetSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!generalBudgetProject?.id_proyecto) {
+      return;
+    }
+
+    setGeneralBudgetStatus(null);
+    const popup = window.open("", "_blank");
+
+    if (popup) {
+      popup.document.write("<p>Generando PDF...</p>");
+    }
+
+    try {
+      const blob = await projectService.downloadGeneralBudgetPdf(generalBudgetProject.id_proyecto, generalBudgetFormat);
+
+      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
+        throw new Error("La respuesta no contiene un PDF valido.");
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        window.open(url, "_blank");
+      }
+
+      closeGeneralBudget();
+    } catch (pdfError) {
+      if (popup) {
+        popup.close();
+      }
+
+      setGeneralBudgetStatus({
+        type: "error",
+        message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el presupuesto general.",
+      });
+    }
+  };
+
+  const openInputBreakdown = (project) => {
+    setInputBreakdownProject(project);
+    setInputBreakdownType("1");
+    setInputBreakdownStatus(null);
+    setInputBreakdownOpen(true);
+  };
+
+  const closeInputBreakdown = () => {
+    setInputBreakdownOpen(false);
+    setInputBreakdownProject(null);
+    setInputBreakdownType("1");
+    setInputBreakdownStatus(null);
+  };
+
+  const handleInputBreakdownSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!inputBreakdownProject?.id_proyecto) {
+      return;
+    }
+
+    setInputBreakdownStatus(null);
+    const popup = window.open("", "_blank");
+
+    if (popup) {
+      popup.document.write("<p>Generando PDF...</p>");
+    }
+
+    try {
+      const blob = await projectService.downloadInputBreakdownPdf(inputBreakdownProject.id_proyecto, inputBreakdownType);
+
+      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
+        throw new Error("La respuesta no contiene un PDF valido.");
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        window.open(url, "_blank");
+      }
+
+      closeInputBreakdown();
+    } catch (pdfError) {
+      if (popup) {
+        popup.close();
+      }
+
+      setInputBreakdownStatus({
+        type: "error",
+        message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el desglose de insumos del proyecto.",
       });
     }
   };
@@ -160,6 +714,11 @@ export default function ProjectsPage() {
         </CardHeader>
 
         <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
+          {feedback && (
+            <Alert variant={feedback.type === "error" ? "destructive" : "default"} className="rounded-2xl">
+              <AlertDescription>{feedback.message}</AlertDescription>
+            </Alert>
+          )}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex items-end gap-3">
               <div className="flex flex-col gap-2">
@@ -169,14 +728,14 @@ export default function ProjectsPage() {
                     placeholder="Buscar proyecto..."
                     className="h-9 w-64 rounded-xl border-border/80"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={handleSearchChange}
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     className="h-9 rounded-xl"
-                    onClick={() => setSearch("")}
+                    onClick={clearSearch}
                     disabled={!search}
                   >
                     {search ? <X className="size-4" /> : <Search className="size-4" />}
@@ -281,37 +840,68 @@ export default function ProjectsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-72 rounded-2xl border border-border/70 bg-background/95 p-1 shadow-lg">
-                              <DropdownMenuItem
-                                className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
-                                onClick={() => openEdit(project)}
-                              >
-                                <Pencil className="h-4 w-4 text-muted-foreground" />
-                                <span>Editar Proyecto</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openItems(project)}>
-                                <ListPlus className="h-4 w-4 text-muted-foreground" />
-                                <span>Agregar Items al Proyecto</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
-                                <Calculator className="h-4 w-4 text-muted-foreground" />
-                                <span>Presupuesto por Rubros</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openRecalculate(project)}>
-                                <RefreshCw className="h-4 w-4 text-muted-foreground" />
-                                <span>Recalcular Precio por Rubro</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
-                                <PieChart className="h-4 w-4 text-muted-foreground" />
-                                <span>Resumen por Insidencia</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
-                                <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
-                                <span>Presupuesto General</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
-                                <Layers className="h-4 w-4 text-muted-foreground" />
-                                <span>Desglose de Insumos del Proyecto</span>
-                              </DropdownMenuItem>
+                              {canEditProject && (
+                                <DropdownMenuItem
+                                  className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
+                                  onClick={() => openEdit(project)}
+                                >
+                                  <Pencil className="h-4 w-4 text-muted-foreground" />
+                                  <span>Editar Proyecto</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canSyncProjectItems && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openItems(project)}>
+                                  <ListPlus className="h-4 w-4 text-muted-foreground" />
+                                  <span>Agregar Items al Proyecto</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewHistory && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openHistory(project)}>
+                                  <History className="h-4 w-4 text-muted-foreground" />
+                                  <span>Historial</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewBudgetByGroup && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => void handleOpenBudgetByGroupPdf(project)}>
+                                  <Calculator className="h-4 w-4 text-muted-foreground" />
+                                  <span>Presupuesto por Rubros</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canRecalculateBudget && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openRecalculate(project)}>
+                                  <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                                  <span>Recalcular Precio por Rubro</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewIncidenceSummary && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openIncidenceSummary(project)}>
+                                  <PieChart className="h-4 w-4 text-muted-foreground" />
+                                  <span>Resumen por Insidencia</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewGeneralBudget && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openGeneralBudget(project)}>
+                                  <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                                  <span>Presupuesto General</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewInputBreakdown && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openInputBreakdown(project)}>
+                                  <Layers className="h-4 w-4 text-muted-foreground" />
+                                  <span>Desglose de Insumos del Proyecto</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewInputsReport && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => void handleOpenInputsReportPdf(project)}>
+                                  <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                                  <span>Reporte de Insumos</span>
+                                </DropdownMenuItem>
+                              )}
+                              {!hasProjectRowActions && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 text-muted-foreground" disabled>
+                                  Sin acciones disponibles
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
@@ -372,6 +962,168 @@ export default function ProjectsPage() {
           )}
         </CardContent>
       </Card>
+
+      {historyOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-3xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-2xl tracking-[-0.04em]">
+                      <History className="h-5 w-5" />
+                      Historial
+                    </CardTitle>
+                    <CardDescription>{historyProject?.nombre_proyecto || "Proyecto seleccionado"}</CardDescription>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeHistory}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 sm:p-6">
+                <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_1fr]">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="project-history-action">Accion</Label>
+                    <select
+                      id="project-history-action"
+                      value={historyFilters.action}
+                      onChange={(event) => updateHistoryFilter("action", event.target.value)}
+                      className="h-10 rounded-xl border border-border/80 bg-background px-3 text-sm"
+                    >
+                      {historyActionOptions.map((option) => (
+                        <option key={option.value || "all"} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="project-history-from">Desde</Label>
+                    <Input
+                      id="project-history-from"
+                      type="date"
+                      value={historyFilters.dateFrom}
+                      onChange={(event) => updateHistoryFilter("dateFrom", event.target.value)}
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="project-history-to">Hasta</Label>
+                    <Input
+                      id="project-history-to"
+                      type="date"
+                      value={historyFilters.dateTo}
+                      onChange={(event) => updateHistoryFilter("dateTo", event.target.value)}
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-end">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label htmlFor="project-history-user">Usuario</Label>
+                    <Input
+                      id="project-history-user"
+                      value={historyFilters.user}
+                      onChange={(event) => updateHistoryFilter("user", event.target.value)}
+                      placeholder="Nombre o ID de usuario"
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+
+                  <Button type="button" variant="outline" className="rounded-full" onClick={clearHistoryFilters}>
+                    Limpiar filtros
+                  </Button>
+                </div>
+
+                {historyIsError && (
+                  <Alert variant="destructive" className="mt-4 rounded-2xl">
+                    <AlertDescription>{historyError?.response?.data?.message || "No se pudo cargar el historial del proyecto."}</AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="mt-6 space-y-4">
+                  {(historyLoading || historyFetching) && historyItems.length === 0 && (
+                    <div className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-border/80 px-4 py-10 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cargando historial...
+                    </div>
+                  )}
+
+                  {!historyLoading && historyItems.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-border/80 px-4 py-10 text-center text-sm text-muted-foreground">
+                      No hay movimientos registrados para este proyecto.
+                    </div>
+                  )}
+
+                  {historyItems.map((entry) => (
+                    <div key={entry.id} className="relative rounded-2xl border border-border/70 bg-background/85 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-white">
+                              {historyActionLabels[entry.action] || entry.action}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">{formatHistoryDate(entry.occurred_at)}</span>
+                          </div>
+                          <h3 className="mt-3 text-base font-semibold text-foreground">{entry.title}</h3>
+                          <p className="mt-1 text-sm leading-6 text-muted-foreground">{entry.detail || "Sin detalle adicional."}</p>
+                        </div>
+
+                        <div className="shrink-0 text-left text-xs text-muted-foreground sm:text-right">
+                          <div className="font-medium text-foreground">{entry.user_name || "Usuario no registrado"}</div>
+                          <div>{entry.ip || "Sin IP"}</div>
+                        </div>
+                      </div>
+
+                      {hasMetadata(entry.metadata) && (
+                        <details className="mt-4 rounded-xl border border-border/70 bg-muted/20 p-3">
+                          <summary className="cursor-pointer text-sm font-medium text-foreground">Ver detalles</summary>
+                          <div className="mt-3">
+                            {renderHistoryMetadata(entry)}
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                  <span>{historyMeta.total || 0} movimientos registrados</span>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-full text-muted-foreground"
+                      onClick={() => setHistoryPage((current) => Math.max(1, current - 1))}
+                      disabled={historyMeta.current_page <= 1 || historyFetching}
+                    >
+                      <ChevronLeft data-icon="inline-start" />
+                      Anterior
+                    </Button>
+                    <span className="min-w-16 text-center">Pag. {historyMeta.current_page}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-full text-muted-foreground"
+                      onClick={() => setHistoryPage((current) => Math.min(historyTotalPages, current + 1))}
+                      disabled={historyMeta.current_page >= historyTotalPages || historyFetching}
+                    >
+                      Siguiente
+                      <ChevronRight data-icon="inline-end" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {editOpen && createPortal(
         <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
@@ -458,14 +1210,171 @@ export default function ProjectsPage() {
                     <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={closeRecalculate}>
                       Cancelar
                     </Button>
-                    <Button type="submit" className="rounded-full bg-foreground text-background hover:bg-foreground/90" disabled={recalculateMutation.isPending}>
-                      {recalculateMutation.isPending ? (
+                    <Button type="submit" className="rounded-full bg-foreground text-background hover:bg-foreground/90" disabled={recalculatePending}>
+                      {recalculatePending ? (
                         <>
                           <Loader2 className="mr-2 size-4 animate-spin" />
-                          Recalculando...
+                          Generando PDF...
                         </>
                       ) : "Recalcular"}
                     </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {incidenceOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Resumen por incidencia</CardTitle>
+                    <CardDescription>{incidenceProject?.nombre_proyecto || "Selecciona el formato del reporte."}</CardDescription>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeIncidenceSummary}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 sm:p-6">
+                <form className="flex flex-col gap-5" onSubmit={handleIncidenceSummarySubmit}>
+                  {incidenceStatus && (
+                    <Alert variant="destructive" className="rounded-2xl">
+                      <AlertDescription>{incidenceStatus.message}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="incidence-format">Formato</Label>
+                    <select
+                      id="incidence-format"
+                      value={incidenceFormat}
+                      onChange={(event) => setIncidenceFormat(event.target.value)}
+                      className="h-10 rounded-xl border border-border/80 bg-background px-3 text-sm"
+                    >
+                      <option value="PCA">PCA</option>
+                      <option value="PC_FPS">PC_FPS</option>
+                      <option value="PC_UPRE">PC_UPRE</option>
+                      <option value="PC_FNDR">PC_FNDR</option>
+                      <option value="PC_OBRAS">PC_OBRAS</option>
+                    </select>
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <Button type="button" variant="outline" onClick={closeIncidenceSummary}>Cancelar</Button>
+                    <Button type="submit">Generar PDF</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {generalBudgetOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Presupuesto general</CardTitle>
+                    <CardDescription>{generalBudgetProject?.nombre_proyecto || "Selecciona el formato del reporte."}</CardDescription>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeGeneralBudget}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 sm:p-6">
+                <form className="flex flex-col gap-5" onSubmit={handleGeneralBudgetSubmit}>
+                  {generalBudgetStatus && (
+                    <Alert variant="destructive" className="rounded-2xl">
+                      <AlertDescription>{generalBudgetStatus.message}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="general-budget-format">Formato</Label>
+                    <select
+                      id="general-budget-format"
+                      value={generalBudgetFormat}
+                      onChange={(event) => setGeneralBudgetFormat(event.target.value)}
+                      className="h-10 rounded-xl border border-border/80 bg-background px-3 text-sm"
+                    >
+                      <option value="PCA">PCA</option>
+                      <option value="PC_FPS">PC_FPS</option>
+                      <option value="PC_UPRE">PC_UPRE</option>
+                      <option value="PC_FNDR">PC_FNDR</option>
+                      <option value="PC_OBRAS">PC_OBRAS</option>
+                    </select>
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <Button type="button" variant="outline" onClick={closeGeneralBudget}>Cancelar</Button>
+                    <Button type="submit">Generar PDF</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {inputBreakdownOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Desglose de insumos del proyecto</CardTitle>
+                    <CardDescription>{inputBreakdownProject?.nombre_proyecto || "Selecciona el tipo de desglose."}</CardDescription>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeInputBreakdown}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 sm:p-6">
+                <form className="flex flex-col gap-5" onSubmit={handleInputBreakdownSubmit}>
+                  {inputBreakdownStatus && (
+                    <Alert variant="destructive" className="rounded-2xl">
+                      <AlertDescription>{inputBreakdownStatus.message}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="input-breakdown-type">Tipo</Label>
+                    <select
+                      id="input-breakdown-type"
+                      value={inputBreakdownType}
+                      onChange={(event) => setInputBreakdownType(event.target.value)}
+                      className="h-10 rounded-xl border border-border/80 bg-background px-3 text-sm"
+                    >
+                      <option value="1">Material</option>
+                      <option value="2">Mano de Obra</option>
+                      <option value="3">Maquinaria y Herramientas</option>
+                    </select>
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <Button type="button" variant="outline" onClick={closeInputBreakdown}>Cancelar</Button>
+                    <Button type="submit">Generar PDF</Button>
                   </div>
                 </form>
               </CardContent>

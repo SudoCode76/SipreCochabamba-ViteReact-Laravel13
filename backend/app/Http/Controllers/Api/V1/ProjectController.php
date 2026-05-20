@@ -5,18 +5,28 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Project\BudgetRecalculationRequest;
 use App\Http\Requests\Project\IncidencePriceRequest;
+use App\Http\Requests\Project\IndexProjectHistoryRequest;
 use App\Http\Requests\Project\IndexProjectRequest;
 use App\Http\Requests\Project\ProjectFormatRequest;
+use App\Http\Requests\Project\ProjectInputBreakdownRequest;
 use App\Http\Requests\Project\ShowProjectItemsRequest;
 use App\Http\Requests\Project\StoreProjectRequest;
 use App\Http\Requests\Project\SyncProjectItemsRequest;
 use App\Http\Requests\Project\UpdateProjectRequest;
+use App\Http\Resources\Project\ProjectHistoryResource;
 use App\Models\Item;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\Projects\ProjectBudgetService;
+use App\Services\Projects\ProjectBudgetByGroupPdfService;
 use App\Services\Projects\ProjectContextService;
 use App\Services\Projects\ProjectCrudService;
+use App\Services\Projects\ProjectIncidenceSummaryPdfService;
+use App\Services\Projects\ProjectInputBreakdownPdfService;
+use App\Services\Projects\ProjectInputsReportPdfService;
+use App\Services\Projects\ProjectGeneralBudgetPdfService;
+use App\Services\Projects\ProjectHistoryService;
 use App\Services\Projects\ProjectItemService;
 use App\Services\Projects\ProjectListService;
 use App\Services\Projects\ProjectPermissionService;
@@ -31,7 +41,14 @@ class ProjectController extends Controller
         private readonly ProjectCrudService $projectCrudService,
         private readonly ProjectItemService $projectItemService,
         private readonly ProjectBudgetService $projectBudgetService,
+        private readonly ProjectBudgetByGroupPdfService $projectBudgetByGroupPdfService,
+        private readonly ProjectIncidenceSummaryPdfService $projectIncidenceSummaryPdfService,
+        private readonly ProjectGeneralBudgetPdfService $projectGeneralBudgetPdfService,
+        private readonly ProjectInputBreakdownPdfService $projectInputBreakdownPdfService,
+        private readonly ProjectInputsReportPdfService $projectInputsReportPdfService,
         private readonly ProjectPermissionService $projectPermissionService,
+        private readonly ProjectHistoryService $projectHistoryService,
+        private readonly AuditService $auditService,
     ) {}
 
     public function context(Request $request): JsonResponse
@@ -77,6 +94,7 @@ class ProjectController extends Controller
 
         $project = $this->projectCrudService->create($request, $request->user());
         $project->load(['creator', 'requester']);
+        $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se creo el proyecto '.$project->nombre_proyecto);
 
         return response()->json([
             'success' => true,
@@ -110,8 +128,9 @@ class ProjectController extends Controller
             return $response;
         }
 
-        $project = $this->projectCrudService->update($request, $project);
+        $project = $this->projectCrudService->update($request, $project, $request->user());
         $project->load(['creator', 'requester']);
+        $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se actualizo el proyecto '.$project->nombre_proyecto);
 
         return response()->json([
             'success' => true,
@@ -128,7 +147,8 @@ class ProjectController extends Controller
             return $response;
         }
 
-        $project = $this->projectItemService->sync($project, $request->validated('items'), $request->user());
+        $project = $this->projectItemService->sync($project, $request->validated('items'), $request->user(), $request->ip());
+        $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se sincronizaron los items del proyecto '.$project->nombre_proyecto);
 
         return response()->json([
             'success' => true,
@@ -156,9 +176,31 @@ class ProjectController extends Controller
         ]);
     }
 
+    public function history(IndexProjectHistoryRequest $request, Project $project): JsonResponse
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view', 'No tiene permisos para ver el historial del proyecto.')) {
+            return $response;
+        }
+
+        $history = $this->projectHistoryService->list($project, $request->validated());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Historial del proyecto obtenido correctamente.',
+            'data' => [
+                'items' => ProjectHistoryResource::collection($history->getCollection())->resolve(),
+                'meta' => [
+                    'current_page' => $history->currentPage(),
+                    'per_page' => $history->perPage(),
+                    'total' => $history->total(),
+                ],
+            ],
+        ]);
+    }
+
     public function incidencePrice(IncidencePriceRequest $request, Item $item): JsonResponse
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar precios por incidencia.')) {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_incidence_summary', 'No tiene permisos para consultar precios por incidencia.')) {
             return $response;
         }
 
@@ -177,16 +219,33 @@ class ProjectController extends Controller
             return $response;
         }
 
+        $data = $this->projectBudgetService->budgetRecalculation($project, $request->date('fecha'));
+        $this->projectHistoryService->recordBudgetRecalculated($project, $request->user(), $request->ip(), $request->date('fecha')->toDateString(), $data);
+        $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se recalculo el presupuesto del proyecto '.$project->nombre_proyecto);
+
         return response()->json([
             'success' => true,
             'message' => 'Presupuesto del proyecto recalculado correctamente.',
-            'data' => $this->projectBudgetService->budgetRecalculation($project, $request->date('fecha')),
+            'data' => $data,
         ]);
+    }
+
+    public function budgetRecalculationPdf(BudgetRecalculationRequest $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_recalculate_budget', 'No tiene permisos para recalcular el presupuesto del proyecto.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para recalcular el presupuesto del proyecto.');
+        }
+
+        $data = $this->projectBudgetService->budgetRecalculation($project, $request->date('fecha'));
+        $this->projectHistoryService->recordBudgetRecalculated($project, $request->user(), $request->ip(), $request->date('fecha')->toDateString(), $data);
+        $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se recalculo el presupuesto del proyecto '.$project->nombre_proyecto);
+
+        return $this->projectBudgetByGroupPdfService->streamHistorical($project, $data);
     }
 
     public function budgetByGroup(Project $project): JsonResponse
     {
-        if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view_reports', 'No tiene permisos para consultar presupuesto por rubros.')) {
+        if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view_budget_by_group', 'No tiene permisos para consultar presupuesto por rubros.')) {
             return $response;
         }
 
@@ -197,9 +256,20 @@ class ProjectController extends Controller
         ]);
     }
 
+    public function budgetByGroupPdf(Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view_budget_by_group', 'No tiene permisos para consultar presupuesto por rubros.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar presupuesto por rubros.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, request()->user(), request()->ip(), 'Presupuesto por rubros');
+
+        return $this->projectBudgetByGroupPdfService->stream($project);
+    }
+
     public function incidenceSummary(ProjectFormatRequest $request, Project $project): JsonResponse
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar el resumen de incidencia.')) {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_incidence_summary', 'No tiene permisos para consultar el resumen de incidencia.')) {
             return $response;
         }
 
@@ -210,9 +280,59 @@ class ProjectController extends Controller
         ]);
     }
 
+    public function incidenceSummaryPdf(ProjectFormatRequest $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_incidence_summary', 'No tiene permisos para consultar el resumen de incidencia.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el resumen de incidencia.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Resumen por incidencia', [
+            'format' => $request->validated('format'),
+        ]);
+
+        return $this->projectIncidenceSummaryPdfService->stream($project, $request->validated('format'));
+    }
+
+    public function generalBudgetPdf(ProjectFormatRequest $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_general_budget', 'No tiene permisos para consultar el presupuesto general.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el presupuesto general.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Presupuesto general', [
+            'format' => $request->validated('format'),
+        ]);
+
+        return $this->projectGeneralBudgetPdfService->stream($project, $request->validated('format'));
+    }
+
+    public function inputBreakdownPdf(ProjectInputBreakdownRequest $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_input_breakdown', 'No tiene permisos para consultar el desglose de insumos del proyecto.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el desglose de insumos del proyecto.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Desglose de insumos del proyecto', [
+            'type' => (int) $request->validated('type'),
+        ]);
+
+        return $this->projectInputBreakdownPdfService->stream($project, (int) $request->validated('type'));
+    }
+
+    public function inputsReportPdf(Request $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_inputs_report', 'No tiene permisos para consultar el reporte de insumos del proyecto.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el reporte de insumos del proyecto.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Reporte consolidado de insumos');
+
+        return $this->projectInputsReportPdfService->stream($project);
+    }
+
     public function breakdownCalculation(ProjectFormatRequest $request, Project $project): JsonResponse
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para calcular el desglose del proyecto.')) {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_input_breakdown', 'No tiene permisos para calcular el desglose del proyecto.')) {
             return $response;
         }
 
@@ -225,7 +345,7 @@ class ProjectController extends Controller
 
     public function unitPrices(ProjectFormatRequest $request, Project $project): JsonResponse
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_reports', 'No tiene permisos para consultar precios unitarios del proyecto.')) {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_unit_prices', 'No tiene permisos para consultar precios unitarios del proyecto.')) {
             return $response;
         }
 

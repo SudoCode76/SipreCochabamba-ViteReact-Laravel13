@@ -3,10 +3,12 @@
 namespace App\Services\Projects;
 
 use App\Models\User;
-use Illuminate\Database\Eloquent\Builder;
+use App\Services\Permissions\PermissionResolverService;
 
 class ProjectPermissionService
 {
+    public function __construct(private readonly PermissionResolverService $permissions) {}
+
     public function resolve(User $user): array
     {
         if ($user->isAdministrator()) {
@@ -17,30 +19,36 @@ class ProjectPermissionService
                 'can_sync_items' => true,
                 'can_recalculate_budget' => true,
                 'can_view_reports' => true,
+                'can_view_budget_by_group' => true,
+                'can_view_incidence_summary' => true,
+                'can_view_general_budget' => true,
+                'can_view_input_breakdown' => true,
+                'can_view_inputs_report' => true,
+                'can_view_unit_prices' => true,
             ];
         }
 
-        return [
-            'can_view' => $this->has($user, 'PROYECTO', ['INDEX']),
-            'can_create' => $this->has($user, 'PROYECTO', ['REGISTRAR_PROYECTO']),
-            'can_edit' => $this->has($user, 'PROYECTO', ['EDITAR_PROYECTO']),
-            'can_sync_items' => $this->has($user, 'PROYECTO', ['REGISTRAR_ITEM_PROYECTO']),
-            'can_recalculate_budget' => $this->has($user, 'PROYECTO', ['RECAL_PRESUPUESTO_RUBRO']),
-            'can_view_reports' => $this->has($user, 'PROYECTO', ['RESUMEN_INCIDENCIA', 'PRESUPUESTO_RUBRO', 'DESGLOSE_ITEMS']),
-        ];
-    }
+        $resolved = $this->permissions->resolveMap($user, 'PROYECTO', [
+            'can_view' => ['INDEX', 'PROYECTO'],
+            'can_create' => ['REGISTRAR_PROYECTO', 'NUEVO_PROYECTO'],
+            'can_edit' => ['EDITAR_PROYECTO', 'EDIT_PROYECTO'],
+            'can_sync_items' => ['REGISTRAR_ITEM_PROYECTO'],
+            'can_recalculate_budget' => ['RECAL_PRESUPUESTO_RUBRO'],
+            'can_view_budget_by_group' => ['PRESUPUESTO_RUBRO'],
+            'can_view_incidence_summary' => ['RESUMEN_INCIDENCIA'],
+            'can_view_general_budget' => ['PRESUPUESTO_GENERAL', 'PRESUPUESTO_RUBRO'],
+            'can_view_input_breakdown' => ['DESGLOSE_ITEMS', 'CALCULAR_DESGLOSE'],
+            'can_view_inputs_report' => ['REPORTE_INSUMOS', 'DESGLOSE_ITEMS'],
+            'can_view_unit_prices' => ['PRECIOS_UNITARIOS', 'IMPRIMIR_PRECIOS_UNITARIOS', 'PRESUPUESTO_RUBRO'],
+        ]);
 
-    private function has(User $user, string $className, array $functionNames): bool
-    {
-        return $user->activePermissions()
-            ->whereHas('systemFunction', function (Builder $query) use ($className, $functionNames): void {
-                $query->whereRaw('UPPER(TRIM(clase)) = ?', [strtoupper(trim($className))])
-                    ->where(function (Builder $query) use ($functionNames): void {
-                        foreach ($functionNames as $functionName) {
-                            $query->orWhereRaw('UPPER(TRIM(nombre_funcion)) = ?', [strtoupper(trim($functionName))]);
-                        }
-                    });
-            })
-            ->exists();
+        $resolved['can_view_reports'] = $resolved['can_view_budget_by_group']
+            || $resolved['can_view_incidence_summary']
+            || $resolved['can_view_general_budget']
+            || $resolved['can_view_input_breakdown']
+            || $resolved['can_view_inputs_report']
+            || $resolved['can_view_unit_prices'];
+
+        return $resolved;
     }
 }

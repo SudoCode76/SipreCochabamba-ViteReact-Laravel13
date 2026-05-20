@@ -21,6 +21,7 @@ use App\Services\Inputs\InputCrudService;
 use App\Services\Inputs\InputDeletionService;
 use App\Services\Inputs\InputListService;
 use App\Services\Inputs\InputQuoteService;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -32,6 +33,7 @@ class InputController extends Controller
         private readonly InputCrudService $inputCrudService,
         private readonly InputDeletionService $inputDeletionService,
         private readonly InputQuoteService $inputQuoteService,
+        private readonly AuditService $auditService,
     ) {}
 
     public function index(IndexInputRequest $request): JsonResponse
@@ -233,6 +235,7 @@ class InputController extends Controller
     {
         $quote = $this->inputQuoteService->create($input, $request);
         $quote->load(['input', 'log']);
+        $this->auditService->record($request->user(), $request->ip(), 'INSUMOS: se registro una cotizacion para '.$input->descripcion);
 
         return response()->json([
             'success' => true,

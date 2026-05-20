@@ -14,7 +14,7 @@ export function useAuth() {
     queryKey: ["auth-user"],
     queryFn: async () => {
       const data = await authService.getProfile();
-      return data.user || data;
+      return data?.data?.user || data?.user || data;
     },
     retry: false, // Don't retry if fetching the user fails (e.g. 401)
     refetchOnWindowFocus: false,

@@ -7,17 +7,27 @@ use App\Models\Project;
 use App\Models\ProjectItem;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ProjectItemService
 {
     public function __construct(
         private readonly ProjectItemIncidencePriceService $incidencePriceService,
+        private readonly ProjectLegacyUnitPriceService $legacyUnitPriceService,
         private readonly ProjectFormatResolver $formatResolver,
+        private readonly ProjectHistoryService $projectHistoryService,
     ) {}
 
-    public function sync(Project $project, array $items, User $user): Project
+    public function sync(Project $project, array $items, User $user, ?string $ip = null): Project
     {
-        DB::transaction(function () use ($project, $items, $user): void {
+        $historySummary = [
+            'added' => [],
+            'updated' => [],
+            'removed' => [],
+        ];
+
+        DB::transaction(function () use ($project, $items, $user, &$historySummary): void {
             $incomingIds = collect($items)
                 ->map(fn (array $item): int => (int) $item['id_item'])
                 ->unique()
@@ -43,28 +53,44 @@ class ProjectItemService
                 $existingItem = $existing->get($itemId);
 
                 if ($existingItem instanceof ProjectItem && strtoupper((string) $existingItem->estado) === 'AC') {
+                    $this->trackUpdatedProjectItem($historySummary, $existingItem, $payload);
                     $existingItem->update($payload);
 
                     continue;
                 }
 
                 if ($existingItem instanceof ProjectItem) {
+                    $historySummary['added'][] = $this->historyItemPayload($itemId, $payload);
                     $existingItem->update($payload);
 
                     continue;
                 }
 
+                $historySummary['added'][] = $this->historyItemPayload($itemId, $payload);
                 ProjectItem::query()->create(array_merge($payload, [
                     'id_proyecto' => $project->id_proyecto,
                     'id_item' => $itemId,
                 ]));
             }
 
-            ProjectItem::query()
+            $removedItems = ProjectItem::query()
                 ->where('id_proyecto', $project->id_proyecto)
                 ->whereNotNull('id_item')
                 ->whereNotIn('id_item', $incomingIds->all())
                 ->where('estado', 'AC')
+                ->get();
+
+            foreach ($removedItems as $removedItem) {
+                $historySummary['removed'][] = [
+                    'id_item' => $removedItem->id_item,
+                    'cantidad' => $removedItem->cantidad,
+                    'precio' => $removedItem->precio,
+                    'prioridad' => $removedItem->prioridad,
+                ];
+            }
+
+            ProjectItem::query()
+                ->whereIn('id_proyecto_item', $removedItems->pluck('id_proyecto_item')->all())
                 ->update([
                     'estado' => 'DC',
                 ]);
@@ -81,6 +107,8 @@ class ProjectItemService
             ]);
         });
 
+        $this->projectHistoryService->recordItemsSynced($project->refresh(), $user, $ip, $historySummary);
+
         return $project->refresh();
     }
 
@@ -96,7 +124,7 @@ class ProjectItemService
 
         return $items->map(function (ProjectItem $projectItem) use ($format): array {
             $item = $projectItem->item;
-            $price = $item ? $this->incidencePriceService->resolve($item, $format) : null;
+            $price = $item ? round($this->legacyUnitPriceService->resolve($item, $format), 2) : null;
 
             return [
                 'id_proyecto_item' => $projectItem->id_proyecto_item,
@@ -120,6 +148,7 @@ class ProjectItemService
                     'abreviatura' => $item->unitMeasure->abreviatura,
                 ] : null,
                 'especificacion' => $item?->especificacion,
+                'especificacion_url' => $this->publicFileUrl($item?->especificacion),
             ];
         })->values()->all();
     }
@@ -137,8 +166,10 @@ class ProjectItemService
             'descripcion' => $item->subgroupCatalog?->descripcion,
             'id_unidad_medida' => $item->unitMeasure?->id_unidad_medida,
             'nombre_unidad_medida' => $item->unitMeasure?->descripcion,
+            'abreviatura_unidad_medida' => $item->unitMeasure?->abreviatura,
             'especificacion' => $item->especificacion,
-            'precio' => $this->incidencePriceService->resolve($item, $format),
+            'especificacion_url' => $this->publicFileUrl($item->especificacion),
+            'precio' => round($this->legacyUnitPriceService->resolve($item, $format), 2),
         ];
     }
 
@@ -156,5 +187,60 @@ class ProjectItemService
             ])
             ->values()
             ->all();
+    }
+
+    private function trackUpdatedProjectItem(array &$summary, ProjectItem $existingItem, array $payload): void
+    {
+        $changes = [];
+
+        foreach (['precio', 'cantidad', 'prioridad', 'estado'] as $field) {
+            $oldValue = $existingItem->{$field};
+            $newValue = $payload[$field] ?? null;
+
+            if ((string) $oldValue !== (string) $newValue) {
+                $changes[$field] = [
+                    'from' => $oldValue,
+                    'to' => $newValue,
+                ];
+            }
+        }
+
+        if ($changes === []) {
+            return;
+        }
+
+        $summary['updated'][] = [
+            'id_item' => $existingItem->id_item,
+            'changes' => $changes,
+        ];
+    }
+
+    private function historyItemPayload(int $itemId, array $payload): array
+    {
+        return [
+            'id_item' => $itemId,
+            'cantidad' => $payload['cantidad'],
+            'precio' => $payload['precio'],
+            'prioridad' => $payload['prioridad'],
+        ];
+    }
+
+    private function publicFileUrl(?string $path): ?string
+    {
+        $path = trim((string) $path);
+
+        if ($path === '') {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            return $path;
+        }
+
+        if (! Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        return url(Storage::disk('public')->url($path));
     }
 }

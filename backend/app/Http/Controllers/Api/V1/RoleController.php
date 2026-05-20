@@ -10,11 +10,14 @@ use App\Http\Requests\Role\UpdateRoleStatusRequest;
 use App\Http\Resources\Role\RoleResource;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
 class RoleController extends Controller
 {
+    public function __construct(private readonly AuditService $auditService) {}
+
     public function context(): JsonResponse
     {
         return response()->json([
@@ -88,6 +91,7 @@ class RoleController extends Controller
             'nombre_rol' => trim($request->string('nombre_rol')->toString()),
             'estado' => strtoupper($request->string('estado')->toString()),
         ]);
+        $this->auditService->record($request->user(), $request->ip(), 'ADMINISTRACION: se creo el rol '.$role->nombre_rol);
 
         return response()->json([
             'success' => true,
@@ -129,6 +133,7 @@ class RoleController extends Controller
         });
 
         $role->refresh();
+        $this->auditService->record($request->user(), $request->ip(), 'ADMINISTRACION: se actualizo el rol '.$role->nombre_rol);
 
         return response()->json([
             'success' => true,
@@ -147,6 +152,7 @@ class RoleController extends Controller
         ]);
 
         $role->refresh();
+        $this->auditService->record($request->user(), $request->ip(), 'ADMINISTRACION: se cambio el estado del rol '.$role->nombre_rol);
 
         return response()->json([
             'success' => true,

@@ -7,11 +7,14 @@ use App\Http\Requests\Item\UpdateCalculationPercentageRequest;
 use App\Models\GeneralCalculationPercentage;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Services\Parameters\ParameterPermissionService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Validation\ValidationException;
 
 class CalculationPercentageService
 {
+    public function __construct(private readonly ParameterPermissionService $permissions) {}
+
     public function context(User $user): array
     {
         return [
@@ -19,11 +22,7 @@ class CalculationPercentageService
                 ['code' => 'AC', 'label' => 'ACTIVO'],
                 ['code' => 'DC', 'label' => 'INACTIVO'],
             ],
-            'permissions' => [
-                'can_view' => $user->isAdministrator(),
-                'can_create' => $user->isAdministrator(),
-                'can_update' => $user->isAdministrator(),
-            ],
+            'permissions' => $this->permissions->resolve($user, ['PORCENTAJE_CALCULO', 'PARAMETROS_CALCULO']),
         ];
     }
 
