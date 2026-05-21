@@ -8,7 +8,7 @@ use App\Http\Requests\Item\StoreCalculationPercentageRequest;
 use App\Http\Requests\Item\UpdateCalculationPercentageRequest;
 use App\Http\Resources\Item\CalculationPercentageResource;
 use App\Models\FndrCalculationPercentage;
-use App\Services\Items\FndrCalculationPercentageService;
+use App\Modules\Items\Services\FndrCalculationPercentageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

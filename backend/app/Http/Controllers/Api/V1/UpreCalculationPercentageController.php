@@ -8,7 +8,7 @@ use App\Http\Requests\Item\StoreCalculationPercentageRequest;
 use App\Http\Requests\Item\UpdateCalculationPercentageRequest;
 use App\Http\Resources\Item\CalculationPercentageResource;
 use App\Models\UpreCalculationPercentage;
-use App\Services\Items\UpreCalculationPercentageService;
+use App\Modules\Items\Services\UpreCalculationPercentageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

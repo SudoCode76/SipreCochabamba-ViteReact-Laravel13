@@ -3,7 +3,7 @@
 namespace App\Services\Inputs;
 
 use App\Models\User;
-use App\Services\Permissions\PermissionResolverService;
+use App\Modules\Security\Services\PermissionResolverService;
 
 class InputPermissionService
 {

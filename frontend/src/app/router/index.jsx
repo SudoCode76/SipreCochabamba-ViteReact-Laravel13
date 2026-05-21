@@ -35,6 +35,7 @@ import RolesPage from "@/modules/roles/pages/RolesPage";
 import UsersPage from "@/modules/users/pages/UsersPage";
 import GroupsPage from "@/modules/groups/pages/GroupsPage";
 import SubgroupsPage from "@/modules/groups/pages/SubgroupsPage";
+import ModulesPage from "@/modules/modules/pages/ModulesPage";
 import CalculationPercentagesPage from "@/modules/calculation-percentages/pages/CalculationPercentagesPage";
 import AuditsPage from "@/modules/audits/pages/AuditsPage";
 
@@ -175,6 +176,10 @@ export const router = createBrowserRouter([
           {
             path: "/Sub grupos",
             element: <SubgroupsPage />,
+          },
+          {
+            path: "/Modulos",
+            element: <ModulesPage />,
           },
           {
             path: "/parametros-calculo",

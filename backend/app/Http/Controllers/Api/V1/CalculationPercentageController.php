@@ -7,7 +7,7 @@ use App\Http\Requests\Item\StoreCalculationPercentageRequest;
 use App\Http\Requests\Item\UpdateCalculationPercentageRequest;
 use App\Http\Resources\Item\CalculationPercentageResource;
 use App\Models\GeneralCalculationPercentage;
-use App\Services\Items\CalculationPercentageService;
+use App\Modules\Items\Services\CalculationPercentageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

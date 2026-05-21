@@ -16,7 +16,9 @@ class SyncProjectItemsRequest extends FormRequest
     {
         return [
             'items' => ['required', 'array'],
+            'items.*.id_proyecto_item' => ['nullable', 'integer', 'exists:proyecto_item,id_proyecto_item'],
             'items.*.id_item' => ['required', 'integer', 'exists:item,id_item'],
+            'items.*.id_modulo' => ['nullable', 'integer', 'exists:modulo,id_modulo'],
             'items.*.precio' => ['required', 'numeric', 'min:0'],
             'items.*.cantidad' => ['required', 'numeric', 'min:0'],
             'items.*.prioridad' => ['nullable', 'integer', 'min:1'],

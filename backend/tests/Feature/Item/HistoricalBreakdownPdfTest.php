@@ -3,7 +3,7 @@
 namespace Tests\Feature\Item;
 
 use App\Models\Item;
-use App\Services\Items\HistoricalBreakdownPdfService;
+use App\Modules\Items\Services\HistoricalBreakdownPdfService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;

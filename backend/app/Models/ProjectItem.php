@@ -21,6 +21,7 @@ class ProjectItem extends Model
     protected $fillable = [
         'id_proyecto',
         'id_item',
+        'id_modulo',
         'estado',
         'cantidad',
         'fecha',
@@ -34,6 +35,7 @@ class ProjectItem extends Model
         return [
             'id_proyecto' => 'integer',
             'id_item' => 'integer',
+            'id_modulo' => 'integer',
             'cantidad' => 'float',
             'fecha' => 'date',
             'precio' => 'float',
@@ -50,6 +52,11 @@ class ProjectItem extends Model
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class, 'id_item', 'id_item');
+    }
+
+    public function module(): BelongsTo
+    {
+        return $this->belongsTo(ModuleCatalog::class, 'id_modulo', 'id_modulo');
     }
 
     public function scopeActive(Builder $query): Builder
