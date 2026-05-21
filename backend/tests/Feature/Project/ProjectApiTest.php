@@ -171,6 +171,39 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.items.2.id_proyecto', 3);
     }
 
+    public function test_can_search_projects_by_independent_words(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createProjectRecord([
+            'id_proyecto' => 1,
+            'nombre_proyecto' => 'DEMO PROYECTO CR',
+        ]);
+        $this->createProjectRecord([
+            'id_proyecto' => 2,
+            'nombre_proyecto' => 'OTRO TRABAJO',
+        ]);
+
+        $this->getJson('/api/v1/projects?search=demo%20proyecto')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_proyecto', 1);
+
+        $this->getJson('/api/v1/projects?search=demo%20cr')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_proyecto', 1);
+
+        $this->getJson('/api/v1/projects?search=demo%20%20%20cr')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_proyecto', 1);
+
+        $this->getJson('/api/v1/projects?search=demo%20xyz')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 0);
+    }
+
     public function test_cannot_create_duplicate_project_name_even_with_different_case(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

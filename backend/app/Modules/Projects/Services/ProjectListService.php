@@ -28,19 +28,30 @@ class ProjectListService
         }
 
         if (! empty($filters['search'])) {
-            $search = Str::lower(trim((string) $filters['search']));
+            $terms = Str::of((string) $filters['search'])
+                ->lower()
+                ->squish()
+                ->explode(' ')
+                ->filter()
+                ->values();
 
-            $query->where(function ($query) use ($search): void {
-                $query->whereRaw('LOWER(TRIM(nombre_proyecto)) LIKE ?', ["%{$search}%"])
-                    ->orWhereRaw('LOWER(TRIM(ubicacion)) LIKE ?', ["%{$search}%"])
-                    ->orWhereRaw('LOWER(TRIM(observaciones)) LIKE ?', ["%{$search}%"])
-                    ->orWhereRaw('LOWER(TRIM(nombre_responsable)) LIKE ?', ["%{$search}%"])
-                    ->orWhereRaw('LOWER(TRIM(CAST(responsable AS CHAR))) LIKE ?', ["%{$search}%"])
-                    ->orWhereRaw('LOWER(TRIM(CAST(solicitante AS CHAR))) LIKE ?', ["%{$search}%"])
-                    ->orWhereHas('requester', function ($query) use ($search): void {
-                        $query->whereRaw('LOWER(TRIM(funcionario)) LIKE ?', ["%{$search}%"])
-                            ->orWhereRaw('LOWER(TRIM(username)) LIKE ?', ["%{$search}%"]);
+            $query->where(function ($query) use ($terms): void {
+                foreach ($terms as $term) {
+                    $query->where(function ($query) use ($term): void {
+                        $like = "%{$term}%";
+
+                        $query->whereRaw('LOWER(TRIM(nombre_proyecto)) LIKE ?', [$like])
+                            ->orWhereRaw('LOWER(TRIM(ubicacion)) LIKE ?', [$like])
+                            ->orWhereRaw('LOWER(TRIM(observaciones)) LIKE ?', [$like])
+                            ->orWhereRaw('LOWER(TRIM(nombre_responsable)) LIKE ?', [$like])
+                            ->orWhereRaw('LOWER(TRIM(CAST(responsable AS CHAR))) LIKE ?', [$like])
+                            ->orWhereRaw('LOWER(TRIM(CAST(solicitante AS CHAR))) LIKE ?', [$like])
+                            ->orWhereHas('requester', function ($query) use ($like): void {
+                                $query->whereRaw('LOWER(TRIM(funcionario)) LIKE ?', [$like])
+                                    ->orWhereRaw('LOWER(TRIM(username)) LIKE ?', [$like]);
+                            });
                     });
+                }
             });
         }
 
