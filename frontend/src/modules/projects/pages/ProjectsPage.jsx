@@ -2,7 +2,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, ClipboardList, X, Loader2, History } from "lucide-react";
+import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, ClipboardList, X, Loader2, History, Copy } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +31,8 @@ const historyActionLabels = {
   items_synced: "Items",
   budget_recalculated: "Recalculo",
   pdf_generated: "PDF",
+  template_created: "Planilla",
+  created_from_template: "Planilla",
 };
 
 const historyActionOptions = [
@@ -40,6 +42,8 @@ const historyActionOptions = [
   { value: "items_synced", label: "Items sincronizados" },
   { value: "budget_recalculated", label: "Presupuesto recalculado" },
   { value: "pdf_generated", label: "PDF generado" },
+  { value: "template_created", label: "Planilla creada" },
+  { value: "created_from_template", label: "Creado desde planilla" },
 ];
 
 const formatHistoryDate = (value) => {
@@ -74,6 +78,8 @@ const historyFieldLabels = {
   cantidad: "Cantidad",
   prioridad: "Prioridad",
   report_type: "Reporte",
+  template_name: "Planilla",
+  items_copied: "Items copiados",
   format: "Formato",
   type: "Tipo",
   reference_date: "Fecha de referencia",
@@ -256,6 +262,11 @@ export default function ProjectsPage() {
     dateFrom: "",
     dateTo: "",
   });
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateProject, setTemplateProject] = useState(null);
+  const [templateName, setTemplateName] = useState("");
+  const [templatePending, setTemplatePending] = useState(false);
+  const [templateStatus, setTemplateStatus] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const deferredSearch = useDeferredValue(search.trim());
 
@@ -281,9 +292,11 @@ export default function ProjectsPage() {
   const canViewGeneralBudget = Boolean(permissions.can_view_general_budget);
   const canViewInputBreakdown = Boolean(permissions.can_view_input_breakdown);
   const canViewInputsReport = Boolean(permissions.can_view_inputs_report);
+  const canManageTemplates = Boolean(permissions.can_manage_templates || permissions.can_create || permissions.can_edit);
   const hasProjectRowActions = canEditProject
     || canSyncProjectItems
     || canViewHistory
+    || canManageTemplates
     || canViewBudgetByGroup
     || canRecalculateBudget
     || canViewIncidenceSummary
@@ -393,6 +406,52 @@ export default function ProjectsPage() {
       dateFrom: "",
       dateTo: "",
     });
+  };
+
+  const openTemplateModal = (project) => {
+    setTemplateProject(project);
+    setTemplateName(`PLANILLA - ${project.nombre_proyecto || ""}`.trim());
+    setTemplateStatus(null);
+    setTemplateOpen(true);
+  };
+
+  const closeTemplateModal = () => {
+    setTemplateOpen(false);
+    setTemplateProject(null);
+    setTemplateName("");
+    setTemplateStatus(null);
+    setTemplatePending(false);
+  };
+
+  const handleTemplateSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!templateProject?.id_proyecto || !templateName.trim()) {
+      return;
+    }
+
+    setTemplatePending(true);
+    setTemplateStatus(null);
+
+    try {
+      await projectService.createTemplateFromProject(templateProject.id_proyecto, {
+        nombre_proyecto: templateName.trim(),
+      });
+      setFeedback({
+        type: "success",
+        message: "La planilla del proyecto se creó correctamente.",
+      });
+      closeTemplateModal();
+    } catch (templateError) {
+      const fieldErrors = templateError?.response?.data?.errors;
+      const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
+      setTemplateStatus({
+        type: "error",
+        message: firstFieldError || templateError?.response?.data?.message || "No se pudo crear la planilla del proyecto.",
+      });
+    } finally {
+      setTemplatePending(false);
+    }
   };
 
   const openRecalculate = (project) => {
@@ -877,6 +936,12 @@ export default function ProjectsPage() {
                                   <span>Historial</span>
                                 </DropdownMenuItem>
                               )}
+                              {canManageTemplates && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openTemplateModal(project)}>
+                                  <Copy className="h-4 w-4 text-muted-foreground" />
+                                  <span>Crear planilla desde este proyecto</span>
+                                </DropdownMenuItem>
+                              )}
                               {canViewBudgetByGroup && (
                                 <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => void handleOpenBudgetByGroupPdf(project)}>
                                   <Calculator className="h-4 w-4 text-muted-foreground" />
@@ -978,6 +1043,63 @@ export default function ProjectsPage() {
           )}
         </CardContent>
       </Card>
+
+      {templateOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Crear planilla</CardTitle>
+                    <CardDescription>{templateProject?.nombre_proyecto || "Define el nombre de la planilla."}</CardDescription>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeTemplateModal}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 sm:p-6">
+                <form className="flex flex-col gap-5" onSubmit={handleTemplateSubmit}>
+                  {templateStatus && (
+                    <Alert variant="destructive" className="rounded-2xl">
+                      <AlertDescription>{templateStatus.message}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="template-name">Nombre de la planilla</Label>
+                    <Input
+                      id="template-name"
+                      value={templateName}
+                      onChange={(event) => setTemplateName(event.target.value)}
+                      placeholder="Nombre de la planilla"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <Button type="button" variant="outline" onClick={closeTemplateModal}>Cancelar</Button>
+                    <Button type="submit" disabled={templatePending}>
+                      {templatePending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creando
+                        </>
+                      ) : (
+                        "Crear planilla"
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {historyOpen && createPortal(
         <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">

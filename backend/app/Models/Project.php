@@ -30,6 +30,7 @@ class Project extends Model
         'fecha_aprob',
         'id_usuario',
         'estado',
+        'es_plantilla',
         'nombre_responsable',
         'latitud',
         'longitud',
@@ -47,6 +48,7 @@ class Project extends Model
             'solicitante' => 'integer',
             'id_usuario' => 'integer',
             'precio' => 'float',
+            'es_plantilla' => 'boolean',
         ];
     }
 

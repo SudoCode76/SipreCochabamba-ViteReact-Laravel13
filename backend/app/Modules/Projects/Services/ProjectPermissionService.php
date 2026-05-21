@@ -25,6 +25,7 @@ class ProjectPermissionService
                 'can_view_input_breakdown' => true,
                 'can_view_inputs_report' => true,
                 'can_view_unit_prices' => true,
+                'can_manage_templates' => true,
             ];
         }
 
@@ -41,6 +42,10 @@ class ProjectPermissionService
             'can_view_inputs_report' => ['REPORTE_INSUMOS', 'DESGLOSE_ITEMS'],
             'can_view_unit_prices' => ['PRECIOS_UNITARIOS', 'IMPRIMIR_PRECIOS_UNITARIOS', 'PRESUPUESTO_RUBRO'],
         ]);
+
+        $resolved['can_manage_templates'] = $this->permissions->allows($user, 'PARAMETROS', ['PLANILLAS_PROYECTO'])
+            || $resolved['can_create']
+            || $resolved['can_edit'];
 
         $resolved['can_view_reports'] = $resolved['can_view_budget_by_group']
             || $resolved['can_view_incidence_summary']

@@ -23,6 +23,7 @@ import ProjectsPage from "@/modules/projects/pages/ProjectsPage";
 import NewProjectPage from "@/modules/projects/pages/NewProjectPage";
 import EditProjectPage from "@/modules/projects/pages/EditProjectPage";
 import ProjectItemsPage from "@/modules/projects/pages/ProjectItemsPage";
+import ProjectTemplatesPage from "@/modules/projects/pages/ProjectTemplatesPage";
 import InputsPage from "@/modules/inputs/pages/InputsPage";
 import InputRequestsPage from "@/modules/input-requests/pages/InputRequestsPage";
 import CreateInputRequestPage from "@/modules/input-requests/pages/CreateInputRequestPage";
@@ -180,6 +181,10 @@ export const router = createBrowserRouter([
           {
             path: "/Modulos",
             element: <ModulesPage />,
+          },
+          {
+            path: "/Planillas Proyecto",
+            element: <ProjectTemplatesPage />,
           },
           {
             path: "/parametros-calculo",

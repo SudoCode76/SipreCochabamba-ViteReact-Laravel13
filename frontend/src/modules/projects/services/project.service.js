@@ -13,6 +13,11 @@ export const projectService = {
     return response.data;
   },
 
+  create: async (payload) => {
+    const response = await apiClient.post("/v1/projects", payload);
+    return response.data;
+  },
+
   show: async (projectId) => {
     const response = await apiClient.get(`/v1/projects/${projectId}`);
     return response.data;
@@ -34,6 +39,39 @@ export const projectService = {
 
   update: async (projectId, payload) => {
     const response = await apiClient.put(`/v1/projects/${projectId}`, payload);
+    return response.data;
+  },
+
+  templates: async ({ page = 1, perPage = 15, search = "", status = "" } = {}) => {
+    const response = await apiClient.get("/v1/project-templates", {
+      params: {
+        page,
+        per_page: perPage,
+        search: search || undefined,
+        status: status || undefined,
+      },
+    });
+    return response.data;
+  },
+
+  showTemplate: async (templateId) => {
+    const response = await apiClient.get(`/v1/project-templates/${templateId}`);
+    return response.data;
+  },
+
+  createTemplateFromProject: async (projectId, payload) => {
+    const response = await apiClient.post(`/v1/projects/${projectId}/template`, payload);
+    return response.data;
+  },
+
+  updateTemplate: async ({ id, payload }) => {
+    const templateId = id;
+    const response = await apiClient.put(`/v1/project-templates/${templateId}`, payload);
+    return response.data;
+  },
+
+  createFromTemplate: async (templateId, payload) => {
+    const response = await apiClient.post(`/v1/project-templates/${templateId}/create-project`, payload);
     return response.data;
   },
 
