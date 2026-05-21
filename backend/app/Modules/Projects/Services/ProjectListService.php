@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Projects;
+namespace App\Modules\Projects\Services;
 
 use App\Models\Project;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -20,11 +20,9 @@ class ProjectListService
         $order = strtolower((string) ($filters['order'] ?? 'legacy'));
 
         if ($order === 'recent') {
-            $query->orderByDesc('id_proyecto')
-                ->orderByDesc('fecha');
+            $query->orderByDesc('id_proyecto');
         } elseif ($order === 'oldest') {
-            $query->orderBy('id_proyecto')
-                ->orderBy('fecha');
+            $query->orderBy('id_proyecto');
         } else {
             $query->orderBy('nombre_proyecto');
         }

@@ -138,14 +138,14 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.meta.total', 2);
     }
 
-    public function test_can_sort_projects_by_recent_and_oldest_dates(): void
+    public function test_can_sort_projects_by_recent_and_oldest_registration(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
 
         $this->createProjectRecord([
             'id_proyecto' => 1,
             'nombre_proyecto' => 'PROYECTO UNO',
-            'fecha' => '2026-01-10',
+            'fecha' => '82023-02-10',
         ]);
         $this->createProjectRecord([
             'id_proyecto' => 2,
@@ -155,7 +155,7 @@ class ProjectApiTest extends TestCase
         $this->createProjectRecord([
             'id_proyecto' => 3,
             'nombre_proyecto' => 'PROYECTO TRES',
-            'fecha' => '2026-03-10',
+            'fecha' => '2025-03-10',
         ]);
 
         $this->getJson('/api/v1/projects?per_page=10&order=recent')
