@@ -90,6 +90,41 @@ class InputApiTest extends TestCase
             ->assertJsonPath('data.items.0.id_insumo', 2);
     }
 
+    public function test_admin_can_search_inputs_by_independent_words(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput([
+            'id_insumo' => 1,
+            'descripcion' => 'ARENA FINA LAVADA',
+            'estado' => 'AC',
+        ]);
+        $this->createInput([
+            'id_insumo' => 2,
+            'descripcion' => 'CEMENTO PORTLAND',
+            'estado' => 'AC',
+        ]);
+
+        $this->getJson('/api/v1/inputs?search=arena%20lavada&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_insumo', 1);
+
+        $this->getJson('/api/v1/inputs?search=arena%20fina&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_insumo', 1);
+
+        $this->getJson('/api/v1/inputs?description=arena%20%20%20lavada&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_insumo', 1);
+
+        $this->getJson('/api/v1/inputs?search=arena%20xyz&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 0);
+    }
+
     public function test_admin_can_sort_inputs_by_recent_and_oldest_dates(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

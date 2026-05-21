@@ -29,8 +29,18 @@ class InputListService
         $search = $filters['search'] ?? $filters['description'] ?? null;
 
         if (is_string($search) && trim($search) !== '') {
-            $normalizedSearch = Str::lower(trim($search));
-            $query->whereRaw('LOWER(TRIM(descripcion)) LIKE ?', ["%{$normalizedSearch}%"]);
+            $terms = Str::of($search)
+                ->lower()
+                ->squish()
+                ->explode(' ')
+                ->filter()
+                ->values();
+
+            $query->where(function ($query) use ($terms): void {
+                foreach ($terms as $term) {
+                    $query->whereRaw('LOWER(TRIM(descripcion)) LIKE ?', ["%{$term}%"]);
+                }
+            });
         }
 
         if (! empty($filters['status'])) {
