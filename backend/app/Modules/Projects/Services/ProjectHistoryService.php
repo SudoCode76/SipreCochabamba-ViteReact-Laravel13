@@ -90,6 +90,24 @@ class ProjectHistoryService
         ], $metadata));
     }
 
+    public function recordTemplateCreated(Project $project, ?User $actor, ?string $ip, Project $template, int $itemsCopied): void
+    {
+        $this->record($project, $actor, $ip, 'template_created', 'Se creó una planilla desde este proyecto', 'Se creó la planilla '.$template->nombre_proyecto.' copiando '.$itemsCopied.' items activos.', [
+            'template_id' => $template->id_proyecto,
+            'template_name' => $template->nombre_proyecto,
+            'items_copied' => $itemsCopied,
+        ]);
+    }
+
+    public function recordCreatedFromTemplate(Project $project, ?User $actor, ?string $ip, Project $template, int $itemsCopied): void
+    {
+        $this->record($project, $actor, $ip, 'created_from_template', 'Se creó el proyecto desde una planilla', 'Se creó el proyecto usando la planilla '.$template->nombre_proyecto.' y se copiaron '.$itemsCopied.' items.', [
+            'template_id' => $template->id_proyecto,
+            'template_name' => $template->nombre_proyecto,
+            'items_copied' => $itemsCopied,
+        ]);
+    }
+
     private function record(Project $project, ?User $actor, ?string $ip, string $action, string $title, ?string $detail, array $metadata = []): void
     {
         ProjectHistory::query()->create([

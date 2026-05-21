@@ -31,6 +31,7 @@ class ProjectCrudService
             'fecha_aprob' => $request->filled('fecha_aprob') ? $request->date('fecha_aprob')->toDateString() : null,
             'id_usuario' => $user->id_usuario,
             'estado' => strtoupper($request->string('estado')->toString()),
+            'es_plantilla' => false,
             'nombre_responsable' => $responsable?->funcionario,
             'latitud' => $request->filled('latitud') ? $request->string('latitud')->toString() : null,
             'longitud' => $request->filled('longitud') ? $request->string('longitud')->toString() : null,

@@ -11,7 +11,11 @@ class ProjectListService
     public function execute(array $filters): LengthAwarePaginator
     {
         $query = Project::query()
-            ->with(['creator', 'requester']);
+            ->with(['creator', 'requester'])
+            ->where(function ($query): void {
+                $query->where('es_plantilla', false)
+                    ->orWhereNull('es_plantilla');
+            });
 
         $order = strtolower((string) ($filters['order'] ?? 'legacy'));
 

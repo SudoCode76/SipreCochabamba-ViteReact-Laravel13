@@ -3,6 +3,7 @@
 namespace Tests\Feature\Project;
 
 use App\Models\Permission;
+use App\Models\ProjectItem;
 use App\Models\Role;
 use App\Models\SystemFunction;
 use App\Models\Unit;
@@ -786,6 +787,80 @@ class ProjectApiTest extends TestCase
             'estado' => 'AC',
             'aprobado' => 'PD',
         ])->assertForbidden();
+    }
+
+    public function test_can_create_template_from_project_and_create_project_from_template(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createProjectRecord();
+        $this->createUnitMeasure();
+        $this->createItemRecord();
+        $this->createProjectItemRecord([
+            'id_proyecto_item' => 1,
+            'estado' => 'AC',
+            'cantidad' => 2,
+            'precio' => 15,
+        ]);
+        $this->createProjectItemRecord([
+            'id_proyecto_item' => 2,
+            'estado' => 'DC',
+            'cantidad' => 5,
+            'precio' => 99,
+        ]);
+
+        $templateResponse = $this->postJson('/api/v1/projects/1/template', [
+            'nombre_proyecto' => 'planilla base',
+        ])->assertCreated()
+            ->assertJsonPath('data.template.nombre_proyecto', 'PLANILLA BASE')
+            ->assertJsonPath('data.template.es_plantilla', true);
+
+        $templateId = $templateResponse->json('data.template.id_proyecto');
+
+        $this->assertDatabaseHas('proyecto', [
+            'id_proyecto' => $templateId,
+            'es_plantilla' => true,
+            'estado' => 'AC',
+        ]);
+        $this->assertSame(1, ProjectItem::query()->where('id_proyecto', $templateId)->where('estado', 'AC')->count());
+
+        $this->getJson('/api/v1/projects?per_page=10')
+            ->assertOk()
+            ->assertJsonMissingPath('data.items.1');
+
+        $this->getJson('/api/v1/project-templates?per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_proyecto', $templateId);
+
+        $projectResponse = $this->postJson("/api/v1/project-templates/{$templateId}/create-project", [
+            'nombre_proyecto' => 'proyecto desde planilla',
+            'fecha' => '2026-05-21',
+            'latitud' => '111',
+            'longitud' => '222',
+            'ubicacion' => 'ubicacion nueva',
+            'responsable' => 1,
+            'solicitante' => 1,
+            'observaciones' => 'obs nueva',
+            'estado' => 'AC',
+            'aprobado' => 'PD',
+            'distrito' => 'D1',
+            'zona' => 'ZONA NUEVA',
+            'otb' => 'OTB NUEVA',
+        ])->assertCreated()
+            ->assertJsonPath('data.project.nombre_proyecto', 'PROYECTO DESDE PLANILLA')
+            ->assertJsonPath('data.project.es_plantilla', false)
+            ->assertJsonPath('data.project.precio', 30);
+
+        $projectId = $projectResponse->json('data.project.id_proyecto');
+
+        $this->assertSame(1, ProjectItem::query()->where('id_proyecto', $projectId)->where('estado', 'AC')->count());
+        $this->assertDatabaseHas('proyecto_historial', [
+            'id_proyecto' => 1,
+            'accion' => 'template_created',
+        ]);
+        $this->assertDatabaseHas('proyecto_historial', [
+            'id_proyecto' => $projectId,
+            'accion' => 'created_from_template',
+        ]);
     }
 
     public function test_non_admin_with_project_permissions_can_access_allowed_endpoints(): void

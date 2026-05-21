@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Loader2, Package, MapPin } from "lucide-react";
+import { ArrowLeft, Loader2, Package, MapPin, Copy } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import apiClient from "@/lib/api/client";
+import { projectService } from "../services/project.service";
 
 export default function NewProjectPage() {
   const navigate = useNavigate();
@@ -26,24 +26,63 @@ export default function NewProjectPage() {
     estado: "AC",
     aprobado: "PD",
   });
+  const [creationMode, setCreationMode] = useState("blank");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["project-context"],
-    queryFn: async () => {
-      const response = await apiClient.get("/v1/projects/context");
-      return response.data;
-    },
+    queryFn: projectService.context,
+  });
+
+  const { data: templatesData, isFetching: templatesFetching } = useQuery({
+    queryKey: ["project-templates-active"],
+    queryFn: () => projectService.templates({ perPage: 100, status: "AC" }),
+    enabled: creationMode === "template",
+    retry: false,
   });
 
   const responsibleOptions = data?.data?.responsible_options ?? [];
   const requesterOptions = data?.data?.requester_options ?? [];
   const statuses = data?.data?.statuses ?? [];
   const conditions = data?.data?.conditions ?? [];
+  const templates = templatesData?.data?.items ?? [];
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleModeChange = (mode) => {
+    setCreationMode(mode);
+    setSelectedTemplateId("");
+    setError(null);
+  };
+
+  const handleTemplateChange = (templateId) => {
+    setSelectedTemplateId(templateId);
+    setError(null);
+
+    const template = templates.find((item) => String(item.id_proyecto) === String(templateId));
+    if (!template) {
+      return;
+    }
+
+    setFormData((current) => ({
+      ...current,
+      nombre_proyecto: "",
+      ubicacion: template.ubicacion || "",
+      latitud: template.latitud || "",
+      longitud: template.longitud || "",
+      distrito: template.distrito || "",
+      zona: template.zona || "",
+      otb: template.otb || "",
+      responsable: template.responsable || "",
+      solicitante: template.solicitante ? String(template.solicitante) : "",
+      observaciones: template.observaciones || "",
+      estado: "AC",
+      aprobado: template.aprobado || "PD",
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -52,12 +91,25 @@ export default function NewProjectPage() {
     setSaving(true);
 
     try {
-      await apiClient.post("/v1/projects", {
+      const payload = {
         ...formData,
         latitud: formData.latitud?.trim() || null,
         longitud: formData.longitud?.trim() || null,
         observaciones: formData.observaciones?.trim() || null,
-      });
+      };
+
+      if (creationMode === "template") {
+        if (!selectedTemplateId) {
+          setError("Seleccione una planilla para crear el proyecto.");
+          setSaving(false);
+          return;
+        }
+
+        await projectService.createFromTemplate(selectedTemplateId, payload);
+      } else {
+        await projectService.create(payload);
+      }
+
       navigate("/Proyecto");
     } catch (err) {
       const fieldErrors = err.response?.data?.errors;
@@ -103,6 +155,47 @@ export default function NewProjectPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+              <Label className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Forma de creación</Label>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${creationMode === "blank" ? "border-sky-500 bg-sky-50 text-sky-900" : "border-border/70 bg-background"}`}
+                  onClick={() => handleModeChange("blank")}
+                >
+                  <Package className="h-5 w-5" />
+                  <span className="font-medium">Crear desde cero</span>
+                </button>
+                <button
+                  type="button"
+                  className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${creationMode === "template" ? "border-sky-500 bg-sky-50 text-sky-900" : "border-border/70 bg-background"}`}
+                  onClick={() => handleModeChange("template")}
+                >
+                  <Copy className="h-5 w-5" />
+                  <span className="font-medium">Usar planilla</span>
+                </button>
+              </div>
+
+              {creationMode === "template" && (
+                <div className="mt-4 space-y-2">
+                  <Label htmlFor="project-template">Planilla</Label>
+                  <select
+                    id="project-template"
+                    value={selectedTemplateId}
+                    onChange={(event) => handleTemplateChange(event.target.value)}
+                    className="h-10 w-full rounded-xl border border-border/80 bg-background px-3"
+                  >
+                    <option value="">{templatesFetching ? "Cargando planillas..." : "Seleccione una planilla"}</option>
+                    {templates.map((template) => (
+                      <option key={template.id_proyecto} value={template.id_proyecto}>
+                        {template.nombre_proyecto}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />

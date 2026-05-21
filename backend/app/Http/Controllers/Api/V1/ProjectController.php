@@ -371,6 +371,7 @@ class ProjectController extends Controller
             'observaciones' => $project->observaciones,
             'aprobado' => $project->aprobado,
             'estado' => $project->estado,
+            'es_plantilla' => (bool) $project->es_plantilla,
             'id_usuario' => $project->id_usuario,
         ];
 

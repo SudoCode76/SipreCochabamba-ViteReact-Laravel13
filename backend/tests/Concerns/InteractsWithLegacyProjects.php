@@ -31,6 +31,7 @@ trait InteractsWithLegacyProjects
             $table->date('fecha_aprob')->nullable();
             $table->unsignedInteger('id_usuario')->nullable();
             $table->string('estado', 2)->nullable();
+            $table->boolean('es_plantilla')->default(false);
             $table->string('nombre_responsable', 100)->nullable();
             $table->string('latitud', 50)->nullable();
             $table->string('longitud', 50)->nullable();
@@ -107,6 +108,7 @@ trait InteractsWithLegacyProjects
             'fecha_aprob' => null,
             'id_usuario' => 1,
             'estado' => 'AC',
+            'es_plantilla' => false,
             'nombre_responsable' => 'Usuario Demo',
             'latitud' => '123',
             'longitud' => '456',

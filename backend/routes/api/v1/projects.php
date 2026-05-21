@@ -7,6 +7,7 @@ use App\Modules\Projects\Http\Controllers\ProjectCatalogController;
 use App\Modules\Projects\Http\Controllers\ProjectHistoryController;
 use App\Modules\Projects\Http\Controllers\ProjectItemsController;
 use App\Modules\Projects\Http\Controllers\ProjectReportController;
+use App\Modules\Projects\Http\Controllers\ProjectTemplateController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
@@ -14,6 +15,11 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/projects/create-context', [ProjectCatalogController::class, 'context']);
     Route::get('/projects', [ProjectCatalogController::class, 'index']);
     Route::post('/projects', [ProjectCatalogController::class, 'store']);
+    Route::get('/project-templates', [ProjectTemplateController::class, 'index']);
+    Route::get('/project-templates/{template}', [ProjectTemplateController::class, 'show']);
+    Route::put('/project-templates/{project}', [ProjectTemplateController::class, 'update']);
+    Route::post('/project-templates/{template}/create-project', [ProjectTemplateController::class, 'createProject']);
+    Route::post('/projects/{project}/template', [ProjectTemplateController::class, 'store']);
     Route::get('/projects/{project}/history', [ProjectHistoryController::class, 'history']);
     Route::get('/projects/{project}', [ProjectCatalogController::class, 'show']);
     Route::put('/projects/{project}', [ProjectCatalogController::class, 'update']);
