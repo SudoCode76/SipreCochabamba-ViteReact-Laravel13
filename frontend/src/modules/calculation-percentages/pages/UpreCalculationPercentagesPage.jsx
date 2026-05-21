@@ -6,7 +6,6 @@ import {
   Loader2,
   Percent,
   Pencil,
-  Plus,
   RefreshCcw,
   Search,
   X,
@@ -107,7 +106,6 @@ export default function UpreCalculationPercentagesPage() {
   const items = useMemo(() => listQuery.data?.data?.items ?? [], [listQuery.data]);
   const meta = listQuery.data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0, from: 0, to: 0, last_page: 1 };
   const statuses = contextQuery.data?.data?.statuses ?? [];
-  const permissions = contextQuery.data?.data?.permissions ?? {};
 
   const totalPages = Math.max(1, meta.last_page || Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
   const visiblePages = useMemo(() => {
@@ -126,11 +124,6 @@ export default function UpreCalculationPercentagesPage() {
   const closeForm = () => {
     setIsFormOpen(false);
     resetForm();
-  };
-
-  const openCreate = () => {
-    resetForm();
-    setIsFormOpen(true);
   };
 
   const openEdit = async (id) => {
@@ -253,14 +246,11 @@ export default function UpreCalculationPercentagesPage() {
               </div>
               <div>
                 <CardTitle className="text-2xl tracking-[-0.04em]">Porcentaje de Cálculo UPRE</CardTitle>
-                <CardDescription>
-                  Administración de porcentajes de cálculo UPRE para los procesos del sistema.
-                </CardDescription>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              /<Button
+              <Button
                 variant="outline"
                 className="rounded-full border-border/70 bg-background/80"
                 onClick={() => listQuery.refetch()}
@@ -269,7 +259,6 @@ export default function UpreCalculationPercentagesPage() {
                 <RefreshCcw data-icon="inline-start" className={cn(listQuery.isFetching && "animate-spin")} />
                 Refrescar
               </Button>
-
             </div>
           </div>
         </CardHeader>

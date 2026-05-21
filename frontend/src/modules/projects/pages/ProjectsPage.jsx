@@ -225,6 +225,7 @@ const renderHistoryMetadata = (entry) => {
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const [perPage, setPerPage] = useState(15);
+  const [order, setOrder] = useState("legacy");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [editOpen, setEditOpen] = useState(false);
@@ -259,8 +260,8 @@ export default function ProjectsPage() {
   const deferredSearch = useDeferredValue(search.trim());
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["projects", { page, perPage, search: deferredSearch }],
-    queryFn: () => projectService.list({ page, perPage, search: deferredSearch }),
+    queryKey: ["projects", { page, perPage, search: deferredSearch, order }],
+    queryFn: () => projectService.list({ page, perPage, search: deferredSearch, order }),
     placeholderData: (previousData) => previousData,
   });
   const { data: contextData } = useQuery({
@@ -330,6 +331,11 @@ export default function ProjectsPage() {
   const handlePerPageChange = (event) => {
     setPage(1);
     setPerPage(Number(event.target.value));
+  };
+
+  const handleOrderChange = (event) => {
+    setPage(1);
+    setOrder(event.target.value);
   };
 
   const handleSearchChange = (event) => {
@@ -755,6 +761,16 @@ export default function ProjectsPage() {
                 <option value={15}>15</option>
                 <option value={25}>25</option>
                 <option value={50}>50</option>
+              </select>
+              <label className="text-xs font-medium text-muted-foreground">Orden</label>
+              <select
+                value={order}
+                onChange={handleOrderChange}
+                className="h-9 rounded-xl border border-border/80 px-3 text-sm"
+              >
+                <option value="legacy">Predeterminado</option>
+                <option value="recent">Recientes</option>
+                <option value="oldest">Antiguos</option>
               </select>
             </div>
           </div>

@@ -18,6 +18,7 @@ class IndexFndrItemRequest extends FormRequest
             'group_id' => ['nullable', 'integer', 'exists:grupo,id_grupo'],
             'subgroup_id' => ['nullable', 'integer', 'exists:sub_grupo,id_subgrupo'],
             'status' => ['nullable', 'string', 'size:2', 'in:AC,DC'],
+            'order' => ['nullable', 'string', 'in:legacy,recent,oldest'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];

@@ -131,7 +131,6 @@ export default function CalculationPercentagesPage() {
               </div>
             </div>
           </CardHeader>
-
           <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
             {isLoading && (
               <div className="flex items-center justify-center rounded-2xl border border-border/70 bg-background/70 p-8 text-muted-foreground">

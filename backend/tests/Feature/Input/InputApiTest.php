@@ -90,6 +90,41 @@ class InputApiTest extends TestCase
             ->assertJsonPath('data.items.0.id_insumo', 2);
     }
 
+    public function test_admin_can_sort_inputs_by_recent_and_oldest_dates(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput([
+            'id_insumo' => 1,
+            'descripcion' => 'Zinc',
+            'fecha' => '2026-01-10',
+        ]);
+
+        $this->createInput([
+            'id_insumo' => 2,
+            'descripcion' => 'Acero estructural',
+            'fecha' => '2026-02-10',
+        ]);
+
+        $this->createInput([
+            'id_insumo' => 3,
+            'descripcion' => 'Arena fina',
+            'fecha' => '2026-03-10',
+        ]);
+
+        $this->getJson('/api/v1/inputs?per_page=10&order=recent')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_insumo', 3)
+            ->assertJsonPath('data.items.1.id_insumo', 2)
+            ->assertJsonPath('data.items.2.id_insumo', 1);
+
+        $this->getJson('/api/v1/inputs?per_page=10&order=oldest')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_insumo', 1)
+            ->assertJsonPath('data.items.1.id_insumo', 2)
+            ->assertJsonPath('data.items.2.id_insumo', 3);
+    }
+
     public function test_admin_can_get_input_context_and_select_searches(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
