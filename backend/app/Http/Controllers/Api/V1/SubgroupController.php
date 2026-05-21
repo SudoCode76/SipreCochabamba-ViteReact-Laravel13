@@ -13,7 +13,7 @@ use App\Http\Resources\Item\SubgroupResource;
 use App\Models\GroupCatalog;
 use App\Models\SubgroupCatalog;
 use App\Models\User;
-use App\Services\Items\SubgroupService;
+use App\Modules\Items\Services\SubgroupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

@@ -3,7 +3,7 @@
 namespace Tests\Feature\Item;
 
 use App\Models\Item;
-use App\Services\Items\LegacyUnitPriceAnalysisService;
+use App\Modules\Items\Services\LegacyUnitPriceAnalysisService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\InteractsWithLegacyAuth;

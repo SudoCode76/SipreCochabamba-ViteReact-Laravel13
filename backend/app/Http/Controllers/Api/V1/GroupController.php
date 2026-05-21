@@ -9,7 +9,7 @@ use App\Http\Requests\Item\StoreGroupRequest;
 use App\Http\Requests\Item\UpdateGroupRequest;
 use App\Http\Resources\Item\GroupResource;
 use App\Models\GroupCatalog;
-use App\Services\Items\GroupService;
+use App\Modules\Items\Services\GroupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

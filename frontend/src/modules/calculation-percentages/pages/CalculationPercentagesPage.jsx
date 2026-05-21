@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, MoreHorizontal, Pencil, Percent, Plus, Trash2, X } from "lucide-react";
+import { Loader2, MoreHorizontal, Pencil, Percent, Trash2, X } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -54,11 +54,6 @@ export default function CalculationPercentagesPage() {
   });
 
   const items = data?.data?.items ?? (Array.isArray(data?.data) ? data.data : []);
-
-  const openNew = () => {
-    setSelectedItem({ codigo: "", descripcion: "", porcentaje: "", observacion: "", estado: "AC" });
-    setFormOpen(true);
-  };
 
   const openEdit = (item) => {
     setSelectedItem(item);

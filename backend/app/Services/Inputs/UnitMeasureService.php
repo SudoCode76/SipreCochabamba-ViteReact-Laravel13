@@ -10,7 +10,7 @@ use App\Models\Authorization;
 use App\Models\UnitMeasure;
 use App\Models\User;
 use App\Services\AuditService;
-use App\Services\Parameters\ParameterPermissionService;
+use App\Modules\Parameters\Services\ParameterPermissionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 

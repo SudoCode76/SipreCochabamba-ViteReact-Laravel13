@@ -24,6 +24,7 @@ Route::prefix('v1')->group(function (): void {
     require __DIR__.'/api/v1/units.php';
     require __DIR__.'/api/v1/groups.php';
     require __DIR__.'/api/v1/subgroups.php';
+    require __DIR__.'/api/v1/modules.php';
     require __DIR__.'/api/v1/calculation_percentages_fndr.php';
     require __DIR__.'/api/v1/calculation_percentages_fps.php';
     require __DIR__.'/api/v1/calculation_percentages_obras.php';

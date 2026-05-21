@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, FileText, Loader2, MapPin, Upload } from "lucide-react";
@@ -54,7 +54,7 @@ function QuoteCard({ title, file, replacementName, onChange }) {
 export default function EditInputRequestPage() {
   const navigate = useNavigate();
   const { requestId } = useParams();
-  const [formData, setFormData] = useState(null);
+  const [draftFormData, setFormData] = useState(null);
   const [replaceQuotes, setReplaceQuotes] = useState(false);
   const [archivoValid, setArchivoValid] = useState(null);
   const [archivoPropuesto1, setArchivoPropuesto1] = useState(null);
@@ -79,12 +79,8 @@ export default function EditInputRequestPage() {
   });
 
   const request = detailQuery.data?.data?.request ?? null;
-
-  useEffect(() => {
-    if (request && !formData) {
-      setFormData(buildInitialForm(request));
-    }
-  }, [request, formData]);
+  const initialFormData = useMemo(() => (request ? buildInitialForm(request) : null), [request]);
+  const formData = draftFormData ?? initialFormData;
 
   const types = contextQuery.data?.data?.types ?? [];
   const unitMeasures = contextQuery.data?.data?.unit_measures ?? [];
@@ -117,7 +113,7 @@ export default function EditInputRequestPage() {
   });
 
   const handleChange = (field, value) => {
-    setFormData((current) => ({ ...current, [field]: value }));
+    setFormData((current) => ({ ...(current ?? formData), [field]: value }));
   };
 
   const handleSubmit = (event) => {

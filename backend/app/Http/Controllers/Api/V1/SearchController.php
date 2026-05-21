@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Services\Inputs\InputSearchService;
-use App\Services\Projects\ProjectItemService;
+use App\Modules\Projects\Services\ProjectItemService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

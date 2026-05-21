@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Services\Permissions\PermissionResolverService;
+use App\Modules\Security\Services\PermissionResolverService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;

@@ -68,8 +68,8 @@ export default function InputRequestsPage() {
   const startRecord = meta.total === 0 ? 0 : (meta.current_page - 1) * meta.per_page + 1;
   const endRecord = Math.min(meta.current_page * meta.per_page, meta.total);
 
-  const quoteHistory = quoteHistoryQuery.data?.data?.items ?? [];
   const filteredQuoteHistory = useMemo(() => {
+    const quoteHistory = quoteHistoryQuery.data?.data?.items ?? [];
     const search = viewSearch.trim().toLowerCase();
 
     if (!search) {
@@ -81,7 +81,7 @@ export default function InputRequestsPage() {
       || String(quote.fecha ?? "").toLowerCase().includes(search)
       || String(quote.condicion ?? "").toLowerCase().includes(search)
     ));
-  }, [quoteHistory, viewSearch]);
+  }, [quoteHistoryQuery.data, viewSearch]);
 
   const quoteTotalPages = Math.max(1, Math.ceil(filteredQuoteHistory.length / viewPerPage));
   const safeQuotePage = Math.min(viewPage, quoteTotalPages);

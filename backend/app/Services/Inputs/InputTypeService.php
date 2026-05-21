@@ -7,7 +7,7 @@ use App\Http\Requests\Input\UpdateInputTypeRequest;
 use App\Models\InputType;
 use App\Models\User;
 use App\Services\AuditService;
-use App\Services\Parameters\ParameterPermissionService;
+use App\Modules\Parameters\Services\ParameterPermissionService;
 use Illuminate\Validation\ValidationException;
 
 class InputTypeService
