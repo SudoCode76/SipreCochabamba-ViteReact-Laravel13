@@ -110,6 +110,44 @@ class FndrItemApiTest extends TestCase
             ->assertJsonPath('data.items.0.available_actions.breakdown_recalculation', false);
     }
 
+    public function test_fndr_list_searches_items_by_independent_words(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->seedFndrPercentages();
+
+        $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'DEMO ITEM CR',
+        ]);
+        $this->createItemRecord([
+            'id_item' => 2,
+            'item' => 'OTRO TRABAJO',
+        ]);
+
+        $this->getJson('/api/v1/items/fndr?search=demo%20item&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_item', 1);
+
+        $this->getJson('/api/v1/items/fndr?search=demo%20cr&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_item', 1);
+
+        $this->getJson('/api/v1/items/fndr?search=demo%20%20%20cr&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_item', 1);
+
+        $this->getJson('/api/v1/items/fndr?search=demo%20xyz&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 0);
+    }
+
     public function test_fndr_list_calculated_price_matches_legacy_list_rules_with_log_join_multiplication(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

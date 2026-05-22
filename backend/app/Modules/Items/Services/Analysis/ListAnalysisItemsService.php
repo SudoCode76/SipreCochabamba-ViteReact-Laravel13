@@ -37,10 +37,22 @@ class ListAnalysisItemsService
         }
 
         if (! empty($filters['search'])) {
-            $search = Str::lower(trim((string) $filters['search']));
-            $query->where(function ($query) use ($search): void {
-                $query->whereRaw('LOWER(TRIM(item.item)) LIKE ?', ["%{$search}%"])
-                    ->orWhereRaw('LOWER(TRIM(item.estado)) LIKE ?', ["%{$search}%"]);
+            $terms = Str::of((string) $filters['search'])
+                ->lower()
+                ->squish()
+                ->explode(' ')
+                ->filter()
+                ->values();
+
+            $query->where(function ($query) use ($terms): void {
+                foreach ($terms as $term) {
+                    $query->where(function ($query) use ($term): void {
+                        $like = "%{$term}%";
+
+                        $query->whereRaw('LOWER(TRIM(item.item)) LIKE ?', [$like])
+                            ->orWhereRaw('LOWER(TRIM(item.estado)) LIKE ?', [$like]);
+                    });
+                }
             });
         }
 

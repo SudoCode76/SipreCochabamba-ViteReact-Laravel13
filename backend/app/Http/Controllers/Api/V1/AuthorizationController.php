@@ -7,15 +7,21 @@ use App\Http\Requests\Authorization\IndexAuthorizationRequest;
 use App\Http\Requests\Authorization\UpdateAuthorizationStatusRequest;
 use App\Http\Resources\Authorization\AuthorizationResource;
 use App\Models\Authorization;
+use App\Models\Input;
 use App\Services\AuditService;
+use App\Services\Inputs\InputDeletionService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class AuthorizationController extends Controller
 {
-    public function __construct(private readonly AuditService $auditService) {}
+    public function __construct(
+        private readonly AuditService $auditService,
+        private readonly InputDeletionService $inputDeletionService,
+    ) {}
 
     public function context(): JsonResponse
     {
@@ -128,6 +134,34 @@ class AuthorizationController extends Controller
         ]);
     }
 
+    public function impact(Authorization $authorization): JsonResponse
+    {
+        $impact = [
+            'type' => strtolower((string) ($authorization->tipo_elemento ?: $authorization->tabla ?: 'general')),
+            'items' => [],
+            'pending_projects' => [],
+            'summary' => [
+                'items_count' => 0,
+                'pending_projects_count' => 0,
+            ],
+        ];
+
+        if (strtolower((string) $authorization->tabla) === 'insumo' || strtolower((string) $authorization->tipo_elemento) === 'insumo') {
+            $input = Input::query()->find($authorization->id_elemento);
+
+            if ($input) {
+                $impact = array_merge($impact, $this->inputDeletionService->deleteImpact($input));
+                $impact['type'] = 'insumo';
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Impacto de autorizacion obtenido correctamente.',
+            'data' => $impact,
+        ]);
+    }
+
     public function updateStatus(UpdateAuthorizationStatusRequest $request, Authorization $authorization): JsonResponse
     {
         $authorization->load('requester');
@@ -155,9 +189,30 @@ class AuthorizationController extends Controller
             $payload['fecha_aut'] = now();
         }
 
-        $authorization->update($payload);
+        $authorization = DB::transaction(function () use ($authorization, $payload, $request, $nextStatus): Authorization {
+            $authorization->update($payload);
+            $authorization->refresh()->load('requester');
 
-        $authorization->refresh()->load('requester');
+            if ($nextStatus === 'AP' && $this->isInputAuthorization($authorization)) {
+                $input = Input::query()->find($authorization->id_elemento);
+
+                if (! $input) {
+                    throw ValidationException::withMessages([
+                        'authorization' => ['No se encontro el insumo asociado a esta autorizacion.'],
+                    ]);
+                }
+
+                $this->inputDeletionService->deleteAfterApprovedAuthorization(
+                    $input,
+                    $authorization,
+                    $request->user(),
+                    $request->ip()
+                );
+            }
+
+            return $authorization->refresh()->load('requester');
+        });
+
         $this->auditService->record($request->user(), $request->ip(), 'ADMINISTRACION: se proceso la autorizacion '.$authorization->getKey());
 
         return response()->json([
@@ -183,5 +238,11 @@ class AuthorizationController extends Controller
         }
 
         throw new RuntimeException('No se pudo generar un numero de autorizacion unico.');
+    }
+
+    private function isInputAuthorization(Authorization $authorization): bool
+    {
+        return strtolower((string) $authorization->tabla) === 'insumo'
+            || strtolower((string) $authorization->tipo_elemento) === 'insumo';
     }
 }

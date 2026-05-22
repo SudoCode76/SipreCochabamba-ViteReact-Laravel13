@@ -7,5 +7,6 @@ Route::middleware(['auth:sanctum', 'active_user', 'db_permission:ADMINISTRADOR,A
     Route::get('/authorizations/context', [AuthorizationController::class, 'context']);
     Route::get('/authorizations', [AuthorizationController::class, 'index']);
     Route::get('/authorizations/{authorization}', [AuthorizationController::class, 'show']);
+    Route::get('/authorizations/{authorization}/impact', [AuthorizationController::class, 'impact']);
     Route::patch('/authorizations/{authorization}/status', [AuthorizationController::class, 'updateStatus']);
 });

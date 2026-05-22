@@ -16,4 +16,8 @@ export const inputsService = {
     const response = await apiClient.post(`/v1/inputs/${id}/delete-authorization-request`, payload);
     return response.data;
   },
+  deleteImpact: async (id) => {
+    const response = await apiClient.get(`/v1/inputs/${id}/delete-impact`);
+    return response.data;
+  },
 };

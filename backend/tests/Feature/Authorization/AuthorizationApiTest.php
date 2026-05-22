@@ -10,12 +10,16 @@ use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\InteractsWithLegacyAuth;
 use Tests\Concerns\InteractsWithLegacyInputs;
+use Tests\Concerns\InteractsWithLegacyItems;
+use Tests\Concerns\InteractsWithLegacyProjects;
 use Tests\TestCase;
 
 class AuthorizationApiTest extends TestCase
 {
     use InteractsWithLegacyAuth;
     use InteractsWithLegacyInputs;
+    use InteractsWithLegacyItems;
+    use InteractsWithLegacyProjects;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -24,6 +28,8 @@ class AuthorizationApiTest extends TestCase
 
         $this->setUpLegacyAuthSchema();
         $this->setUpLegacyInputSchema();
+        $this->setUpLegacyItemSchema();
+        $this->setUpLegacyProjectSchema();
     }
 
     public function test_administrator_can_get_authorizations_context_list_and_show_authorizations(): void
@@ -88,6 +94,38 @@ class AuthorizationApiTest extends TestCase
             ->assertJsonPath('data.authorization.module', 'insumo');
     }
 
+    public function test_administrator_can_view_authorization_impact_for_input_deletion(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput(['id_insumo' => 1, 'descripcion' => 'ARENA FINA']);
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM CON ARENA']);
+        $this->createItemInput(['id_item_insumo' => 1, 'id_insumo' => 1, 'id_item' => 1, 'estado' => 'AC']);
+        $this->createProjectRecord(['id_proyecto' => 1, 'nombre_proyecto' => 'PROYECTO PENDIENTE', 'aprobado' => 'PD']);
+        $this->createProjectRecord(['id_proyecto' => 2, 'nombre_proyecto' => 'PROYECTO APROBADO', 'aprobado' => 'AP']);
+        $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_proyecto' => 1, 'id_item' => 1, 'estado' => 'AC']);
+        $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_proyecto' => 2, 'id_item' => 1, 'estado' => 'AC']);
+
+        $authorization = $this->createAuthorization([
+            'id_autorizacion' => 3,
+            'id_elemento' => 1,
+            'elemento' => 'ARENA FINA',
+            'tipo_elemento' => 'insumo',
+            'tabla' => 'insumo',
+            'estado' => 'PE',
+        ]);
+
+        $this->getJson("/api/v1/authorizations/{$authorization->id_autorizacion}/impact")
+            ->assertOk()
+            ->assertJsonPath('data.type', 'insumo')
+            ->assertJsonPath('data.summary.items_count', 1)
+            ->assertJsonPath('data.summary.pending_projects_count', 1)
+            ->assertJsonPath('data.items.0.id_item', 1)
+            ->assertJsonPath('data.pending_projects.0.id_proyecto', 1);
+    }
+
     public function test_administrator_can_process_authorization_status(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
@@ -95,6 +133,10 @@ class AuthorizationApiTest extends TestCase
         $authorization = $this->createAuthorization([
             'id_autorizacion' => 2,
             'num_sec' => 45,
+            'id_elemento' => 99,
+            'elemento' => 'Grupo demo',
+            'tipo_elemento' => 'grupo',
+            'tabla' => 'grupo',
             'estado' => 'PE',
             'nro_autorizacion' => null,
         ]);
@@ -117,9 +159,78 @@ class AuthorizationApiTest extends TestCase
         ]);
     }
 
+    public function test_approving_input_authorization_deletes_input_and_removes_it_from_item_compositions(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput(['id_insumo' => 1, 'descripcion' => 'ARENA FINA', 'estado' => 'AC']);
+        $this->createInput(['id_insumo' => 2, 'descripcion' => 'CEMENTO PORTLAND', 'estado' => 'AC']);
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM CON ARENA']);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM INACTIVO CON ARENA']);
+
+        $this->createItemInput(['id_item_insumo' => 1, 'id_insumo' => 1, 'id_item' => 1, 'estado' => 'AC']);
+        $this->createItemInput(['id_item_insumo' => 2, 'id_insumo' => 1, 'id_item' => 2, 'estado' => 'DC']);
+        $this->createItemInput(['id_item_insumo' => 3, 'id_insumo' => 2, 'id_item' => 1, 'estado' => 'AC']);
+
+        $authorization = $this->createAuthorization([
+            'id_autorizacion' => 4,
+            'id_elemento' => 1,
+            'elemento' => 'ARENA FINA',
+            'tipo_elemento' => 'insumo',
+            'tabla' => 'insumo',
+            'estado' => 'PE',
+            'nro_autorizacion' => null,
+        ]);
+
+        $this->patchJson("/api/v1/authorizations/{$authorization->id_autorizacion}/status", [
+            'status' => 'AUTORIZADO',
+        ])->assertOk()
+            ->assertJsonPath('data.authorization.status', 'AP')
+            ->assertJsonPath('data.authorization.module', 'insumo');
+
+        $this->assertDatabaseHas('insumo', [
+            'id_insumo' => 1,
+            'estado' => 'DP',
+        ]);
+        $this->assertDatabaseHas('insumo', [
+            'id_insumo' => 2,
+            'estado' => 'AC',
+        ]);
+        $this->assertDatabaseHas('item_insumo', [
+            'id_item_insumo' => 1,
+            'id_insumo' => 1,
+            'estado' => 'DC',
+        ]);
+        $this->assertDatabaseHas('item_insumo', [
+            'id_item_insumo' => 2,
+            'id_insumo' => 1,
+            'estado' => 'DC',
+        ]);
+        $this->assertDatabaseHas('item_insumo', [
+            'id_item_insumo' => 3,
+            'id_insumo' => 2,
+            'estado' => 'AC',
+        ]);
+        $this->assertDatabaseHas('log_insumo', [
+            'id_insumo' => 1,
+            'accion' => 'MD',
+            'estado' => 'DP',
+        ]);
+
+        $this->getJson("/api/v1/authorizations/{$authorization->id_autorizacion}/impact")
+            ->assertOk()
+            ->assertJsonPath('data.summary.items_count', 0)
+            ->assertJsonPath('data.summary.pending_projects_count', 0);
+    }
+
     public function test_processing_as_no_procede_clears_authorization_number(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput(['id_insumo' => 1, 'descripcion' => 'ARENA FINA', 'estado' => 'AC']);
+        $this->createItemInput(['id_item_insumo' => 1, 'id_insumo' => 1, 'id_item' => 1, 'estado' => 'AC']);
 
         $authorization = $this->createAuthorization([
             'id_autorizacion' => 2,
@@ -139,6 +250,14 @@ class AuthorizationApiTest extends TestCase
             'id_autorizacion' => $authorization->id_autorizacion,
             'estado' => 'NP',
             'nro_autorizacion' => null,
+        ]);
+        $this->assertDatabaseHas('insumo', [
+            'id_insumo' => 1,
+            'estado' => 'AC',
+        ]);
+        $this->assertDatabaseHas('item_insumo', [
+            'id_item_insumo' => 1,
+            'estado' => 'AC',
         ]);
     }
 
@@ -165,6 +284,7 @@ class AuthorizationApiTest extends TestCase
         $this->getJson('/api/v1/authorizations/context')->assertUnauthorized();
         $this->getJson('/api/v1/authorizations')->assertUnauthorized();
         $this->getJson("/api/v1/authorizations/{$authorization->id_autorizacion}")->assertUnauthorized();
+        $this->getJson("/api/v1/authorizations/{$authorization->id_autorizacion}/impact")->assertUnauthorized();
         $this->patchJson("/api/v1/authorizations/{$authorization->id_autorizacion}/status", [
             'estado' => 'AP',
         ])->assertUnauthorized();
@@ -209,6 +329,7 @@ class AuthorizationApiTest extends TestCase
         $this->getJson('/api/v1/authorizations/context')->assertForbidden();
         $this->getJson('/api/v1/authorizations')->assertForbidden();
         $this->getJson("/api/v1/authorizations/{$authorization->id_autorizacion}")->assertForbidden();
+        $this->getJson("/api/v1/authorizations/{$authorization->id_autorizacion}/impact")->assertForbidden();
         $this->patchJson("/api/v1/authorizations/{$authorization->id_autorizacion}/status", [
             'estado' => 'AP',
         ])->assertForbidden();
