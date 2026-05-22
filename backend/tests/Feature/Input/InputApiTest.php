@@ -157,6 +157,56 @@ class InputApiTest extends TestCase
             ->assertJsonPath('data.items.0.id_insumo', 2);
     }
 
+    public function test_input_list_marks_only_pending_delete_authorizations_as_in_process(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput([
+            'id_insumo' => 1,
+            'descripcion' => 'ARENA CON SOLICITUD PENDIENTE',
+            'estado' => 'AC',
+        ]);
+        $this->createInput([
+            'id_insumo' => 2,
+            'descripcion' => 'CEMENTO CON SOLICITUD APROBADA',
+            'estado' => 'AC',
+        ]);
+        $this->createInput([
+            'id_insumo' => 3,
+            'descripcion' => 'FIERRO SIN SOLICITUD',
+            'estado' => 'AC',
+        ]);
+
+        $pendingAuthorization = $this->createAuthorization([
+            'id_autorizacion' => 10,
+            'id_elemento' => 1,
+            'elemento' => 'ARENA CON SOLICITUD PENDIENTE',
+            'tipo_elemento' => 'insumo',
+            'tabla' => 'insumo',
+            'estado' => 'PE',
+        ]);
+        $this->createAuthorization([
+            'id_autorizacion' => 11,
+            'id_elemento' => 2,
+            'elemento' => 'CEMENTO CON SOLICITUD APROBADA',
+            'tipo_elemento' => 'insumo',
+            'tabla' => 'insumo',
+            'estado' => 'AP',
+        ]);
+
+        $this->getJson('/api/v1/inputs?order=oldest&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_insumo', 1)
+            ->assertJsonPath('data.items.0.delete_authorization_status', 'pending')
+            ->assertJsonPath('data.items.0.delete_authorization_label', 'ELIMINACIÓN EN PROCESO')
+            ->assertJsonPath('data.items.0.delete_authorization_id', $pendingAuthorization->id_autorizacion)
+            ->assertJsonPath('data.items.1.id_insumo', 2)
+            ->assertJsonPath('data.items.1.delete_authorization_status', 'none')
+            ->assertJsonPath('data.items.1.delete_authorization_id', null)
+            ->assertJsonPath('data.items.2.id_insumo', 3)
+            ->assertJsonPath('data.items.2.delete_authorization_status', 'none');
+    }
+
     public function test_admin_can_view_input_delete_impact_with_items_and_pending_projects(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

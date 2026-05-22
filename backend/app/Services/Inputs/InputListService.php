@@ -2,6 +2,7 @@
 
 namespace App\Services\Inputs;
 
+use App\Models\Authorization;
 use App\Models\Input;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Str;
@@ -10,7 +11,24 @@ class InputListService
 {
     public function execute(array $filters): LengthAwarePaginator
     {
+        $authorizationKeyName = (new Authorization)->getKeyName();
+
         $query = Input::query()
+            ->select('insumo.*')
+            ->selectSub(
+                Authorization::query()
+                    ->select($authorizationKeyName)
+                    ->whereColumn('id_elemento', 'insumo.id_insumo')
+                    ->where('estado', 'PE')
+                    ->where(function ($query): void {
+                        $query->where('tabla', 'insumo')
+                            ->orWhere('tipo_elemento', 'insumo');
+                    })
+                    ->orderByDesc('fecha')
+                    ->orderByDesc($authorizationKeyName)
+                    ->limit(1),
+                'pending_delete_authorization_id'
+            )
             ->with(['type', 'unitMeasure', 'creator']);
 
         $order = strtolower((string) ($filters['order'] ?? 'legacy'));

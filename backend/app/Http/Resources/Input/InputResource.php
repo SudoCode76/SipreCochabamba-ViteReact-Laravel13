@@ -9,6 +9,9 @@ class InputResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $pendingDeleteAuthorizationId = $this->getAttribute('pending_delete_authorization_id');
+        $hasPendingDeleteAuthorization = filled($pendingDeleteAuthorizationId);
+
         return [
             'id_insumo' => $this->id_insumo,
             'descripcion' => $this->descripcion,
@@ -20,6 +23,9 @@ class InputResource extends JsonResource
             'abreviatura' => $this->unitMeasure?->abreviatura,
             'fecha_cotiz' => $this->fecha_cotiz?->toDateString(),
             'estado' => $this->estado,
+            'delete_authorization_status' => $hasPendingDeleteAuthorization ? 'pending' : 'none',
+            'delete_authorization_label' => $hasPendingDeleteAuthorization ? 'ELIMINACIÓN EN PROCESO' : null,
+            'delete_authorization_id' => $hasPendingDeleteAuthorization ? (int) $pendingDeleteAuthorizationId : null,
             'observacion' => $this->observacion,
             'tipo' => $this->tipo,
             'unidad_medida' => $this->unidad_medida,
@@ -27,6 +33,9 @@ class InputResource extends JsonResource
             'description' => $this->descripcion,
             'price' => $this->precio !== null ? (float) $this->precio : null,
             'status' => $this->estado,
+            'deleteAuthorizationStatus' => $hasPendingDeleteAuthorization ? 'pending' : 'none',
+            'deleteAuthorizationLabel' => $hasPendingDeleteAuthorization ? 'ELIMINACIÓN EN PROCESO' : null,
+            'deleteAuthorizationId' => $hasPendingDeleteAuthorization ? (int) $pendingDeleteAuthorizationId : null,
             'date' => $this->fecha?->toDateString(),
             'request_id' => $this->solicitud,
             'code' => $this->cod,

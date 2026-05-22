@@ -26,6 +26,20 @@ const statusClass = {
   DC: "bg-rose-600 text-white",
 };
 
+const getInputStatusBadge = (item) => {
+  if (item.delete_authorization_status === "pending") {
+    return {
+      className: "bg-amber-500 text-black",
+      label: item.delete_authorization_label || "ELIMINACIÓN EN PROCESO",
+    };
+  }
+
+  return {
+    className: statusClass[item.estado] || "bg-slate-500 text-white",
+    label: item.estado === "AC" ? "HABILITADO" : "INHABILITADO",
+  };
+};
+
 export default function InputsPage() {
   const queryClient = useQueryClient();
   const [perPage, setPerPage] = useState(15);
@@ -206,6 +220,7 @@ export default function InputsPage() {
   const deleteAuthorizationMutation = useMutation({
     mutationFn: (id) => inputsService.requestDeleteAuthorization(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inputs"] });
       closeDelete();
       alert("Solicitud de autorizacion enviada correctamente.");
     },
@@ -600,8 +615,8 @@ export default function InputsPage() {
                           {item.fecha_cotiz}
                         </td>
                         <td className="px-5 py-4 align-top">
-                          <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClass[item.estado] || "bg-slate-500 text-white"}`}>
-                            {item.estado === "AC" ? "HABILITADO" : "INHABILITADO"}
+                          <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${getInputStatusBadge(item).className}`}>
+                            {getInputStatusBadge(item).label}
                           </Badge>
                         </td>
                         <td className="px-5 py-4 align-top text-center">
@@ -634,11 +649,15 @@ export default function InputsPage() {
                                 <History className="h-4 w-4 text-muted-foreground" />
                                 <span>Ver historial de insumo</span>
                               </DropdownMenuItem>
-                              <DropdownMenuSeparator className="my-1 bg-border/50" />
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleOpenDelete(item)}>
-                                <Trash2 className="h-4 w-4 text-muted-foreground" />
-                                <span>Eliminar</span>
-                              </DropdownMenuItem>
+                              {item.delete_authorization_status !== "pending" && (
+                                <>
+                                  <DropdownMenuSeparator className="my-1 bg-border/50" />
+                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleOpenDelete(item)}>
+                                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                    <span>Eliminar</span>
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
