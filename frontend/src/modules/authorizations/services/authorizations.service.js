@@ -24,6 +24,11 @@ export const authorizationsService = {
     return response.data;
   },
 
+  impact: async (authorizationId) => {
+    const response = await apiClient.get(`/v1/authorizations/${authorizationId}/impact`);
+    return response.data;
+  },
+
   updateStatus: async (authorizationId, payload) => {
     const response = await apiClient.patch(`/v1/authorizations/${authorizationId}/status`, payload);
     return response.data;

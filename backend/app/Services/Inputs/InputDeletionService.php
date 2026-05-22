@@ -60,6 +60,67 @@ class InputDeletionService
         ];
     }
 
+    public function deleteImpact(Input $input): array
+    {
+        $items = DB::table('item_insumo')
+            ->join('item', 'item.id_item', '=', 'item_insumo.id_item')
+            ->where('item_insumo.id_insumo', $input->id_insumo)
+            ->where('item_insumo.estado', 'AC')
+            ->groupBy('item.id_item', 'item.item', 'item.estado')
+            ->orderBy('item.item')
+            ->get([
+                'item.id_item',
+                'item.item as name',
+                'item.estado as status',
+            ])
+            ->map(fn ($item): array => [
+                'id_item' => (int) $item->id_item,
+                'name' => $item->name,
+                'status' => $item->status,
+                'status_label' => $item->status === 'AC' ? 'HABILITADO' : 'INHABILITADO',
+            ])
+            ->values();
+
+        $pendingProjects = DB::table('item_insumo')
+            ->join('proyecto_item', 'proyecto_item.id_item', '=', 'item_insumo.id_item')
+            ->join('proyecto', 'proyecto.id_proyecto', '=', 'proyecto_item.id_proyecto')
+            ->where('item_insumo.id_insumo', $input->id_insumo)
+            ->where('item_insumo.estado', 'AC')
+            ->where('proyecto_item.estado', 'AC')
+            ->where('proyecto.estado', 'AC')
+            ->where('proyecto.aprobado', 'PD')
+            ->where(function ($query): void {
+                $query->where('proyecto.es_plantilla', false)
+                    ->orWhereNull('proyecto.es_plantilla');
+            })
+            ->groupBy('proyecto.id_proyecto', 'proyecto.nombre_proyecto', 'proyecto.aprobado', 'proyecto.estado')
+            ->orderBy('proyecto.nombre_proyecto')
+            ->get([
+                'proyecto.id_proyecto',
+                'proyecto.nombre_proyecto as name',
+                'proyecto.aprobado as approval_status',
+                'proyecto.estado as status',
+                DB::raw('COUNT(DISTINCT proyecto_item.id_item) as items_count'),
+            ])
+            ->map(fn ($project): array => [
+                'id_proyecto' => (int) $project->id_proyecto,
+                'name' => $project->name,
+                'approval_status' => $project->approval_status,
+                'status' => $project->status,
+                'items_count' => (int) $project->items_count,
+            ])
+            ->values();
+
+        return [
+            'items' => $items->all(),
+            'pending_projects' => $pendingProjects->all(),
+            'summary' => [
+                'items_count' => $items->count(),
+                'pending_projects_count' => $pendingProjects->count(),
+            ],
+        ];
+    }
+
     public function delete(Input $input, DeleteInputRequest $request, User $user): Input
     {
         return DB::transaction(function () use ($input, $request, $user): Input {
@@ -82,6 +143,49 @@ class InputDeletionService
             ]);
 
             $this->registerAudit($user, $request->ip(), 'Eliminacion logica de insumo '.$input->descripcion);
+
+            return $input->refresh();
+        });
+    }
+
+    public function deleteAfterApprovedAuthorization(Input $input, Authorization $authorization, User $user, ?string $ip): Input
+    {
+        return DB::transaction(function () use ($input, $authorization, $user, $ip): Input {
+            $isInputAuthorization = strtolower((string) $authorization->tabla) === 'insumo'
+                || strtolower((string) $authorization->tipo_elemento) === 'insumo';
+
+            if (! $isInputAuthorization || (int) $authorization->id_elemento !== (int) $input->id_insumo) {
+                throw ValidationException::withMessages([
+                    'authorization' => ['La autorizacion no corresponde al insumo seleccionado.'],
+                ]);
+            }
+
+            ItemInput::query()
+                ->where('id_insumo', $input->id_insumo)
+                ->where('estado', 'AC')
+                ->update(['estado' => 'DC']);
+
+            $input->update([
+                'estado' => 'DP',
+            ]);
+
+            InputLog::query()->create([
+                'descripcion' => $input->descripcion,
+                'id_insumo' => $input->id_insumo,
+                'precio' => $input->precio,
+                'tipo' => $input->tipo,
+                'unidad_medida' => $input->unidad_medida,
+                'accion' => 'MD',
+                'usuario' => $user->id_usuario,
+                'fecha' => now()->toDateString(),
+                'estado' => 'DP',
+            ]);
+
+            $this->registerAudit(
+                $user,
+                $ip,
+                'Autorizacion aprobada: se elimino el insumo '.$input->descripcion.' y se retiro de los items afectados'
+            );
 
             return $input->refresh();
         });

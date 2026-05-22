@@ -183,6 +183,15 @@ class InputController extends Controller
         ]);
     }
 
+    public function deleteImpact(Input $input): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'Impacto de eliminacion obtenido correctamente.',
+            'data' => $this->inputDeletionService->deleteImpact($input),
+        ]);
+    }
+
     public function history(Input $input): JsonResponse
     {
         $history = $input->histories()

@@ -12,12 +12,16 @@ use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\InteractsWithLegacyAuth;
 use Tests\Concerns\InteractsWithLegacyInputs;
+use Tests\Concerns\InteractsWithLegacyItems;
+use Tests\Concerns\InteractsWithLegacyProjects;
 use Tests\TestCase;
 
 class InputApiTest extends TestCase
 {
     use InteractsWithLegacyAuth;
     use InteractsWithLegacyInputs;
+    use InteractsWithLegacyItems;
+    use InteractsWithLegacyProjects;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -26,6 +30,8 @@ class InputApiTest extends TestCase
 
         $this->setUpLegacyAuthSchema();
         $this->setUpLegacyInputSchema();
+        $this->setUpLegacyItemSchema();
+        $this->setUpLegacyProjectSchema();
         $this->createInputType();
         $this->createUnitMeasure();
     }
@@ -88,6 +94,161 @@ class InputApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.meta.total', 1)
             ->assertJsonPath('data.items.0.id_insumo', 2);
+    }
+
+    public function test_admin_can_search_inputs_by_independent_words(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput([
+            'id_insumo' => 1,
+            'descripcion' => 'ARENA FINA LAVADA',
+            'estado' => 'AC',
+        ]);
+        $this->createInput([
+            'id_insumo' => 2,
+            'descripcion' => 'CEMENTO PORTLAND',
+            'estado' => 'AC',
+        ]);
+
+        $this->getJson('/api/v1/inputs?search=arena%20lavada&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_insumo', 1);
+
+        $this->getJson('/api/v1/inputs?search=arena%20fina&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_insumo', 1);
+
+        $this->getJson('/api/v1/inputs?description=arena%20%20%20lavada&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_insumo', 1);
+
+        $this->getJson('/api/v1/inputs?search=arena%20xyz&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 0);
+    }
+
+    public function test_inputs_marked_as_deleted_are_hidden_by_default_but_can_be_filtered(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput([
+            'id_insumo' => 1,
+            'descripcion' => 'ARENA ACTIVA',
+            'estado' => 'AC',
+        ]);
+        $this->createInput([
+            'id_insumo' => 2,
+            'descripcion' => 'ARENA ELIMINADA',
+            'estado' => 'DP',
+        ]);
+
+        $this->getJson('/api/v1/inputs?per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_insumo', 1);
+
+        $this->getJson('/api/v1/inputs?status=DP&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_insumo', 2);
+    }
+
+    public function test_input_list_marks_only_pending_delete_authorizations_as_in_process(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput([
+            'id_insumo' => 1,
+            'descripcion' => 'ARENA CON SOLICITUD PENDIENTE',
+            'estado' => 'AC',
+        ]);
+        $this->createInput([
+            'id_insumo' => 2,
+            'descripcion' => 'CEMENTO CON SOLICITUD APROBADA',
+            'estado' => 'AC',
+        ]);
+        $this->createInput([
+            'id_insumo' => 3,
+            'descripcion' => 'FIERRO SIN SOLICITUD',
+            'estado' => 'AC',
+        ]);
+
+        $pendingAuthorization = $this->createAuthorization([
+            'id_autorizacion' => 10,
+            'id_elemento' => 1,
+            'elemento' => 'ARENA CON SOLICITUD PENDIENTE',
+            'tipo_elemento' => 'insumo',
+            'tabla' => 'insumo',
+            'estado' => 'PE',
+        ]);
+        $this->createAuthorization([
+            'id_autorizacion' => 11,
+            'id_elemento' => 2,
+            'elemento' => 'CEMENTO CON SOLICITUD APROBADA',
+            'tipo_elemento' => 'insumo',
+            'tabla' => 'insumo',
+            'estado' => 'AP',
+        ]);
+
+        $this->getJson('/api/v1/inputs?order=oldest&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_insumo', 1)
+            ->assertJsonPath('data.items.0.delete_authorization_status', 'pending')
+            ->assertJsonPath('data.items.0.delete_authorization_label', 'ELIMINACIÓN EN PROCESO')
+            ->assertJsonPath('data.items.0.delete_authorization_id', $pendingAuthorization->id_autorizacion)
+            ->assertJsonPath('data.items.1.id_insumo', 2)
+            ->assertJsonPath('data.items.1.delete_authorization_status', 'none')
+            ->assertJsonPath('data.items.1.delete_authorization_id', null)
+            ->assertJsonPath('data.items.2.id_insumo', 3)
+            ->assertJsonPath('data.items.2.delete_authorization_status', 'none');
+    }
+
+    public function test_admin_can_view_input_delete_impact_with_items_and_pending_projects(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput(['id_insumo' => 1, 'descripcion' => 'ARENA FINA']);
+        $this->createInput(['id_insumo' => 2, 'descripcion' => 'CEMENTO PORTLAND']);
+        $this->createGroup();
+        $this->createSubgroup();
+
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM ACTIVO', 'estado' => 'AC']);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM ASOCIACION INACTIVA', 'estado' => 'AC']);
+        $this->createItemRecord(['id_item' => 3, 'item' => 'ITEM INACTIVO', 'estado' => 'DC']);
+
+        $this->createItemInput(['id_item_insumo' => 1, 'id_insumo' => 1, 'id_item' => 1, 'estado' => 'AC']);
+        $this->createItemInput(['id_item_insumo' => 2, 'id_insumo' => 1, 'id_item' => 2, 'estado' => 'DC']);
+        $this->createItemInput(['id_item_insumo' => 3, 'id_insumo' => 1, 'id_item' => 3, 'estado' => 'AC']);
+        $this->createItemInput(['id_item_insumo' => 4, 'id_insumo' => 2, 'id_item' => 1, 'estado' => 'AC']);
+
+        $this->createProjectRecord(['id_proyecto' => 1, 'nombre_proyecto' => 'PROYECTO PENDIENTE', 'aprobado' => 'PD', 'estado' => 'AC']);
+        $this->createProjectRecord(['id_proyecto' => 2, 'nombre_proyecto' => 'PROYECTO APROBADO', 'aprobado' => 'AP', 'estado' => 'AC']);
+        $this->createProjectRecord(['id_proyecto' => 3, 'nombre_proyecto' => 'PLANILLA PENDIENTE', 'aprobado' => 'PD', 'estado' => 'AC', 'es_plantilla' => true]);
+        $this->createProjectRecord(['id_proyecto' => 4, 'nombre_proyecto' => 'PROYECTO INACTIVO', 'aprobado' => 'PD', 'estado' => 'DC']);
+        $this->createProjectRecord(['id_proyecto' => 5, 'nombre_proyecto' => 'PROYECTO ITEM INACTIVO', 'aprobado' => 'PD', 'estado' => 'AC']);
+
+        $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_proyecto' => 1, 'id_item' => 1, 'estado' => 'AC']);
+        $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_proyecto' => 1, 'id_item' => 3, 'estado' => 'AC']);
+        $this->createProjectItemRecord(['id_proyecto_item' => 3, 'id_proyecto' => 2, 'id_item' => 1, 'estado' => 'AC']);
+        $this->createProjectItemRecord(['id_proyecto_item' => 4, 'id_proyecto' => 3, 'id_item' => 1, 'estado' => 'AC']);
+        $this->createProjectItemRecord(['id_proyecto_item' => 5, 'id_proyecto' => 4, 'id_item' => 1, 'estado' => 'AC']);
+        $this->createProjectItemRecord(['id_proyecto_item' => 6, 'id_proyecto' => 5, 'id_item' => 1, 'estado' => 'DC']);
+
+        $this->getJson('/api/v1/inputs/1/delete-impact')
+            ->assertOk()
+            ->assertJsonPath('data.summary.items_count', 2)
+            ->assertJsonPath('data.summary.pending_projects_count', 1)
+            ->assertJsonPath('data.items.0.id_item', 1)
+            ->assertJsonPath('data.items.0.status_label', 'HABILITADO')
+            ->assertJsonPath('data.items.1.id_item', 3)
+            ->assertJsonPath('data.items.1.status_label', 'INHABILITADO')
+            ->assertJsonPath('data.pending_projects.0.id_proyecto', 1)
+            ->assertJsonPath('data.pending_projects.0.name', 'PROYECTO PENDIENTE')
+            ->assertJsonPath('data.pending_projects.0.items_count', 2);
     }
 
     public function test_admin_can_sort_inputs_by_recent_and_oldest_dates(): void
@@ -456,6 +617,7 @@ class InputApiTest extends TestCase
         $this->deleteJson('/api/v1/inputs/1', [])->assertUnauthorized();
         $this->postJson('/api/v1/inputs/1/delete-authorization-request', [])->assertUnauthorized();
         $this->getJson('/api/v1/inputs/1/delete-authorization-status')->assertUnauthorized();
+        $this->getJson('/api/v1/inputs/1/delete-impact')->assertUnauthorized();
         $this->patchJson('/api/v1/inputs/1/status', [])->assertUnauthorized();
         $this->getJson('/api/v1/inputs/1/history')->assertUnauthorized();
         $this->getJson('/api/v1/inputs/1/logs')->assertUnauthorized();

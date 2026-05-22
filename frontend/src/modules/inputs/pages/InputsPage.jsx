@@ -26,6 +26,20 @@ const statusClass = {
   DC: "bg-rose-600 text-white",
 };
 
+const getInputStatusBadge = (item) => {
+  if (item.delete_authorization_status === "pending") {
+    return {
+      className: "bg-amber-500 text-black",
+      label: item.delete_authorization_label || "ELIMINACIÓN EN PROCESO",
+    };
+  }
+
+  return {
+    className: statusClass[item.estado] || "bg-slate-500 text-white",
+    label: item.estado === "AC" ? "HABILITADO" : "INHABILITADO",
+  };
+};
+
 export default function InputsPage() {
   const queryClient = useQueryClient();
   const [perPage, setPerPage] = useState(15);
@@ -100,6 +114,17 @@ export default function InputsPage() {
     enabled: quoteOpen && Boolean(selectedInput?.id_insumo),
   });
 
+  const {
+    data: deleteImpactData,
+    isLoading: deleteImpactLoading,
+    isError: deleteImpactIsError,
+  } = useQuery({
+    queryKey: ["input-delete-impact", selectedInput?.id_insumo],
+    queryFn: () => inputsService.deleteImpact(selectedInput.id_insumo),
+    enabled: deleteOpen && Boolean(selectedInput?.id_insumo),
+    retry: false,
+  });
+
   const items = data?.data?.items ?? [];
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
@@ -108,6 +133,10 @@ export default function InputsPage() {
   const statuses = contextData?.data?.statuses ?? [];
   const quoteHistoryItems = quoteHistoryData?.data?.items ?? [];
   const currentQuote = currentQuoteData?.data?.quote ?? null;
+  const deleteImpact = deleteImpactData?.data ?? null;
+  const impactedItems = deleteImpact?.items ?? [];
+  const impactedProjects = deleteImpact?.pending_projects ?? [];
+  const deleteImpactSummary = deleteImpact?.summary ?? { items_count: 0, pending_projects_count: 0 };
 
   const filteredQuoteHistory = quoteHistoryItems.filter((quote) => {
     const term = viewSearch.trim().toLowerCase();
@@ -191,6 +220,7 @@ export default function InputsPage() {
   const deleteAuthorizationMutation = useMutation({
     mutationFn: (id) => inputsService.requestDeleteAuthorization(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inputs"] });
       closeDelete();
       alert("Solicitud de autorizacion enviada correctamente.");
     },
@@ -585,8 +615,8 @@ export default function InputsPage() {
                           {item.fecha_cotiz}
                         </td>
                         <td className="px-5 py-4 align-top">
-                          <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClass[item.estado] || "bg-slate-500 text-white"}`}>
-                            {item.estado === "AC" ? "HABILITADO" : "INHABILITADO"}
+                          <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${getInputStatusBadge(item).className}`}>
+                            {getInputStatusBadge(item).label}
                           </Badge>
                         </td>
                         <td className="px-5 py-4 align-top text-center">
@@ -619,11 +649,15 @@ export default function InputsPage() {
                                 <History className="h-4 w-4 text-muted-foreground" />
                                 <span>Ver historial de insumo</span>
                               </DropdownMenuItem>
-                              <DropdownMenuSeparator className="my-1 bg-border/50" />
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleOpenDelete(item)}>
-                                <Trash2 className="h-4 w-4 text-muted-foreground" />
-                                <span>Eliminar</span>
-                              </DropdownMenuItem>
+                              {item.delete_authorization_status !== "pending" && (
+                                <>
+                                  <DropdownMenuSeparator className="my-1 bg-border/50" />
+                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleOpenDelete(item)}>
+                                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                    <span>Eliminar</span>
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
@@ -975,6 +1009,83 @@ export default function InputsPage() {
                 <p className="text-sm text-muted-foreground">
                   Esta acción enviará una solicitud de autorización para continuar con la eliminación del insumo.
                 </p>
+
+                <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+                  {deleteImpactLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin" />
+                      Cargando impacto de eliminación...
+                    </div>
+                  ) : deleteImpactIsError ? (
+                    <Alert variant="destructive" className="rounded-2xl">
+                      <AlertDescription>No se pudo cargar el impacto de eliminación del insumo.</AlertDescription>
+                    </Alert>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Ítems asociados</p>
+                          <p className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-foreground">
+                            {deleteImpactSummary.items_count}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Proyectos pendientes</p>
+                          <p className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-foreground">
+                            {deleteImpactSummary.pending_projects_count}
+                          </p>
+                        </div>
+                      </div>
+
+                      {impactedItems.length === 0 && impactedProjects.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No se encontraron ítems ni proyectos pendientes afectados.
+                        </p>
+                      ) : (
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <div className="flex flex-col gap-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                              Ítems afectados
+                            </p>
+                            <div className="max-h-44 overflow-y-auto rounded-xl border border-border/70 bg-background/80">
+                              {impactedItems.length === 0 ? (
+                                <p className="px-3 py-3 text-sm text-muted-foreground">Sin ítems afectados.</p>
+                              ) : impactedItems.map((item) => (
+                                <div key={item.id_item} className="flex items-start justify-between gap-3 border-b border-border/60 px-3 py-2 last:border-b-0">
+                                  <div>
+                                    <p className="text-sm font-medium text-foreground">{item.name}</p>
+                                    <p className="text-xs text-muted-foreground">ID {item.id_item}</p>
+                                  </div>
+                                  <Badge className={`shrink-0 rounded-full px-2 py-1 text-[10px] uppercase ${item.status === "AC" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>
+                                    {item.status_label}
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                              Proyectos pendientes afectados
+                            </p>
+                            <div className="max-h-44 overflow-y-auto rounded-xl border border-border/70 bg-background/80">
+                              {impactedProjects.length === 0 ? (
+                                <p className="px-3 py-3 text-sm text-muted-foreground">Sin proyectos pendientes afectados.</p>
+                              ) : impactedProjects.map((project) => (
+                                <div key={project.id_proyecto} className="border-b border-border/60 px-3 py-2 last:border-b-0">
+                                  <p className="text-sm font-medium text-foreground">{project.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    ID {project.id_proyecto} · {project.items_count} ítem(s) afectado(s)
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <DialogFooter className="mt-2 justify-center gap-2 sm:justify-center">
                   <Button type="button" variant="outline" className="min-w-36 rounded-full" onClick={closeDelete}>
