@@ -14,6 +14,7 @@ Route::middleware(['auth:sanctum', 'active_user', 'db_permission:INSUMO,INSUMO|I
     Route::delete('/inputs/{input}', [InputController::class, 'destroy']);
     Route::post('/inputs/{input}/delete-authorization-request', [InputController::class, 'requestDeleteAuthorization']);
     Route::get('/inputs/{input}/delete-authorization-status', [InputController::class, 'deleteAuthorizationStatus']);
+    Route::get('/inputs/{input}/delete-impact', [InputController::class, 'deleteImpact']);
     Route::patch('/inputs/{input}/status', [InputController::class, 'updateStatus']);
     Route::get('/inputs/{input}/history', [InputController::class, 'history']);
     Route::get('/inputs/{input}/logs', [InputController::class, 'logs']);

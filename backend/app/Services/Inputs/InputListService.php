@@ -45,6 +45,11 @@ class InputListService
 
         if (! empty($filters['status'])) {
             $query->where('estado', strtoupper((string) $filters['status']));
+        } else {
+            $query->where(function ($query): void {
+                $query->where('estado', '!=', 'DP')
+                    ->orWhereNull('estado');
+            });
         }
 
         if (! empty($filters['type_id'])) {
