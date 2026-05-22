@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronLeft,
@@ -44,6 +44,24 @@ const initialProcessForm = {
   status: "",
 };
 
+function buildProcessSuccessMessage(response) {
+  const authorization = response?.data?.authorization;
+  const statusLabel = authorization?.status_label;
+  const authorizationNumber = authorization?.authorization_number;
+
+  if (statusLabel === "AUTORIZADO") {
+    return authorizationNumber
+      ? `Autorizacion aprobada correctamente. N° ${authorizationNumber}.`
+      : "Autorizacion aprobada correctamente.";
+  }
+
+  if (statusLabel === "NO PROCEDE") {
+    return "Autorizacion marcada como no procede correctamente.";
+  }
+
+  return response?.message || "Autorizacion procesada correctamente.";
+}
+
 export default function AuthorizationsPage() {
   const queryClient = useQueryClient();
 
@@ -60,6 +78,18 @@ export default function AuthorizationsPage() {
   const [feedback, setFeedback] = useState(null);
 
   const deferredSearchTerm = useDeferredValue(searchTerm.trim());
+
+  useEffect(() => {
+    if (!feedback) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setFeedback(null);
+    }, 4000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [feedback]);
 
   const contextQuery = useQuery({
     queryKey: ["authorizations-context"],
@@ -140,8 +170,8 @@ export default function AuthorizationsPage() {
 
   const processMutation = useMutation({
     mutationFn: ({ authorizationId, payload }) => authorizationsService.updateStatus(authorizationId, payload),
-    onSuccess: () => {
-      setFeedback({ type: "success", message: "Autorización procesada correctamente." });
+    onSuccess: (response) => {
+      setFeedback({ type: "success", message: buildProcessSuccessMessage(response) });
       closeProcess();
       queryClient.invalidateQueries({ queryKey: ["authorizations"] });
       queryClient.invalidateQueries({ queryKey: ["authorization-detail"] });
