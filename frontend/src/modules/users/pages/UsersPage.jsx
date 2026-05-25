@@ -61,6 +61,38 @@ const initialForm = {
   unit_description: "",
 };
 
+function normalizeFormErrors(errors = {}) {
+  const translated = { ...errors };
+
+  if (translated.username?.[0]) {
+    translated.username = ["Ya existe un usuario con ese nombre de usuario."];
+  }
+
+  if (translated.ci?.[0]) {
+    translated.ci = ["Ya existe un usuario registrado con ese C.I."];
+  }
+
+  return {
+    ...translated,
+    username: translated.username ?? translated.usuario,
+    ci: translated.ci ?? translated.documento,
+  };
+}
+
+function validationMessage(error, fallback) {
+  const errors = normalizeFormErrors(error.response?.data?.errors ?? {});
+
+  if (errors.ci?.[0]) {
+    return "Ya existe un usuario registrado con ese C.I.";
+  }
+
+  if (errors.username?.[0]) {
+    return "Ya existe un usuario con ese nombre de usuario.";
+  }
+
+  return error.response?.data?.message || fallback;
+}
+
 function buildFormFromUser(user) {
   return {
     funcionario: user?.full_name ?? "",
@@ -227,12 +259,12 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (error) => {
-      setFormErrors(error.response?.data?.errors ?? {});
+      setFormErrors(normalizeFormErrors(error.response?.data?.errors ?? {}));
       setFeedback({
         type: "error",
         message: error.response?.status === 403
           ? "Acceso denegado para crear usuarios."
-          : error.response?.data?.message || "No se pudo crear el usuario.",
+          : validationMessage(error, "No se pudo crear el usuario."),
       });
     },
   });
@@ -246,12 +278,12 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ["user-detail"] });
     },
     onError: (error) => {
-      setFormErrors(error.response?.data?.errors ?? {});
+      setFormErrors(normalizeFormErrors(error.response?.data?.errors ?? {}));
       setFeedback({
         type: "error",
         message: error.response?.status === 403
           ? "Acceso denegado para editar usuarios."
-          : error.response?.data?.message || "No se pudo actualizar el usuario.",
+          : validationMessage(error, "No se pudo actualizar el usuario."),
       });
     },
   });
@@ -344,6 +376,21 @@ export default function UsersPage() {
     }
   };
 
+  const findExistingUserByCiForSubmit = async () => {
+    const trimmedCi = form.ci.trim();
+
+    if (!trimmedCi || trimmedCi.length < 5) {
+      return null;
+    }
+
+    try {
+      const data = await usersService.findExistingByCi(trimmedCi);
+      return data?.data?.items?.[0] ?? null;
+    } catch {
+      return null;
+    }
+  };
+
   const handleSubmitForm = (event) => {
     event.preventDefault();
     setFeedback(null);
@@ -354,9 +401,17 @@ export default function UsersPage() {
     }
 
     const submit = async () => {
-      const existingUser = await lookupByCiIfNeeded();
+      const existingUser = !isEditing ? await findExistingUserByCiForSubmit() : null;
 
       if (!isEditing && existingUser) {
+        setFormErrors((current) => ({
+          ...current,
+          ci: ["Ya existe un usuario registrado con ese C.I."],
+        }));
+        setLookupFeedback({
+          type: "error",
+          message: `Ya existe un usuario con ese C.I.: ${existingUser.full_name}. Abre ese registro para editarlo en lugar de crear uno nuevo.`,
+        });
         return;
       }
 
@@ -753,6 +808,12 @@ export default function UsersPage() {
                   </div>
                 ) : (
                   <form className="flex flex-col gap-5" onSubmit={handleSubmitForm}>
+                    {feedback?.type === "error" && (
+                      <Alert variant="destructive" className="rounded-2xl">
+                        <AlertDescription>{feedback.message}</AlertDescription>
+                      </Alert>
+                    )}
+
                     <div className="grid gap-5 sm:grid-cols-2">
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="ci" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">

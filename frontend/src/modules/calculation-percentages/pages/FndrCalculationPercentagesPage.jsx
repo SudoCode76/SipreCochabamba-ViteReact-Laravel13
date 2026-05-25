@@ -6,7 +6,6 @@ import {
   Loader2,
   Percent,
   Pencil,
-  Plus,
   RefreshCcw,
   Search,
   X,
@@ -99,7 +98,6 @@ export default function FndrCalculationPercentagesPage() {
   const items = useMemo(() => listQuery.data?.data?.items ?? [], [listQuery.data]);
   const meta = listQuery.data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0, from: 0, to: 0, last_page: 1 };
   const statuses = contextQuery.data?.data?.statuses ?? [];
-  const permissions = contextQuery.data?.data?.permissions ?? {};
 
   const totalPages = Math.max(1, meta.last_page || Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
   const visiblePages = useMemo(() => {
@@ -118,11 +116,6 @@ export default function FndrCalculationPercentagesPage() {
   const closeForm = () => {
     setIsFormOpen(false);
     resetForm();
-  };
-
-  const openCreate = () => {
-    resetForm();
-    setIsFormOpen(true);
   };
 
   const openEdit = async (id) => {
@@ -261,12 +254,6 @@ export default function FndrCalculationPercentagesPage() {
                 <RefreshCcw data-icon="inline-start" className={cn(listQuery.isFetching && "animate-spin")} />
                 Refrescar
               </Button>
-              {permissions.can_create && (
-                <Button className="rounded-full bg-foreground text-background hover:bg-foreground/90" onClick={openCreate}>
-                  <Plus data-icon="inline-start" />
-                  Registrar FNDR
-                </Button>
-              )}
             </div>
           </div>
         </CardHeader>

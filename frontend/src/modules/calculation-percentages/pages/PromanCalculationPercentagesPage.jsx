@@ -6,7 +6,6 @@ import {
   Loader2,
   Percent,
   Pencil,
-  Plus,
   RefreshCcw,
   Search,
   X,
@@ -117,11 +116,6 @@ export default function PromanCalculationPercentagesPage() {
   const closeForm = () => {
     setIsFormOpen(false);
     resetForm();
-  };
-
-  const openCreate = () => {
-    resetForm();
-    setIsFormOpen(true);
   };
 
   const openEdit = async (id) => {
@@ -259,10 +253,6 @@ export default function PromanCalculationPercentagesPage() {
               >
                 <RefreshCcw data-icon="inline-start" className={cn(listQuery.isFetching && "animate-spin")} />
                 Refrescar
-              </Button>
-              <Button className="rounded-full bg-foreground text-background hover:bg-foreground/90" onClick={openCreate}>
-                <Plus data-icon="inline-start" />
-                Registrar % PROMAN
               </Button>
             </div>
           </div>
