@@ -89,7 +89,6 @@ export default function MainLayout() {
                               </div>
                               <div className="flex flex-1 flex-col gap-0.5">
                                 <span className="font-medium text-foreground">{child.title}</span>
-                                <span className="text-xs text-muted-foreground">{section.title}</span>
                               </div>
                               <ArrowRight className="size-4 text-muted-foreground" />
                             </Link>
