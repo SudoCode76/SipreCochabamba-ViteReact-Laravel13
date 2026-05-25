@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import ProjectLocationMap from "../components/ProjectLocationMap";
 import { projectService } from "../services/project.service";
 
 export default function NewProjectPage() {
@@ -201,9 +202,7 @@ export default function NewProjectPage() {
                 <MapPin className="h-4 w-4" />
                 Ubicación en el Mapa
               </Label>
-              <div className="h-64 rounded-xl border border-border/80 bg-muted/30 flex items-center justify-center">
-                <p className="text-muted-foreground text-sm">Mapa interactivo - Seleccione la ubicación</p>
-              </div>
+              <ProjectLocationMap value={formData} onChange={(changes) => setFormData((current) => ({ ...current, ...changes }))} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -213,7 +212,7 @@ export default function NewProjectPage() {
                   id="latitud"
                   value={formData.latitud}
                   onChange={(e) => handleChange("latitud", e.target.value)}
-                  placeholder="-17.814581"
+                  placeholder="Coordenada Y UTM"
                 />
               </div>
               <div className="space-y-2">
@@ -222,7 +221,7 @@ export default function NewProjectPage() {
                   id="longitud"
                   value={formData.longitud}
                   onChange={(e) => handleChange("longitud", e.target.value)}
-                  placeholder="-63.156082"
+                  placeholder="Coordenada X UTM"
                 />
               </div>
               <div className="space-y-2">
