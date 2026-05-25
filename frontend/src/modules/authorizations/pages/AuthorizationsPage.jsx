@@ -178,28 +178,13 @@ export default function AuthorizationsPage() {
   const processMutation = useMutation({
     mutationFn: ({ authorizationId, payload }) => authorizationsService.updateStatus(authorizationId, payload),
     onSuccess: (response) => {
-<<<<<<< HEAD
       setFeedback({ type: "success", message: buildProcessSuccessMessage(response) });
-=======
-      const authorization = response?.data?.authorization;
-      const isApprovedInput = authorization?.status === "AP" && authorization?.module === "insumo";
-
-      setFeedback({
-        type: "success",
-        message: isApprovedInput
-          ? "Autorización aprobada. El insumo fue eliminado y retirado de los ítems afectados."
-          : "Autorización procesada correctamente.",
-      });
->>>>>>> miguelFrontend
       closeProcess();
       queryClient.invalidateQueries({ queryKey: ["authorizations"] });
       queryClient.invalidateQueries({ queryKey: ["authorization-detail"] });
       queryClient.invalidateQueries({ queryKey: ["authorization-impact"] });
-
-      if (isApprovedInput) {
-        queryClient.invalidateQueries({ queryKey: ["inputs"] });
-        queryClient.invalidateQueries({ queryKey: ["input-delete-impact"] });
-      }
+      queryClient.invalidateQueries({ queryKey: ["inputs"] });
+      queryClient.invalidateQueries({ queryKey: ["input-delete-impact"] });
     },
     onError: (error) => {
       setFormErrors(error.response?.data?.errors ?? {});
