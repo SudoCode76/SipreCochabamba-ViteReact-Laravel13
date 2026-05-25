@@ -19,6 +19,13 @@ const statusClass = {
   DC: "bg-rose-600 text-white",
 };
 
+const getSubgroupId = (item) => item?.id_subgrupo ?? item?.id_sub_grupo ?? item?.id ?? null;
+const getSubgroupCode = (item) => item?.codigo ?? item?.code ?? item?.codigo_sub_grupo ?? "";
+const getSubgroupDescription = (item) => item?.descripcion ?? item?.description ?? item?.nombre_sub_grupo ?? item?.nombre ?? "";
+const getGroupId = (item) => item?.id_grupo ?? item?.group_id ?? "";
+const getGroupOptionId = (group) => group?.id_grupo ?? group?.id ?? "";
+const getGroupOptionName = (group) => group?.nombre_grupo ?? group?.name ?? group?.description ?? "-";
+
 export default function SubgroupsPage() {
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
@@ -63,7 +70,7 @@ export default function SubgroupsPage() {
   const groups = groupsData?.data?.items ?? (Array.isArray(groupsData?.data) ? groupsData.data : []);
 
   const openNew = () => {
-    setSelectedItem({ code: "", description: "", status: "AC", group_id: "" });
+    setSelectedItem({ codigo: "", descripcion: "", estado: "AC", id_grupo: "" });
     setFormOpen(true);
   };
 
@@ -91,14 +98,14 @@ export default function SubgroupsPage() {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const payload = {
-      codigo_subgrupo: String(formData.get("codigo_subgrupo") || "").trim(),
-      nombre_subgrupo: String(formData.get("nombre_subgrupo") || "").trim(),
+      codigo: String(formData.get("codigo_subgrupo") || "").trim(),
+      descripcion: String(formData.get("nombre_subgrupo") || "").trim(),
       estado: String(formData.get("estado") || "AC"),
       id_grupo: Number(formData.get("id_grupo")),
     };
 
     try {
-      const itemId = selectedItem?.id || selectedItem?.id_sub_grupo || selectedItem?.id_subgrupo;
+      const itemId = getSubgroupId(selectedItem);
       if (itemId) {
         await updateMutation.mutateAsync({ id: itemId, payload });
         return;
@@ -116,7 +123,7 @@ export default function SubgroupsPage() {
     const autorizacion = String(formData.get("autorizacion") || "").trim();
 
     try {
-      const itemId = selectedItem?.id || selectedItem?.id_sub_grupo || selectedItem?.id_subgrupo;
+      const itemId = getSubgroupId(selectedItem);
       await deleteMutation.mutateAsync({ id: itemId, autorizacion });
     } catch (mutationError) {
       alert(mutationError?.response?.data?.message || "No se pudo eliminar el subgrupo.");
@@ -173,18 +180,18 @@ export default function SubgroupsPage() {
                     </thead>
                     <tbody>
                       {items.map((item, index) => {
-                        const code = item.code || item.codigo || item.codigo_sub_grupo || "-";
-                        const description = item.description || item.descripcion || item.nombre_sub_grupo || item.nombre || "-";
+                        const code = getSubgroupCode(item) || "-";
+                        const description = getSubgroupDescription(item) || "-";
                         const status = item.status || item.estado || "DC";
                         const statusLabelText = item.status_label || (status === "AC" ? "ACTIVO" : "INACTIVO");
                         
                         // Resolve group name
-                        const groupId = item.group_id || item.id_grupo;
-                        const groupName = item.group?.name || item.grupo?.nombre_grupo || 
-                                          groups.find(g => (g.id_grupo || g.id) === groupId)?.nombre_grupo || "-";
+                        const groupId = getGroupId(item);
+                        const groupName = item.nombre_grupo || item.group?.name || item.grupo?.nombre_grupo ||
+                                          getGroupOptionName(groups.find((g) => String(getGroupOptionId(g)) === String(groupId)));
 
                         return (
-                          <tr key={item.id || item.id_sub_grupo || item.id_subgrupo || index} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
+                          <tr key={getSubgroupId(item) || index} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
                             <td className="px-5 py-4 align-top text-foreground">{index + 1}</td>
                             <td className="px-5 py-4 align-top text-foreground font-medium">{code}</td>
                             <td className="px-5 py-4 align-top text-foreground">{description}</td>
@@ -239,7 +246,7 @@ export default function SubgroupsPage() {
               <CardHeader className="border-b border-border/70 bg-muted/20">
                 <div className="flex items-start justify-between gap-4">
                   <CardTitle className="text-2xl tracking-[-0.04em]">
-                    { (selectedItem?.id || selectedItem?.id_sub_grupo || selectedItem?.id_subgrupo) ? "Editar subgrupo" : "Registrar nuevo subgrupo"}
+                    {getSubgroupId(selectedItem) ? "Editar subgrupo" : "Registrar nuevo subgrupo"}
                   </CardTitle>
                   <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeForm}>
                     <X />
@@ -255,13 +262,13 @@ export default function SubgroupsPage() {
                         <select 
                           id="id_grupo" 
                           name="id_grupo" 
-                          defaultValue={selectedItem.group_id || selectedItem.id_grupo || ""} 
+                          defaultValue={getGroupId(selectedItem)} 
                           className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4" 
                           required
                         >
                           <option value="">Seleccionar grupo</option>
                           {groups.map(g => (
-                            <option key={g.id_grupo} value={g.id_grupo}>{g.nombre_grupo}</option>
+                            <option key={getGroupOptionId(g)} value={getGroupOptionId(g)}>{getGroupOptionName(g)}</option>
                           ))}
                         </select>
                       </div>
@@ -270,7 +277,7 @@ export default function SubgroupsPage() {
                         <Input 
                           id="codigo_subgrupo" 
                           name="codigo_subgrupo" 
-                          defaultValue={selectedItem.code || selectedItem.codigo || selectedItem.codigo_sub_grupo || ""} 
+                          defaultValue={getSubgroupCode(selectedItem)} 
                           className="h-12 rounded-2xl border-border/80 bg-background/90" 
                           required 
                         />
@@ -280,7 +287,7 @@ export default function SubgroupsPage() {
                         <Input 
                           id="nombre_subgrupo" 
                           name="nombre_subgrupo" 
-                          defaultValue={selectedItem.description || selectedItem.descripcion || selectedItem.nombre_sub_grupo || ""} 
+                          defaultValue={getSubgroupDescription(selectedItem)} 
                           className="h-12 rounded-2xl border-border/80 bg-background/90" 
                           required 
                         />
@@ -315,7 +322,7 @@ export default function SubgroupsPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold text-foreground">Eliminar subgrupo</h3>
-                <p className="text-sm text-muted-foreground">Ingresa la autorizacion aprobada para eliminar <strong>{selectedItem?.description}</strong>.</p>
+                <p className="text-sm text-muted-foreground">Ingresa la autorizacion aprobada para eliminar <strong>{getSubgroupDescription(selectedItem)}</strong>.</p>
               </div>
               <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeDelete}>
                 <X className="size-4" />
