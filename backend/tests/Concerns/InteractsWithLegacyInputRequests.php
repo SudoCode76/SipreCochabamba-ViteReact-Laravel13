@@ -18,6 +18,11 @@ trait InteractsWithLegacyInputRequests
             $table->unsignedInteger('unidad_medida')->nullable();
             $table->unsignedInteger('tipo')->nullable();
             $table->string('ubicacion', 255)->nullable();
+            $table->string('latitud', 80)->nullable();
+            $table->string('longitud', 80)->nullable();
+            $table->string('distrito', 100)->nullable();
+            $table->string('zona', 150)->nullable();
+            $table->string('otb', 150)->nullable();
             $table->string('justificacion', 500)->nullable();
             $table->unsignedInteger('usuario_solicitante')->nullable();
             $table->string('estado_aprobacion', 2)->nullable();
@@ -42,6 +47,11 @@ trait InteractsWithLegacyInputRequests
             'unidad_medida' => 1,
             'tipo' => 1,
             'ubicacion' => 'ALMACEN CENTRAL',
+            'latitud' => null,
+            'longitud' => null,
+            'distrito' => null,
+            'zona' => null,
+            'otb' => null,
             'justificacion' => 'REPOSICION DE STOCK',
             'usuario_solicitante' => 1,
             'estado_aprobacion' => 'PD',

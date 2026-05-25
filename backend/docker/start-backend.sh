@@ -3,6 +3,8 @@ set -eu
 
 cd /var/www/html
 
+printf "upload_max_filesize=10M\npost_max_size=35M\n" > /usr/local/etc/php/conf.d/uploads.ini
+
 mkdir -p \
   bootstrap/cache \
   storage/framework/cache/data \

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import apiClient from "@/lib/api/client";
+import { storageUrl } from "@/modules/input-requests/utils/storage-url";
 
 function buildInitialForm(request) {
   return {
@@ -24,6 +25,8 @@ function buildInitialForm(request) {
 }
 
 function QuoteCard({ title, file, replacementName, onChange }) {
+  const fileUrl = storageUrl(file);
+
   return (
     <div className="flex flex-col items-center gap-4 rounded-[28px] border border-border/70 bg-background/80 px-6 py-7 text-center">
       <h3 className="text-lg font-semibold tracking-[-0.03em] text-foreground">{title}</h3>
@@ -31,8 +34,8 @@ function QuoteCard({ title, file, replacementName, onChange }) {
         <FileText className="size-12" />
       </div>
       <div className="space-y-2 text-sm">
-        {file ? (
-          <a href={`/storage/${file}`} target="_blank" rel="noreferrer" className="font-medium text-emerald-700 hover:underline">
+        {fileUrl ? (
+          <a href={fileUrl} target="_blank" rel="noreferrer" className="font-medium text-emerald-700 hover:underline">
             Ver archivo actual
           </a>
         ) : (

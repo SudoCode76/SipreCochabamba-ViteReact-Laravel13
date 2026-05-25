@@ -121,14 +121,21 @@ class InputRequestApiTest extends TestCase
         Sanctum::actingAs($this->createLegacyAuthUser());
 
         $response = $this->postJson('/api/v1/input-requests', [
-            'descripcion' => 'Solicitud de cemento',
-            'precio' => 45.20,
-            'unidad_medida' => 1,
-            'tipo' => 1,
-            'ubicacion' => 'Almacen norte',
-            'justificacion' => 'Reposicion inmediata',
-            'usuario_solicitante' => 1,
-            'estado_aprobacion' => 'PD',
+            'solicitud' => [
+                'descripcion' => 'Solicitud de cemento',
+                'precio' => 45.20,
+                'unidad_medida' => 1,
+                'tipo' => 1,
+                'ubicacion' => 'Almacen norte',
+                'latitud' => '8059108.12345',
+                'longitud' => '788396.12345',
+                'distrito' => 'D1',
+                'zona' => 'Zona Norte',
+                'otb' => 'OTB Demo',
+                'justificacion' => 'Reposicion inmediata',
+                'usuario_solicitante' => 1,
+                'estado_aprobacion' => 'PD',
+            ],
             'valido' => UploadedFile::fake()->create('valido.pdf', 100, 'application/pdf'),
             'propuesto_1' => UploadedFile::fake()->create('prop1.pdf', 100, 'application/pdf'),
             'propuesto_2' => UploadedFile::fake()->create('prop2.pdf', 100, 'application/pdf'),
@@ -143,6 +150,11 @@ class InputRequestApiTest extends TestCase
         $this->assertDatabaseHas('solicitud_insumo', [
             'id_solicitud' => $requestId,
             'estado_aprobacion' => 'PD',
+            'latitud' => '8059108.12345',
+            'longitud' => '788396.12345',
+            'distrito' => 'D1',
+            'zona' => 'ZONA NORTE',
+            'otb' => 'OTB DEMO',
         ]);
 
         $this->assertDatabaseHas('cotizaciones', [
@@ -153,6 +165,7 @@ class InputRequestApiTest extends TestCase
         $this->getJson('/api/v1/input-requests/'.$requestId)
             ->assertOk()
             ->assertJsonPath('data.request.nombre_tipo', 'MATERIAL')
+            ->assertJsonPath('data.request.latitud', '8059108.12345')
             ->assertJsonPath('data.request.nombre_completo', 'Usuario Demo');
 
         $this->putJson('/api/v1/input-requests/'.$requestId, [
@@ -171,9 +184,31 @@ class InputRequestApiTest extends TestCase
             ->assertJsonPath('data.request.available_actions.edit', false);
     }
 
-    public function test_admin_can_get_quote_history_and_quote_summary(): void
+    public function test_input_request_requires_valid_quote_file_on_create(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->postJson('/api/v1/input-requests', [
+            'descripcion' => 'Solicitud sin cotizacion',
+            'precio' => 45.20,
+            'unidad_medida' => 1,
+            'tipo' => 1,
+            'ubicacion' => 'Almacen norte',
+            'justificacion' => 'Reposicion inmediata',
+            'usuario_solicitante' => 1,
+            'estado_aprobacion' => 'PD',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('valido');
+    }
+
+    public function test_admin_can_get_quote_history_and_quote_summary(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        Storage::disk('public')->put('archivos/cotizaciones/valido/solicitud.pdf', 'pdf');
+        Storage::disk('public')->put('archivos/cotizaciones/propuesto_1/alternativa-1.pdf', 'pdf');
+        Storage::disk('public')->put('archivos/cotizaciones/propuesto_2/alternativa-2.pdf', 'pdf');
 
         $this->createInputRequestRecord();
         $this->createInputRequestQuote([
@@ -190,6 +225,9 @@ class InputRequestApiTest extends TestCase
         $this->getJson('/api/v1/input-requests/1/quotes/history')
             ->assertOk()
             ->assertJsonPath('data.items.0.id_cotizacion', 2)
+            ->assertJsonPath('data.items.0.archivo_url', '/storage/archivos/cotizaciones/valido/solicitud.pdf')
+            ->assertJsonPath('data.items.0.archivo_available', true)
+            ->assertJsonPath('data.items.0.archivo_label', 'Propuesta oficial')
             ->assertJsonPath('data.items.1.id_cotizacion', 1);
 
         $this->getJson('/api/v1/input-requests/1/quote-summary')

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import apiClient from "@/lib/api/client";
+import { storageUrl } from "@/modules/input-requests/utils/storage-url";
 
 const approvalStatusClass = {
   PD: "bg-amber-500 text-white",
@@ -107,6 +108,24 @@ export default function InputRequestsPage() {
   const getQuoteLabel = (index, prefix) => {
     const isCurrent = index === 0;
     return `${prefix} ${isCurrent ? "vigente" : "anterior"}`;
+  };
+
+  const renderQuoteLink = (quote, field, label) => {
+    const fileUrl = storageUrl(quote[`${field}_url`] ?? quote[field]);
+
+    if (!fileUrl) {
+      return <span className="text-muted-foreground">Sin archivo</span>;
+    }
+
+    if (quote[`${field}_available`] === false) {
+      return <span className="text-muted-foreground">Archivo no disponible</span>;
+    }
+
+    return (
+      <a href={fileUrl} target="_blank" rel="noreferrer" className="text-sky-500 hover:underline">
+        {quote[`${field}_label`] ?? label}
+      </a>
+    );
   };
 
   return (
@@ -404,13 +423,13 @@ export default function InputRequestsPage() {
                           <td className="px-3 py-4 align-top text-muted-foreground">{quoteStartRecord + index}</td>
                           <td className="px-3 py-4 align-top text-muted-foreground">{quote.fecha ?? "-"}</td>
                           <td className="px-3 py-4 align-top">
-                            {quote.archivo ? <a href={`/storage/${quote.archivo}`} target="_blank" rel="noreferrer" className="text-sky-500 hover:underline">{getQuoteLabel(absoluteIndex, "propuesta oficial")}</a> : <span className="text-muted-foreground">Sin archivo</span>}
+                            {renderQuoteLink(quote, "archivo", getQuoteLabel(absoluteIndex, "propuesta oficial"))}
                           </td>
                           <td className="px-3 py-4 align-top">
-                            {quote.archivo1 ? <a href={`/storage/${quote.archivo1}`} target="_blank" rel="noreferrer" className="text-sky-500 hover:underline">{getQuoteLabel(absoluteIndex, "propuesta alternativa")}</a> : <span className="text-muted-foreground">Sin archivo</span>}
+                            {renderQuoteLink(quote, "archivo1", getQuoteLabel(absoluteIndex, "propuesta alternativa"))}
                           </td>
                           <td className="px-3 py-4 align-top">
-                            {quote.archivo2 ? <a href={`/storage/${quote.archivo2}`} target="_blank" rel="noreferrer" className="text-sky-500 hover:underline">{getQuoteLabel(absoluteIndex, "propuesta alternativa")}</a> : <span className="text-muted-foreground">Sin archivo</span>}
+                            {renderQuoteLink(quote, "archivo2", getQuoteLabel(absoluteIndex, "propuesta alternativa"))}
                           </td>
                         </tr>
                       );

@@ -36,6 +36,11 @@ class InputRequest extends Model
         'archivo1',
         'archivo2',
         'fecha',
+        'latitud',
+        'longitud',
+        'distrito',
+        'zona',
+        'otb',
         'fecha_modificacion',
         'ultima_modificacion',
     ];

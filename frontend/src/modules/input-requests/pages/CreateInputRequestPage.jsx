@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { authService } from "@/modules/auth/services/auth.service";
 import apiClient from "@/lib/api/client";
 
+const MAX_QUOTE_FILE_SIZE = 10 * 1024 * 1024;
+
 function getCurrentUserId(profile) {
   return profile?.data?.user?.id
     || profile?.data?.user?.id_usuario
@@ -28,6 +30,8 @@ export default function CreateInputRequestPage() {
     precio: "",
     id_unidad_medida: "",
     id_tipo: "",
+    latitud: "",
+    longitud: "",
     ubicacion: "",
     justificacion: "",
     distrito: "",
@@ -64,7 +68,17 @@ export default function CreateInputRequestPage() {
 
   const handleFileChange = (e, setFile) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+      const file = e.target.files[0];
+
+      if (file.size > MAX_QUOTE_FILE_SIZE) {
+        e.target.value = "";
+        setError("Cada archivo de cotización debe pesar 10 MB o menos.");
+        setFile(null);
+        return;
+      }
+
+      setError(null);
+      setFile(file);
     }
   };
 
@@ -78,33 +92,39 @@ export default function CreateInputRequestPage() {
         throw new Error("No se pudo identificar al usuario actual.");
       }
 
+      if (!archivoValid) {
+        throw new Error("Debe adjuntar la cotización válida.");
+      }
+
       const payload = {
         descripcion: formData.descripcion,
         precio: formData.precio,
         unidad_medida: formData.id_unidad_medida,
         tipo: formData.id_tipo,
+        latitud: formData.latitud,
+        longitud: formData.longitud,
+        distrito: formData.distrito,
+        zona: formData.zona,
+        otb: formData.otb,
         ubicacion: formData.ubicacion,
         justificacion: formData.justificacion,
+        estado_aprobacion: "PD",
+        fecha: new Date().toISOString(),
         usuario_solicitante: String(currentUserId),
       };
 
-      const hasFiles = Boolean(archivoValid || archivoPropuesto1 || archivoPropuesto2);
+      const formDataToSend = new FormData();
 
-      if (hasFiles) {
-        const formDataToSend = new FormData();
+      Object.entries(payload).forEach(([key, value]) => {
+        formDataToSend.append(`solicitud[${key}]`, value ?? "");
+      });
 
-        Object.entries(payload).forEach(([key, value]) => {
-          formDataToSend.append(key, value);
-        });
+      formDataToSend.append("valido", archivoValid);
 
-        if (archivoValid) formDataToSend.append("valido", archivoValid);
-        if (archivoPropuesto1) formDataToSend.append("propuesto_1", archivoPropuesto1);
-        if (archivoPropuesto2) formDataToSend.append("propuesto_2", archivoPropuesto2);
+      if (archivoPropuesto1) formDataToSend.append("propuesto_1", archivoPropuesto1);
+      if (archivoPropuesto2) formDataToSend.append("propuesto_2", archivoPropuesto2);
 
-        await apiClient.post("/v1/input-requests", formDataToSend);
-      } else {
-        await apiClient.post("/v1/input-requests", payload);
-      }
+      await apiClient.post("/v1/input-requests", formDataToSend);
 
       navigate("/Listar Solicitud de Insumo");
     } catch (err) {
@@ -159,6 +179,27 @@ export default function CreateInputRequestPage() {
               </Label>
               <div className="h-48 rounded-xl border border-border/80 bg-muted/30 flex items-center justify-center">
                 <p className="text-muted-foreground text-sm">Mapa interactivo - Seleccione la ubicación</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="latitud">Latitud</Label>
+                <Input
+                  id="latitud"
+                  value={formData.latitud}
+                  onChange={(e) => handleChange("latitud", e.target.value)}
+                  placeholder="Coordenada Y"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="longitud">Longitud</Label>
+                <Input
+                  id="longitud"
+                  value={formData.longitud}
+                  onChange={(e) => handleChange("longitud", e.target.value)}
+                  placeholder="Coordenada X"
+                />
               </div>
             </div>
 
@@ -281,7 +322,7 @@ export default function CreateInputRequestPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Cotización Válida</Label>
+                <Label>Cotización Válida *</Label>
                 <div className="flex items-center gap-2">
                   <label className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border/80 cursor-pointer hover:bg-muted/30">
                     <Upload className="h-4 w-4" />
@@ -289,7 +330,7 @@ export default function CreateInputRequestPage() {
                     <input
                       type="file"
                       className="hidden"
-                      accept=".pdf,.doc,.docx,.xls,.xlsx"
+                      accept=".pdf,.jpg,.jpeg,.png"
                       onChange={(e) => handleFileChange(e, setArchivoValid)}
                     />
                   </label>
@@ -306,7 +347,7 @@ export default function CreateInputRequestPage() {
                     <input
                       type="file"
                       className="hidden"
-                      accept=".pdf,.doc,.docx,.xls,.xlsx"
+                      accept=".pdf"
                       onChange={(e) => handleFileChange(e, setArchivoPropuesto1)}
                     />
                   </label>
@@ -323,7 +364,7 @@ export default function CreateInputRequestPage() {
                     <input
                       type="file"
                       className="hidden"
-                      accept=".pdf,.doc,.docx,.xls,.xlsx"
+                      accept=".pdf"
                       onChange={(e) => handleFileChange(e, setArchivoPropuesto2)}
                     />
                   </label>

@@ -14,7 +14,7 @@ FROM php:8.4-cli-bookworm
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git unzip libpq-dev libzip-dev libicu-dev \
     && docker-php-ext-install pdo_pgsql pgsql intl zip \
-    && printf "upload_max_filesize=10M\npost_max_size=12M\n" > /usr/local/etc/php/conf.d/uploads.ini \
+    && printf "upload_max_filesize=10M\npost_max_size=35M\n" > /usr/local/etc/php/conf.d/uploads.ini \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer

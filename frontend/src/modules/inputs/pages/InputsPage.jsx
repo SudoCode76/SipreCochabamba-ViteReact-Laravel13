@@ -24,6 +24,22 @@ import apiClient from "@/lib/api/client";
 const statusClass = {
   AC: "bg-emerald-600 text-white",
   DC: "bg-rose-600 text-white",
+  DP: "bg-slate-700 text-white",
+};
+
+const actionLabels = {
+  REGISTRADOR: "Registro de insumo",
+  RG: "Registro de insumo",
+  MODIFICADO: "Modificación de insumo",
+  MD: "Modificación de insumo",
+  ELIMINADO: "Eliminación de insumo",
+  DP: "Eliminación de insumo",
+};
+
+const statusLabels = {
+  AC: "HABILITADO",
+  DC: "INHABILITADO",
+  DP: "ELIMINADO",
 };
 
 const getInputStatusBadge = (item) => {
@@ -36,8 +52,39 @@ const getInputStatusBadge = (item) => {
 
   return {
     className: statusClass[item.estado] || "bg-slate-500 text-white",
-    label: item.estado === "AC" ? "HABILITADO" : "INHABILITADO",
+    label: statusLabels[item.estado] || item.estado || "SIN ESTADO",
   };
+};
+
+const getHistoryActionLabel = (action) => actionLabels[String(action ?? "").toUpperCase()] || action || "Movimiento de insumo";
+
+const getHistoryStatusLabel = (status) => statusLabels[String(status ?? "").toUpperCase()] || status || "-";
+
+const formatHistoryDate = (value) => {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("es-BO", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+};
+
+const formatMoney = (value) => {
+  const number = Number(value);
+
+  if (Number.isNaN(number)) {
+    return "-";
+  }
+
+  return `Bs ${number.toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 export default function InputsPage() {
@@ -52,6 +99,7 @@ export default function InputsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedInput, setSelectedInput] = useState(null);
   const [createError, setCreateError] = useState(null);
   const [editError, setEditError] = useState(null);
@@ -125,6 +173,17 @@ export default function InputsPage() {
     retry: false,
   });
 
+  const {
+    data: inputHistoryData,
+    isLoading: inputHistoryLoading,
+    isError: inputHistoryIsError,
+  } = useQuery({
+    queryKey: ["input-history", selectedInput?.id_insumo],
+    queryFn: () => inputsService.history(selectedInput.id_insumo),
+    enabled: historyOpen && Boolean(selectedInput?.id_insumo),
+    retry: false,
+  });
+
   const items = data?.data?.items ?? [];
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
@@ -137,6 +196,7 @@ export default function InputsPage() {
   const impactedItems = deleteImpact?.items ?? [];
   const impactedProjects = deleteImpact?.pending_projects ?? [];
   const deleteImpactSummary = deleteImpact?.summary ?? { items_count: 0, pending_projects_count: 0 };
+  const inputHistoryItems = inputHistoryData?.data?.items ?? [];
 
   const filteredQuoteHistory = quoteHistoryItems.filter((quote) => {
     const term = viewSearch.trim().toLowerCase();
@@ -291,6 +351,11 @@ export default function InputsPage() {
     setDeleteOpen(true);
   };
 
+  const handleOpenHistory = (item) => {
+    setSelectedInput(item);
+    setHistoryOpen(true);
+  };
+
   const closeCreate = () => {
     setCreateOpen(false);
     setCreateError(null);
@@ -339,6 +404,11 @@ export default function InputsPage() {
     setViewOpen(false);
     setViewSearch("");
     setViewPerPage(25);
+    setSelectedInput(null);
+  };
+
+  const closeHistory = () => {
+    setHistoryOpen(false);
     setSelectedInput(null);
   };
 
@@ -485,7 +555,7 @@ export default function InputsPage() {
   };
 
   return (
-    <div className={`flex flex-col gap-6 animate-in fade-in duration-500 ${createOpen || editOpen || deleteOpen || quoteOpen || viewOpen ? "blur-sm" : ""}`}>
+    <div className={`flex flex-col gap-6 animate-in fade-in duration-500 ${createOpen || editOpen || deleteOpen || quoteOpen || viewOpen || historyOpen ? "blur-sm" : ""}`}>
       <Card className="border border-border/70 bg-white/86 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
         <CardHeader className="gap-4 border-b border-border/70 bg-muted/25">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -645,7 +715,7 @@ export default function InputsPage() {
                                 <Eye className="h-4 w-4 text-muted-foreground" />
                                 <span>Ver cotizacion actual</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer">
+                              <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleOpenHistory(item)}>
                                 <History className="h-4 w-4 text-muted-foreground" />
                                 <span>Ver historial de insumo</span>
                               </DropdownMenuItem>
@@ -1276,6 +1346,101 @@ export default function InputsPage() {
                     </form>
                   </>
                 )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {historyOpen && createPortal(
+        <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
+          <div className="w-full max-w-5xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
+            <Card className="border border-border/70 bg-white/92 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+              <CardHeader className="border-b border-border/70 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl tracking-[-0.04em]">Historial de Insumo</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Consulta los movimientos registrados para este insumo.
+                    </p>
+                  </div>
+
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeHistory}>
+                    <X />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="history_input_name" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Insumo</Label>
+                  <Input id="history_input_name" value={selectedInput?.descripcion ?? ""} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled />
+                </div>
+
+                {inputHistoryIsError && (
+                  <Alert variant="destructive" className="rounded-2xl">
+                    <AlertDescription>No se pudo cargar el historial del insumo.</AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="overflow-hidden rounded-[28px] border border-border/70 bg-background/90">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-border/70 bg-muted/30 text-left">
+                          <th className="px-5 py-4 font-semibold text-foreground">Fecha/Hora</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Acción</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Usuario</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Precio</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Tipo</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Unidad</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Estado</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">IP</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inputHistoryLoading && (
+                          <tr>
+                            <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                              <Loader2 className="mr-2 inline size-4 animate-spin" /> Cargando historial...
+                            </td>
+                          </tr>
+                        )}
+                        {!inputHistoryLoading && !inputHistoryIsError && inputHistoryItems.map((history) => (
+                          <tr key={history.id_historial ?? history.id} className="border-b border-border/60 last:border-b-0">
+                            <td className="px-5 py-4 align-top text-muted-foreground">{formatHistoryDate(history.fecha ?? history.performed_at)}</td>
+                            <td className="px-5 py-4 align-top text-foreground">{getHistoryActionLabel(history.accion ?? history.action)}</td>
+                            <td className="px-5 py-4 align-top text-muted-foreground">{history.nombre_usuario ?? history.user?.full_name ?? history.usuario ?? "-"}</td>
+                            <td className="px-5 py-4 align-top text-foreground">{formatMoney(history.precio ?? history.price)}</td>
+                            <td className="px-5 py-4 align-top text-muted-foreground">{history.nombre_tipo ?? history.type_name ?? history.tipo ?? "-"}</td>
+                            <td className="px-5 py-4 align-top text-muted-foreground">{history.abreviatura ?? history.nombre_unidad_medida ?? history.unit_measure_name ?? "-"}</td>
+                            <td className="px-5 py-4 align-top">
+                              <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClass[history.estado ?? history.status] || "bg-slate-500 text-white"}`}>
+                                {getHistoryStatusLabel(history.estado ?? history.status)}
+                              </Badge>
+                            </td>
+                            <td className="px-5 py-4 align-top text-muted-foreground">{history.ip ?? "-"}</td>
+                          </tr>
+                        ))}
+                        {!inputHistoryLoading && !inputHistoryIsError && inputHistoryItems.length === 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                              No hay movimientos registrados para este insumo.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex flex-col gap-4 px-5 py-4 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
+                    <p>{inputHistoryItems.length} movimiento(s) registrado(s)</p>
+                    <Button type="button" variant="outline" className="rounded-full" onClick={closeHistory}>
+                      Cerrar
+                    </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>

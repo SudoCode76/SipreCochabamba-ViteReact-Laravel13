@@ -6,6 +6,7 @@ use App\Http\Requests\Input\DeleteInputRequest;
 use App\Http\Requests\Input\StoreInputDeleteAuthorizationRequest;
 use App\Models\Authorization;
 use App\Models\Input;
+use App\Models\InputHistory;
 use App\Models\InputLog;
 use App\Models\ItemInput;
 use App\Models\User;
@@ -142,6 +143,8 @@ class InputDeletionService
                 'estado' => 'DP',
             ]);
 
+            $this->registerHistory($input, $user, $request->ip(), 'ELIMINADO');
+
             $this->registerAudit($user, $request->ip(), 'Eliminacion logica de insumo '.$input->descripcion);
 
             return $input->refresh();
@@ -180,6 +183,8 @@ class InputDeletionService
                 'fecha' => now()->toDateString(),
                 'estado' => 'DP',
             ]);
+
+            $this->registerHistory($input, $user, $ip, 'ELIMINADO');
 
             $this->registerAudit(
                 $user,
@@ -221,5 +226,22 @@ class InputDeletionService
     private function registerAudit(User $user, ?string $ip, string $process): void
     {
         app(AuditService::class)->record($user, $ip, $process);
+    }
+
+    private function registerHistory(Input $input, User $user, ?string $ip, string $action): InputHistory
+    {
+        return InputHistory::query()->create([
+            'descripcion' => $input->descripcion,
+            'id_insumo' => $input->id_insumo,
+            'precio' => $input->precio,
+            'tipo' => $input->tipo,
+            'unidad_medida' => $input->unidad_medida,
+            'accion' => $action,
+            'usuario' => $user->id_usuario,
+            'fecha' => now(),
+            'estado' => $input->estado,
+            'ip' => $ip,
+            'nombre_usuario' => $user->funcionario,
+        ]);
     }
 }

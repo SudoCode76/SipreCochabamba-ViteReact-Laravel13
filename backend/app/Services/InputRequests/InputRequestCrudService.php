@@ -36,6 +36,7 @@ class InputRequestCrudService
                 'archivo1' => $files['archivo1'],
                 'archivo2' => $files['archivo2'],
                 'fecha' => $request->filled('date') ? $request->date('date')->toDateString() : now()->toDateString(),
+                ...$this->locationPayload($request),
                 ...$this->modificationTimestampPayload(),
             ]);
 
@@ -119,6 +120,23 @@ class InputRequestCrudService
     private function registerAudit(User $user, ?string $ip, string $process): void
     {
         app(AuditService::class)->record($user, $ip, $process);
+    }
+
+    private function locationPayload(StoreInputSolicitationRequest|UpdateInputSolicitationRequest $request): array
+    {
+        $payload = [
+            'latitud' => $request->input('latitude'),
+            'longitud' => $request->input('longitude'),
+            'distrito' => $request->filled('district') ? strtoupper(trim($request->string('district')->toString())) : null,
+            'zona' => $request->filled('zone') ? strtoupper(trim($request->string('zone')->toString())) : null,
+            'otb' => $request->filled('otb') ? strtoupper(trim($request->string('otb')->toString())) : null,
+        ];
+
+        return array_filter(
+            $payload,
+            fn (mixed $value, string $column): bool => Schema::hasColumn('solicitud_insumo', $column) && $value !== null && $value !== '',
+            ARRAY_FILTER_USE_BOTH
+        );
     }
 
     private function modificationTimestampPayload(): array

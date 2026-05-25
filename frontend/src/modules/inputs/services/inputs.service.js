@@ -20,4 +20,8 @@ export const inputsService = {
     const response = await apiClient.get(`/v1/inputs/${id}/delete-impact`);
     return response.data;
   },
+  history: async (id) => {
+    const response = await apiClient.get(`/v1/inputs/${id}/history`);
+    return response.data;
+  },
 };

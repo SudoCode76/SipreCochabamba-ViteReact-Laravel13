@@ -218,6 +218,11 @@ class AuthorizationApiTest extends TestCase
             'accion' => 'MD',
             'estado' => 'DP',
         ]);
+        $this->assertDatabaseHas('historial_insumo', [
+            'id_insumo' => 1,
+            'accion' => 'ELIMINADO',
+            'estado' => 'DP',
+        ]);
 
         $this->getJson("/api/v1/authorizations/{$authorization->id_autorizacion}/impact")
             ->assertOk()
