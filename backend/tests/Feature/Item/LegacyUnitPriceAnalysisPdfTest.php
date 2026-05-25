@@ -72,6 +72,121 @@ class LegacyUnitPriceAnalysisPdfTest extends TestCase
         $this->assertStringStartsWith('%PDF', $response->getContent());
     }
 
+    public function test_recalculated_unit_price_analysis_pdf_uses_historical_fndr_prices(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->seedAnalysisFixture();
+        $this->seedFndrPercentages();
+        $this->createInputLog([
+            'id_log' => 10,
+            'id_insumo' => 1,
+            'precio' => 8,
+            'tipo' => 1,
+            'descripcion' => 'Material 1',
+            'fecha' => '2026-05-01',
+        ]);
+
+        $response = $this->get('/api/v1/items/1/price-recalculation/pdf?mode=fndr&fecha=2026-05-15');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="recalcular_analisis_precios.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_recalculated_unit_price_analysis_pdf_supports_upre_mode(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->seedAnalysisFixture();
+        $this->seedUprePercentages();
+        $this->createInputLog([
+            'id_log' => 10,
+            'id_insumo' => 1,
+            'precio' => 8,
+            'tipo' => 1,
+            'descripcion' => 'Material 1',
+            'fecha' => '2026-05-01',
+        ]);
+
+        $response = $this->get('/api/v1/items/1/price-recalculation/pdf?mode=upre&fecha=2026-05-15');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="recalcular_analisis_precios.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_recalculated_unit_price_analysis_pdf_supports_fps_mode(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->seedAnalysisFixture();
+        $this->seedFpsPercentages();
+        $this->createInputLog([
+            'id_log' => 10,
+            'id_insumo' => 1,
+            'precio' => 8,
+            'tipo' => 1,
+            'descripcion' => 'Material 1',
+            'fecha' => '2026-05-01',
+        ]);
+
+        $response = $this->get('/api/v1/items/1/price-recalculation/pdf?mode=fps&fecha=2026-05-15');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="recalcular_analisis_precios.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_recalculated_unit_price_analysis_pdf_supports_obras_mode(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->seedAnalysisFixture();
+        $this->seedObrasPercentages();
+        $this->createInputLog([
+            'id_log' => 10,
+            'id_insumo' => 1,
+            'precio' => 8,
+            'tipo' => 1,
+            'descripcion' => 'Material 1',
+            'fecha' => '2026-05-01',
+        ]);
+
+        $response = $this->get('/api/v1/items/1/price-recalculation/pdf?mode=obras&fecha=2026-05-15');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="recalcular_analisis_precios.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_recalculated_unit_price_analysis_pdf_supports_proman_mode(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->seedAnalysisFixture();
+        $this->seedPromanPercentages();
+        $this->createInputLog([
+            'id_log' => 10,
+            'id_insumo' => 1,
+            'precio' => 8,
+            'tipo' => 1,
+            'descripcion' => 'Material 1',
+            'fecha' => '2026-05-01',
+        ]);
+
+        $response = $this->get('/api/v1/items/1/price-recalculation/pdf?mode=proman&fecha=2026-05-15');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition', 'inline; filename="recalcular_analisis_precios.pdf"');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
     public function test_legacy_unit_price_analysis_pdf_supports_upre_mode(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

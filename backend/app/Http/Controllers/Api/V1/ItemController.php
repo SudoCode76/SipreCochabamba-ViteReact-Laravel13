@@ -540,6 +540,26 @@ class ItemController extends Controller
         ]);
     }
 
+    public function priceRecalculationPdf(RecalculateItemPriceRequest $request, Item $item): Response
+    {
+        $mode = strtolower((string) $request->input('mode', 'general'));
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), $mode);
+
+        if (! $permissions['can_recalculate']) {
+            abort(403, 'No tiene permisos para recalcular el analisis '.strtoupper($mode).' del item.');
+        }
+
+        try {
+            $response = $this->legacyUnitPriceAnalysisPdfService->streamRecalculated($item, $request->date('fecha'), $mode);
+        } catch (InvalidArgumentException $exception) {
+            abort(422, $exception->getMessage());
+        }
+
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se genero el reporte recalculado '.$mode.' del item '.$item->item);
+
+        return $response;
+    }
+
     public function compositionContext(Item $item, Request $request): JsonResponse
     {
         $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');

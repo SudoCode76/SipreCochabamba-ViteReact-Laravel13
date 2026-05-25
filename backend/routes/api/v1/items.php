@@ -52,4 +52,5 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/items/{item}/analisis-precios-unitarios', [ItemAnalysisController::class, 'legacyUnitPriceAnalysis']);
     Route::get('/items/{item}/analisis-precios-unitarios/pdf', [ItemAnalysisController::class, 'legacyUnitPriceAnalysisPdf']);
     Route::post('/items/{item}/price-recalculation', [ItemAnalysisController::class, 'priceRecalculation']);
+    Route::get('/items/{item}/price-recalculation/pdf', [ItemAnalysisController::class, 'priceRecalculationPdf']);
 });

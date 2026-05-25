@@ -182,6 +182,14 @@ export const itemsService = {
     return response.data;
   },
 
+  downloadPriceRecalculationPdf: async ({ itemId, fecha, mode = "general" }) => {
+    const response = await apiClient.get(`/v1/items/${itemId}/price-recalculation/pdf`, {
+      params: { fecha, mode },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
   recalculateBreakdowns: async ({ itemId, payload }) => {
     const response = await apiClient.post(`/v1/items/${itemId}/breakdowns/recalculate`, payload, {
       responseType: "blob",

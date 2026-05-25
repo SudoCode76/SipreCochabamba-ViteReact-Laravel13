@@ -3,21 +3,33 @@
 namespace App\Modules\Items\Services;
 
 use App\Models\Item;
+use App\Modules\Items\Services\Analysis\ItemPriceAnalysisService;
 use App\Support\Pdf\LegacyPdfFormat;
 use App\Support\Pdf\MunicipalReportPdfFactory;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Response;
 
 class LegacyUnitPriceAnalysisPdfService
 {
     public function __construct(
         private readonly LegacyUnitPriceAnalysisService $legacyUnitPriceAnalysisService,
+        private readonly ItemPriceAnalysisService $itemPriceAnalysisService,
     ) {}
 
     public function stream(Item $item, string $mode = 'general'): Response
     {
         $document = $this->legacyUnitPriceAnalysisService->build($item, $mode);
-        $analysis = $document['raw'];
+        return $this->streamAnalysis($document['raw'], 'analisis_de_precios_unitarios.pdf');
+    }
 
+    public function streamRecalculated(Item $item, CarbonInterface $date, string $mode = 'fndr'): Response
+    {
+        $analysis = $this->itemPriceAnalysisService->buildRecalculated($item, $date, $mode);
+        return $this->streamAnalysis($analysis, 'recalcular_analisis_precios.pdf');
+    }
+
+    private function streamAnalysis(array $analysis, string $filename): Response
+    {
         $pdf = MunicipalReportPdfFactory::make('Análisis de Precios Unitarios');
         $pdf->SetFont('dejavusans', '', 8, '', true);
 
@@ -31,7 +43,7 @@ class LegacyUnitPriceAnalysisPdfService
             $pdf->SetFont('dejavusans', '', 10, '', true);
         }
 
-        return MunicipalReportPdfFactory::inlineResponse($pdf, 'analisis_de_precios_unitarios.pdf');
+        return MunicipalReportPdfFactory::inlineResponse($pdf, $filename);
     }
 
     private function buildLegacyHtml(array $analysis): array

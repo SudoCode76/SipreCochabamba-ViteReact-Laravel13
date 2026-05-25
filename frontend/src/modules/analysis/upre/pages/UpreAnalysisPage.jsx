@@ -17,7 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { itemsService } from "@/modules/dashboard/services/items.service";
-import apiClient from "@/lib/api/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,36 +43,76 @@ export default function UpreAnalysisPage() {
 
   const recalculateMutation = useMutation({
     mutationFn: async ({ itemId, fecha }) => {
-      const response = await apiClient.post(`/v1/items/${itemId}/price-recalculation`, {
+      const pdfResponse = await itemsService.downloadPriceRecalculationPdf({
+        itemId,
         fecha,
         mode: "upre",
       });
-      return response.data;
+
+      const pdfBlob = pdfResponse instanceof Blob
+        ? pdfResponse
+        : new Blob([pdfResponse], { type: "application/pdf" });
+
+      if (pdfBlob.size === 0) {
+        throw new Error("El PDF se recibio vacio.");
+      }
+
+      const contentType = String(pdfBlob.type || "").toLowerCase();
+      if (contentType && !contentType.includes("pdf")) {
+        throw new Error("La respuesta no corresponde a un PDF valido.");
+      }
+
+      return pdfBlob;
     },
-    onSuccess: () => {
-      setRecalculateStatus({ type: "success", message: "Precio recalculado correctamente" });
-      setTimeout(() => {
-        setRecalculateOpen(false);
-        setRecalculateItem(null);
-      }, 500);
+    onSuccess: (pdfBlob, variables) => {
+      const blobUrl = URL.createObjectURL(pdfBlob);
+
+      if (variables.reportWindow) {
+        variables.reportWindow.location.replace(blobUrl);
+      } else {
+        const fallbackWindow = window.open(blobUrl, "_blank");
+        if (!fallbackWindow) {
+          window.location.assign(blobUrl);
+        }
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      setRecalculateOpen(false);
+      setRecalculateItem(null);
     },
-    onError: (error) => {
-      const message = error.response?.data?.message || "Error al recalcular el precio"
-      setRecalculateStatus({ type: "error", message })
+    onError: (error, variables) => {
+      if (variables?.reportWindow) {
+        variables.reportWindow.close();
+      }
+
+      const message = error.response?.data?.message || error.message || "Error al recalcular el precio";
+      setRecalculateStatus({ type: "error", message });
     },
-  })
+  });
 
   const handleRecalculate = (item) => {
-    setRecalculateItem(item)
-    setRecalculateDate(new Date().toISOString().split("T")[0])
-    setRecalculateStatus(null)
-    setRecalculateOpen(true)
-  }
+    setRecalculateItem(item);
+    setRecalculateDate(new Date().toISOString().split("T")[0]);
+    setRecalculateStatus(null);
+    setRecalculateOpen(true);
+  };
 
   const handleSubmitRecalculate = (e) => {
-    e.preventDefault()
-    recalculateMutation.mutate({ itemId: recalculateItem.id_item, fecha: recalculateDate })
-  }
+    e.preventDefault();
+
+    const reportWindow = window.open("", "_blank");
+
+    if (reportWindow) {
+      reportWindow.document.title = "Generando PDF";
+      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando recalculo de precios unitarios UPRE...</p>";
+    }
+
+    recalculateMutation.mutate({
+      itemId: recalculateItem.id_item,
+      fecha: recalculateDate,
+      reportWindow,
+    });
+  };
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
     queryKey: ["upre-items", { page, perPage, search }],
