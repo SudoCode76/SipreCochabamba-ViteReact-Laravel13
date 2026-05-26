@@ -45,7 +45,20 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    if ! command -v docker >/dev/null 2>&1; then
+                        echo "ERROR: docker no esta instalado o no esta disponible en el agente Jenkins."
+                        echo "Este pipeline despliega con Docker Compose, por lo que Jenkins debe correr en un agente con Docker CLI y Docker Compose."
+                        echo "Si Jenkins corre dentro de un contenedor, monta /var/run/docker.sock e instala docker-cli dentro del contenedor Jenkins."
+                        exit 127
+                    fi
+
                     docker --version
+
+                    if ! docker compose version >/dev/null 2>&1; then
+                        echo "ERROR: docker compose no esta disponible en el agente Jenkins."
+                        exit 127
+                    fi
+
                     docker compose version
                 '''
             }
@@ -160,13 +173,27 @@ pipeline {
         always {
             sh '''
                 set +e
-                ${COMPOSE_BASE} ps
-                ${COMPOSE_BASE} logs --tail=120 backend
-                if [ "${DEPLOY_PROFILE}" = "production" ]; then
-                    ${COMPOSE_PROD} logs --tail=120 frontend-prod
-                else
-                    ${COMPOSE_BASE} logs --tail=120 frontend
+
+                if ! command -v docker >/dev/null 2>&1; then
+                    echo "Docker no esta disponible; se omiten logs de Docker Compose."
+                    exit 0
                 fi
+
+                if ! docker compose version >/dev/null 2>&1; then
+                    echo "Docker Compose no esta disponible; se omiten logs de Docker Compose."
+                    exit 0
+                fi
+
+                ${COMPOSE_BASE} ps || true
+                ${COMPOSE_BASE} logs --tail=120 backend || true
+
+                if [ "${DEPLOY_PROFILE:-production}" = "production" ]; then
+                    ${COMPOSE_PROD} logs --tail=120 frontend-prod || true
+                else
+                    ${COMPOSE_BASE} logs --tail=120 frontend || true
+                fi
+
+                exit 0
             '''
         }
         success {
