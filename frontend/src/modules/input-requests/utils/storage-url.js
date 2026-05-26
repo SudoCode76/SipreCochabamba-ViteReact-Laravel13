@@ -1,12 +1,6 @@
-const apiBaseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+import { apiOrigin } from "@/lib/api/client";
 
-const apiOrigin = (() => {
-  try {
-    return new URL(apiBaseUrl).origin;
-  } catch {
-    return "http://localhost:8000";
-  }
-})();
+const storageOrigin = import.meta.env.VITE_STORAGE_BASE_URL || apiOrigin;
 
 export function storageUrl(pathOrUrl) {
   if (!pathOrUrl) {
@@ -20,5 +14,5 @@ export function storageUrl(pathOrUrl) {
   const cleanPath = String(pathOrUrl).replace(/^\/+/, "");
   const storagePath = cleanPath.startsWith("storage/") ? cleanPath : `storage/${cleanPath}`;
 
-  return `${apiOrigin}/${storagePath}`;
+  return `${storageOrigin.replace(/\/+$/, "")}/${storagePath}`;
 }

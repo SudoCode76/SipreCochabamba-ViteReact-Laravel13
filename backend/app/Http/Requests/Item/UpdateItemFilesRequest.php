@@ -15,8 +15,8 @@ class UpdateItemFilesRequest extends FormRequest
     {
         return [
             'item' => ['required', 'string', 'max:100'],
-            'specification_file' => ['nullable', 'file', 'max:10240'],
-            'sheet_file' => ['nullable', 'file', 'max:10240'],
+            'specification_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+            'sheet_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
         ];
     }
 }

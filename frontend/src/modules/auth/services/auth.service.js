@@ -1,7 +1,15 @@
-import apiClient from "@/lib/api/client";
+import apiClient, { apiOrigin } from "@/lib/api/client";
+
+const csrfClient = async () => {
+  await apiClient.get(`${apiOrigin}/sanctum/csrf-cookie`, {
+    baseURL: undefined,
+  });
+};
 
 export const authService = {
   login: async (credentials) => {
+    await csrfClient();
+
     const response = await apiClient.post("/v1/auth/login", {
       username: credentials.username,
       clave: credentials.password,
@@ -10,8 +18,8 @@ export const authService = {
     return response.data;
   },
 
-  getProfile: async () => {
-    const response = await apiClient.get("/v1/auth/me");
+  getProfile: async (config = {}) => {
+    const response = await apiClient.get("/v1/auth/me", config);
     return response.data;
   },
 

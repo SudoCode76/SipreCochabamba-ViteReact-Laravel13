@@ -226,31 +226,8 @@ export default function InputsPage() {
 
   const quoteMutation = useMutation({
     mutationFn: async ({ id, payload }) => {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`${apiClient.defaults.baseURL}/v1/inputs/${id}/quotes`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: payload,
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        window.location.href = "/login";
-        throw new Error("Unauthorized");
-      }
-
-      if (!response.ok) {
-        const error = new Error(data?.message || "No se pudo registrar la cotización.");
-        error.response = { data, status: response.status };
-        throw error;
-      }
-
-      return data;
+      const response = await apiClient.post(`/v1/inputs/${id}/quotes`, payload);
+      return response.data;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["inputs"] });

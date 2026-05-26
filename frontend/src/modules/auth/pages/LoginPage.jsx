@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { ArrowRight, KeyRound } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { authService } from "../services/auth.service";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -16,19 +17,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
+function prefetchFrequentRoutes() {
+  void Promise.allSettled([
+    import("@/modules/dashboard/pages/DashboardPage"),
+    import("@/modules/projects/pages/ProjectsPage"),
+    import("@/modules/items/pages/ItemsPage"),
+    import("@/modules/inputs/pages/InputsPage"),
+  ]);
+}
+
 export default function LoginPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      navigate("/dashboard", { replace: true });
-    }
-  }, [navigate]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -55,13 +59,9 @@ export default function LoginPage() {
         return;
       }
 
-      // Assuming the API returns a token directly or inside data
-      const token = data.token || (data.data && data.data.token);
-      if (token) {
-        localStorage.setItem("token", token);
-      }
-      
-      navigate("/dashboard");
+      queryClient.setQueryData(["auth-user"], data?.data?.user || data?.user || data);
+      prefetchFrequentRoutes();
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       // Handle axios errors
       if (err.response && err.response.data) {
@@ -155,4 +155,4 @@ export default function LoginPage() {
       </div>
     </div>
   );
-}
+}

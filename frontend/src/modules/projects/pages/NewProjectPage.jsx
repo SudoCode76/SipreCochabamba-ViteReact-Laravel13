@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, Package, MapPin, Copy } from "lucide-react";
@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import ProjectLocationMap from "../components/ProjectLocationMap";
 import { projectService } from "../services/project.service";
+
+const ProjectLocationMap = lazy(() => import("../components/ProjectLocationMap"));
 
 export default function NewProjectPage() {
   const navigate = useNavigate();
@@ -202,7 +203,16 @@ export default function NewProjectPage() {
                 <MapPin className="h-4 w-4" />
                 Ubicación en el Mapa
               </Label>
-              <ProjectLocationMap value={formData} onChange={(changes) => setFormData((current) => ({ ...current, ...changes }))} />
+              <Suspense
+                fallback={(
+                  <div className="flex h-[360px] items-center justify-center rounded-xl border border-border/80 bg-muted/30 text-sm text-muted-foreground">
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Cargando mapa
+                  </div>
+                )}
+              >
+                <ProjectLocationMap value={formData} onChange={(changes) => setFormData((current) => ({ ...current, ...changes }))} />
+              </Suspense>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

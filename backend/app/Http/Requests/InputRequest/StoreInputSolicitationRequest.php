@@ -52,9 +52,9 @@ class StoreInputSolicitationRequest extends FormRequest
             'district' => ['nullable', 'string', 'max:100'],
             'zone' => ['nullable', 'string', 'max:150'],
             'otb' => ['nullable', 'string', 'max:150'],
-            'valido' => ['required', 'file', 'max:10240'],
-            'propuesto_1' => ['nullable', 'file', 'max:10240'],
-            'propuesto_2' => ['nullable', 'file', 'max:10240'],
+            'valido' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+            'propuesto_1' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+            'propuesto_2' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
         ];
     }
 }

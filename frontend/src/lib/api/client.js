@@ -1,25 +1,32 @@
 
 import axios from "axios";
 
+const defaultApiBaseUrl = import.meta.env.DEV ? "http://localhost:8000/api" : "/api";
+
+export const apiBaseUrl = import.meta.env.VITE_API_URL || defaultApiBaseUrl;
+export const apiOrigin = (() => {
+  try {
+    return new URL(apiBaseUrl, window.location.origin).origin;
+  } catch {
+    return window.location.origin;
+  }
+})();
+
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000/api",
+  baseURL: apiBaseUrl,
+  withCredentials: true,
+  withXSRFToken: true,
   headers: {
     Accept: "application/json",
   },
 });
 
-// Interceptor para añadir el token de autenticación (si existe)
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
-
     if (config.data instanceof FormData) {
       delete config.headers["Content-Type"];
     }
 
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -28,10 +35,12 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      localStorage.removeItem("token");
-      // Optionally redirect to login
-      window.location.href = "/login";
+    const shouldRedirectToLogin = error.response?.status === 401
+      && !error.config?.skipAuthRedirect
+      && window.location.pathname !== "/login";
+
+    if (shouldRedirectToLogin) {
+      window.dispatchEvent(new CustomEvent("auth:unauthorized"));
     }
     if (error.response && error.response.status === 403) {
       error.message = error.response.data?.message || "No tiene permisos para realizar esta acción.";

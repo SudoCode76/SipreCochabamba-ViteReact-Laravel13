@@ -12,21 +12,20 @@ export function useAuth() {
     isError,
   } = useQuery({
     queryKey: ["auth-user"],
-    queryFn: async () => {
-      const data = await authService.getProfile();
-      return data?.data?.user || data?.user || data;
-    },
-    retry: false, // Don't retry if fetching the user fails (e.g. 401)
-    refetchOnWindowFocus: false,
+    queryFn: () => queryClient.getQueryData(["auth-user"]),
+    enabled: false,
+    initialData: () => queryClient.getQueryData(["auth-user"]),
   });
 
   const logoutMutation = useMutation({
     mutationFn: authService.logout,
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["auth-user"] });
+      queryClient.removeQueries({ queryKey: ["auth-user"] });
+    },
     onSettled: () => {
-      // Regardless of success or failure, we clear the local state
-      localStorage.removeItem("token");
       queryClient.clear();
-      navigate("/login");
+      navigate("/login", { replace: true });
     },
   });
 

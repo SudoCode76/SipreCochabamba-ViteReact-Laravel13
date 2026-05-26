@@ -17,6 +17,7 @@ class LoginRequest extends FormRequest
             'username' => ['required', 'string', 'max:50'],
             'clave' => ['required', 'string', 'max:255'],
             'device_name' => ['nullable', 'string', 'max:255'],
+            'issue_token' => ['nullable', 'boolean'],
         ];
     }
 }

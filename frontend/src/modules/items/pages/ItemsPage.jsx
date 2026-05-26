@@ -443,11 +443,11 @@ export default function ItemsPage() {
     setReportFeedback(null);
     setReportLoadingItemId(item.id_item);
 
-    const reportWindow = window.open("", "_blank");
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
 
     if (reportWindow) {
       reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando analisis de precios unitarios...</p>";
+      reportWindow.document.body.textContent = "Generando analisis de precios unitarios...";
     }
 
     try {
@@ -470,7 +470,7 @@ export default function ItemsPage() {
       if (reportWindow) {
         reportWindow.location.replace(blobUrl);
       } else {
-        const fallbackWindow = window.open(blobUrl, "_blank");
+        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
         if (!fallbackWindow) {
           window.location.href = blobUrl;
         }
@@ -497,11 +497,11 @@ export default function ItemsPage() {
     setReportFeedback(null);
     setReportLoadingItemId(item.id_item);
 
-    const reportWindow = window.open("", "_blank");
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
 
     if (reportWindow) {
       reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando desglose de materiales...</p>";
+      reportWindow.document.body.textContent = "Generando desglose de materiales...";
     }
 
     try {
@@ -524,7 +524,7 @@ export default function ItemsPage() {
       if (reportWindow) {
         reportWindow.location.replace(blobUrl);
       } else {
-        const fallbackWindow = window.open(blobUrl, "_blank");
+        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
         if (!fallbackWindow) {
           window.location.href = blobUrl;
         }
@@ -551,11 +551,11 @@ export default function ItemsPage() {
     setReportFeedback(null);
     setReportLoadingItemId(item.id_item);
 
-    const reportWindow = window.open("", "_blank");
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
 
     if (reportWindow) {
       reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando desglose de mano de obra...</p>";
+      reportWindow.document.body.textContent = "Generando desglose de mano de obra...";
     }
 
     try {
@@ -578,7 +578,7 @@ export default function ItemsPage() {
       if (reportWindow) {
         reportWindow.location.replace(blobUrl);
       } else {
-        const fallbackWindow = window.open(blobUrl, "_blank");
+        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
         if (!fallbackWindow) {
           window.location.href = blobUrl;
         }
@@ -605,11 +605,11 @@ export default function ItemsPage() {
     setReportFeedback(null);
     setReportLoadingItemId(item.id_item);
 
-    const reportWindow = window.open("", "_blank");
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
 
     if (reportWindow) {
       reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando desglose de herramientas...</p>";
+      reportWindow.document.body.textContent = "Generando desglose de herramientas...";
     }
 
     try {
@@ -632,7 +632,7 @@ export default function ItemsPage() {
       if (reportWindow) {
         reportWindow.location.replace(blobUrl);
       } else {
-        const fallbackWindow = window.open(blobUrl, "_blank");
+        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
         if (!fallbackWindow) {
           window.location.href = blobUrl;
         }
@@ -1110,11 +1110,11 @@ export default function ItemsPage() {
     setReportFeedback(null);
     setReportLoadingItemId(breakdownItem.id_item);
 
-    const reportWindow = window.open("", "_blank");
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
 
     if (reportWindow) {
       reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando desglose historico...</p>";
+      reportWindow.document.body.textContent = "Generando desglose historico...";
     }
 
     try {
@@ -1143,7 +1143,7 @@ export default function ItemsPage() {
       if (reportWindow) {
         reportWindow.location.replace(blobUrl);
       } else {
-        const fallbackWindow = window.open(blobUrl, "_blank");
+        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
         if (!fallbackWindow) {
           window.location.href = blobUrl;
         }

@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronDown, LogOut, ShieldCheck, User } from "lucide-react";
+import { ArrowRight, ChevronDown, Loader2, LogOut, ShieldCheck, User } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { navigationSections } from "@/app/navigation";
@@ -33,6 +33,15 @@ export default function MainLayout() {
 
   return (
     <div className="relative min-h-screen bg-background text-foreground">
+      {isLoggingOut && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/75 backdrop-blur-sm">
+          <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-background px-5 py-4 text-sm font-medium shadow-xl">
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            Cerrando sesión...
+          </div>
+        </div>
+      )}
+
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[460px] bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.07),_transparent_62%)]" />
 
       <header className="sticky top-0 z-50 px-4 pt-4 sm:px-6">

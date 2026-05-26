@@ -1,44 +1,100 @@
+/* eslint-disable react-refresh/only-export-components */
+import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import MainLayout from "@/app/layouts/MainLayout";
 import ProtectedRoute from "./ProtectedRoute";
 import ModulePlaceholder from "@/components/ModulePlaceholder";
-import ChangePasswordPage from "@/modules/auth/pages/ChangePasswordPage";
-import AuthorizationsPage from "@/modules/authorizations/pages/AuthorizationsPage";
-import FpsCalculationPercentagesPage from "@/modules/calculation-percentages/pages/FpsCalculationPercentagesPage";
 import LoginPage from "@/modules/auth/pages/LoginPage";
-import FndrCalculationPercentagesPage from "@/modules/calculation-percentages/pages/FndrCalculationPercentagesPage";
-import ObrasCalculationPercentagesPage from "@/modules/calculation-percentages/pages/ObrasCalculationPercentagesPage";
-import PromanCalculationPercentagesPage from "@/modules/calculation-percentages/pages/PromanCalculationPercentagesPage";
-import UpreCalculationPercentagesPage from "@/modules/calculation-percentages/pages/UpreCalculationPercentagesPage";
-import DashboardPage from "@/modules/dashboard/pages/DashboardPage";
-import ItemsPage from "@/modules/items/pages/ItemsPage";
-import FndrAnalysisPage from "@/modules/analysis/fndr/pages/FndrAnalysisPage";
-import UpreAnalysisPage from "@/modules/analysis/upre/pages/UpreAnalysisPage";
-import FpsAnalysisPage from "@/modules/analysis/fps/pages/FpsAnalysisPage";
-import ObrasAnalysisPage from "@/modules/analysis/obras/pages/ObrasAnalysisPage";
-import PromanAnalysisPage from "@/modules/analysis/proman/pages/PromanAnalysisPage";
-import PriceRecalculationPage from "@/modules/analysis/pages/PriceRecalculationPage";
-import ProjectsPage from "@/modules/projects/pages/ProjectsPage";
-import NewProjectPage from "@/modules/projects/pages/NewProjectPage";
-import EditProjectPage from "@/modules/projects/pages/EditProjectPage";
-import ProjectItemsPage from "@/modules/projects/pages/ProjectItemsPage";
-import ProjectTemplatesPage from "@/modules/projects/pages/ProjectTemplatesPage";
-import InputsPage from "@/modules/inputs/pages/InputsPage";
-import InputRequestsPage from "@/modules/input-requests/pages/InputRequestsPage";
-import CreateInputRequestPage from "@/modules/input-requests/pages/CreateInputRequestPage";
-import EditInputRequestPage from "@/modules/input-requests/pages/EditInputRequestPage";
-import ManageInputRequestsPage from "@/modules/input-requests/pages/ManageInputRequestsPage";
-import InputTypesPage from "@/modules/input-types/pages/InputTypesPage";
-import UnitMeasuresPage from "@/modules/input-types/pages/UnitMeasuresPage";
-import FunctionsPage from "@/modules/functions/pages/FunctionsPage";
-import RolesPage from "@/modules/roles/pages/RolesPage";
-import UsersPage from "@/modules/users/pages/UsersPage";
-import GroupsPage from "@/modules/groups/pages/GroupsPage";
-import SubgroupsPage from "@/modules/groups/pages/SubgroupsPage";
-import ModulesPage from "@/modules/modules/pages/ModulesPage";
-import CalculationPercentagesPage from "@/modules/calculation-percentages/pages/CalculationPercentagesPage";
-import AuditsPage from "@/modules/audits/pages/AuditsPage";
+
+const loadAuditsPage = () => import("@/modules/audits/pages/AuditsPage");
+const loadAuthorizationsPage = () => import("@/modules/authorizations/pages/AuthorizationsPage");
+const loadCalculationPercentagesPage = () => import("@/modules/calculation-percentages/pages/CalculationPercentagesPage");
+const loadChangePasswordPage = () => import("@/modules/auth/pages/ChangePasswordPage");
+const loadCreateInputRequestPage = () => import("@/modules/input-requests/pages/CreateInputRequestPage");
+const loadDashboardPage = () => import("@/modules/dashboard/pages/DashboardPage");
+const loadEditInputRequestPage = () => import("@/modules/input-requests/pages/EditInputRequestPage");
+const loadEditProjectPage = () => import("@/modules/projects/pages/EditProjectPage");
+const loadFndrAnalysisPage = () => import("@/modules/analysis/fndr/pages/FndrAnalysisPage");
+const loadFndrCalculationPercentagesPage = () => import("@/modules/calculation-percentages/pages/FndrCalculationPercentagesPage");
+const loadFpsAnalysisPage = () => import("@/modules/analysis/fps/pages/FpsAnalysisPage");
+const loadFpsCalculationPercentagesPage = () => import("@/modules/calculation-percentages/pages/FpsCalculationPercentagesPage");
+const loadFunctionsPage = () => import("@/modules/functions/pages/FunctionsPage");
+const loadGroupsPage = () => import("@/modules/groups/pages/GroupsPage");
+const loadInputRequestsPage = () => import("@/modules/input-requests/pages/InputRequestsPage");
+const loadInputsPage = () => import("@/modules/inputs/pages/InputsPage");
+const loadInputTypesPage = () => import("@/modules/input-types/pages/InputTypesPage");
+const loadItemsPage = () => import("@/modules/items/pages/ItemsPage");
+const loadManageInputRequestsPage = () => import("@/modules/input-requests/pages/ManageInputRequestsPage");
+const loadModulesPage = () => import("@/modules/modules/pages/ModulesPage");
+const loadNewProjectPage = () => import("@/modules/projects/pages/NewProjectPage");
+const loadObrasAnalysisPage = () => import("@/modules/analysis/obras/pages/ObrasAnalysisPage");
+const loadObrasCalculationPercentagesPage = () => import("@/modules/calculation-percentages/pages/ObrasCalculationPercentagesPage");
+const loadPriceRecalculationPage = () => import("@/modules/analysis/pages/PriceRecalculationPage");
+const loadProjectItemsPage = () => import("@/modules/projects/pages/ProjectItemsPage");
+const loadProjectTemplatesPage = () => import("@/modules/projects/pages/ProjectTemplatesPage");
+const loadProjectsPage = () => import("@/modules/projects/pages/ProjectsPage");
+const loadPromanAnalysisPage = () => import("@/modules/analysis/proman/pages/PromanAnalysisPage");
+const loadPromanCalculationPercentagesPage = () => import("@/modules/calculation-percentages/pages/PromanCalculationPercentagesPage");
+const loadRolesPage = () => import("@/modules/roles/pages/RolesPage");
+const loadSubgroupsPage = () => import("@/modules/groups/pages/SubgroupsPage");
+const loadUnitMeasuresPage = () => import("@/modules/input-types/pages/UnitMeasuresPage");
+const loadUpreAnalysisPage = () => import("@/modules/analysis/upre/pages/UpreAnalysisPage");
+const loadUpreCalculationPercentagesPage = () => import("@/modules/calculation-percentages/pages/UpreCalculationPercentagesPage");
+const loadUsersPage = () => import("@/modules/users/pages/UsersPage");
+
+const AuditsPage = lazy(loadAuditsPage);
+const AuthorizationsPage = lazy(loadAuthorizationsPage);
+const CalculationPercentagesPage = lazy(loadCalculationPercentagesPage);
+const ChangePasswordPage = lazy(loadChangePasswordPage);
+const CreateInputRequestPage = lazy(loadCreateInputRequestPage);
+const DashboardPage = lazy(loadDashboardPage);
+const EditInputRequestPage = lazy(loadEditInputRequestPage);
+const EditProjectPage = lazy(loadEditProjectPage);
+const FndrAnalysisPage = lazy(loadFndrAnalysisPage);
+const FndrCalculationPercentagesPage = lazy(loadFndrCalculationPercentagesPage);
+const FpsAnalysisPage = lazy(loadFpsAnalysisPage);
+const FpsCalculationPercentagesPage = lazy(loadFpsCalculationPercentagesPage);
+const FunctionsPage = lazy(loadFunctionsPage);
+const GroupsPage = lazy(loadGroupsPage);
+const InputRequestsPage = lazy(loadInputRequestsPage);
+const InputsPage = lazy(loadInputsPage);
+const InputTypesPage = lazy(loadInputTypesPage);
+const ItemsPage = lazy(loadItemsPage);
+const ManageInputRequestsPage = lazy(loadManageInputRequestsPage);
+const ModulesPage = lazy(loadModulesPage);
+const NewProjectPage = lazy(loadNewProjectPage);
+const ObrasAnalysisPage = lazy(loadObrasAnalysisPage);
+const ObrasCalculationPercentagesPage = lazy(loadObrasCalculationPercentagesPage);
+const PriceRecalculationPage = lazy(loadPriceRecalculationPage);
+const ProjectItemsPage = lazy(loadProjectItemsPage);
+const ProjectTemplatesPage = lazy(loadProjectTemplatesPage);
+const ProjectsPage = lazy(loadProjectsPage);
+const PromanAnalysisPage = lazy(loadPromanAnalysisPage);
+const PromanCalculationPercentagesPage = lazy(loadPromanCalculationPercentagesPage);
+const RolesPage = lazy(loadRolesPage);
+const SubgroupsPage = lazy(loadSubgroupsPage);
+const UnitMeasuresPage = lazy(loadUnitMeasuresPage);
+const UpreAnalysisPage = lazy(loadUpreAnalysisPage);
+const UpreCalculationPercentagesPage = lazy(loadUpreCalculationPercentagesPage);
+const UsersPage = lazy(loadUsersPage);
+
+export function prefetchFrequentRoutes() {
+  void Promise.allSettled([
+    loadDashboardPage(),
+    loadProjectsPage(),
+    loadItemsPage(),
+    loadInputsPage(),
+  ]);
+}
+
+function routeElement(element) {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Cargando...</div>}>
+      {element}
+    </Suspense>
+  );
+}
 
 function placeholder(title, description, section, accent) {
   return (
@@ -68,71 +124,71 @@ export const router = createBrowserRouter([
         children: [
           {
             path: "/dashboard",
-            element: <DashboardPage />,
+            element: routeElement(<DashboardPage />),
           },
           {
             path: "/items",
-            element: <ItemsPage />,
+            element: routeElement(<ItemsPage />),
           },
           {
             path: "/analisis/fndr",
-            element: <FndrAnalysisPage />,
+            element: routeElement(<FndrAnalysisPage />),
           },
           {
             path: "/analisis/upre",
-            element: <UpreAnalysisPage />,
+            element: routeElement(<UpreAnalysisPage />),
           },
           {
             path: "/analisis/fps",
-            element: <FpsAnalysisPage />,
+            element: routeElement(<FpsAnalysisPage />),
           },
           {
             path: "/analisis/obras-publicas",
-            element: <ObrasAnalysisPage />,
+            element: routeElement(<ObrasAnalysisPage />),
           },
           {
             path: "/analisis/proman",
-            element: <PromanAnalysisPage />,
+            element: routeElement(<PromanAnalysisPage />),
           },
           {
             path: "/items/:itemId/recalculate",
-            element: <PriceRecalculationPage />,
+            element: routeElement(<PriceRecalculationPage />),
           },
           {
             path: "/Insumo",
-            element: <InputsPage />,
+            element: routeElement(<InputsPage />),
           },
           {
             path: "/Listar Solicitud de Insumo",
-            element: <InputRequestsPage />,
+            element: routeElement(<InputRequestsPage />),
           },
           {
             path: "/Crear Solicitud Insumo",
-            element: <CreateInputRequestPage />,
+            element: routeElement(<CreateInputRequestPage />),
           },
           {
             path: "/Listar Solicitud de Insumo/:requestId/editar",
-            element: <EditInputRequestPage />,
+            element: routeElement(<EditInputRequestPage />),
           },
           {
             path: "/Gestionar Solicitud",
-            element: <ManageInputRequestsPage />,
+            element: routeElement(<ManageInputRequestsPage />),
           },
           {
             path: "/Proyecto",
-            element: <ProjectsPage />,
+            element: routeElement(<ProjectsPage />),
           },
           {
             path: "/Nuevo proyecto",
-            element: <NewProjectPage />,
+            element: routeElement(<NewProjectPage />),
           },
           {
             path: "/Proyecto/:projectId/editar",
-            element: <EditProjectPage />,
+            element: routeElement(<EditProjectPage />),
           },
           {
             path: "/Proyecto/:projectId/items",
-            element: <ProjectItemsPage />,
+            element: routeElement(<ProjectItemsPage />),
           },
           {
             path: "/parametros",
@@ -140,123 +196,123 @@ export const router = createBrowserRouter([
           },
           {
             path: "/parametros/fps",
-            element: <FpsCalculationPercentagesPage />,
+            element: routeElement(<FpsCalculationPercentagesPage />),
           },
           {
             path: "/parametros/upre",
-            element: <UpreCalculationPercentagesPage />,
+            element: routeElement(<UpreCalculationPercentagesPage />),
           },
           {
             path: "/parametros/fndr",
-            element: <FndrCalculationPercentagesPage />,
+            element: routeElement(<FndrCalculationPercentagesPage />),
           },
           {
             path: "/Grupos",
-            element: <GroupsPage />,
+            element: routeElement(<GroupsPage />),
           },
           {
             path: "/%25%20Calculo",
-            element: <CalculationPercentagesPage />,
+            element: routeElement(<CalculationPercentagesPage />),
           },
           {
             path: "/%2520Calculo",
-            element: <CalculationPercentagesPage />,
+            element: routeElement(<CalculationPercentagesPage />),
           },
           {
             path: "/% Calculo",
-            element: <CalculationPercentagesPage />,
+            element: routeElement(<CalculationPercentagesPage />),
           },
           {
             path: "/Calculo",
-            element: <CalculationPercentagesPage />,
+            element: routeElement(<CalculationPercentagesPage />),
           },
           {
             path: "/calculo",
-            element: <CalculationPercentagesPage />,
+            element: routeElement(<CalculationPercentagesPage />),
           },
           {
             path: "/Sub grupos",
-            element: <SubgroupsPage />,
+            element: routeElement(<SubgroupsPage />),
           },
           {
             path: "/Modulos",
-            element: <ModulesPage />,
+            element: routeElement(<ModulesPage />),
           },
           {
             path: "/Planillas Proyecto",
-            element: <ProjectTemplatesPage />,
+            element: routeElement(<ProjectTemplatesPage />),
           },
           {
             path: "/parametros-calculo",
-            element: <CalculationPercentagesPage />,
+            element: routeElement(<CalculationPercentagesPage />),
           },
           {
             path: "/parametros/proman",
-            element: <PromanCalculationPercentagesPage />,
+            element: routeElement(<PromanCalculationPercentagesPage />),
           },
           {
             path: "/parametros/obras-publicas",
-            element: <ObrasCalculationPercentagesPage />,
+            element: routeElement(<ObrasCalculationPercentagesPage />),
           },
           {
             path: "/Parametros Porcentajes Proman",
-            element: <PromanCalculationPercentagesPage />,
+            element: routeElement(<PromanCalculationPercentagesPage />),
           },
           {
             path: "/%25%20Calculo%20UPRE",
-            element: <UpreCalculationPercentagesPage />,
+            element: routeElement(<UpreCalculationPercentagesPage />),
           },
           {
             path: "/% Calculo UPRE",
-            element: <UpreCalculationPercentagesPage />,
+            element: routeElement(<UpreCalculationPercentagesPage />),
           },
           {
             path: "/Parametros Porcentajes Upre",
-            element: <UpreCalculationPercentagesPage />,
+            element: routeElement(<UpreCalculationPercentagesPage />),
           },
           {
             path: "/%25%20Calculo%20FPS",
-            element: <FpsCalculationPercentagesPage />,
+            element: routeElement(<FpsCalculationPercentagesPage />),
           },
           {
             path: "/% Calculo FPS",
-            element: <FpsCalculationPercentagesPage />,
+            element: routeElement(<FpsCalculationPercentagesPage />),
           },
           {
             path: "/Parametros Porcentajes Fps",
-            element: <FpsCalculationPercentagesPage />,
+            element: routeElement(<FpsCalculationPercentagesPage />),
           },
           {
             path: "/%25%20Calculo%20FNDR",
-            element: <FndrCalculationPercentagesPage />,
+            element: routeElement(<FndrCalculationPercentagesPage />),
           },
           {
             path: "/% Calculo FNDR",
-            element: <FndrCalculationPercentagesPage />,
+            element: routeElement(<FndrCalculationPercentagesPage />),
           },
           {
             path: "/Parametros Porcentajes Fndr",
-            element: <FndrCalculationPercentagesPage />,
+            element: routeElement(<FndrCalculationPercentagesPage />),
           },
           {
             path: "/%25%20OBRAS%20PUBLICAS",
-            element: <ObrasCalculationPercentagesPage />,
+            element: routeElement(<ObrasCalculationPercentagesPage />),
           },
           {
             path: "/% OBRAS PUBLICAS",
-            element: <ObrasCalculationPercentagesPage />,
+            element: routeElement(<ObrasCalculationPercentagesPage />),
           },
           {
             path: "/Parametros Porcentajes Obras Publicas",
-            element: <ObrasCalculationPercentagesPage />,
+            element: routeElement(<ObrasCalculationPercentagesPage />),
           },
           {
             path: "/Tipo de Insumo",
-            element: <InputTypesPage />,
+            element: routeElement(<InputTypesPage />),
           },
           {
             path: "/Unidad de Medida",
-            element: <UnitMeasuresPage />,
+            element: routeElement(<UnitMeasuresPage />),
           },
           {
             path: "/administracion",
@@ -280,23 +336,23 @@ export const router = createBrowserRouter([
           },
           {
             path: "/administracion/usuarios",
-            element: <UsersPage />,
+            element: routeElement(<UsersPage />),
           },
           {
             path: "/administracion/funciones",
-            element: <FunctionsPage />,
+            element: routeElement(<FunctionsPage />),
           },
           {
             path: "/administracion/roles",
-            element: <RolesPage />,
+            element: routeElement(<RolesPage />),
           },
           {
             path: "/administracion/autorizaciones",
-            element: <AuthorizationsPage />,
+            element: routeElement(<AuthorizationsPage />),
           },
           {
             path: "/administracion/auditoria",
-            element: <AuditsPage />,
+            element: routeElement(<AuditsPage />),
           },
           {
             path: "/perfil",
@@ -304,7 +360,7 @@ export const router = createBrowserRouter([
           },
           {
             path: "/perfil/password",
-            element: <ChangePasswordPage />,
+            element: routeElement(<ChangePasswordPage />),
           },
         ],
       },

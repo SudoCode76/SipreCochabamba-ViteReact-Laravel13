@@ -70,7 +70,7 @@ export default function FpsAnalysisPage() {
       if (variables.reportWindow) {
         variables.reportWindow.location.replace(blobUrl);
       } else {
-        const fallbackWindow = window.open(blobUrl, "_blank");
+        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
         if (!fallbackWindow) {
           window.location.assign(blobUrl);
         }
@@ -100,11 +100,11 @@ export default function FpsAnalysisPage() {
   const handleSubmitRecalculate = (e) => {
     e.preventDefault();
 
-    const reportWindow = window.open("", "_blank");
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
 
     if (reportWindow) {
       reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando recalculo de precios unitarios FPS...</p>";
+      reportWindow.document.body.textContent = "Generando recalculo de precios unitarios FPS...";
     }
 
     recalculateMutation.mutate({
@@ -151,11 +151,11 @@ export default function FpsAnalysisPage() {
     setReportFeedback(null);
     setReportLoadingItemId(item.id_item);
 
-    const reportWindow = window.open("", "_blank");
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
 
     if (reportWindow) {
       reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.innerHTML = "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Generando analisis de precios unitarios FPS...</p>";
+      reportWindow.document.body.textContent = "Generando analisis de precios unitarios FPS...";
     }
 
     try {
@@ -178,7 +178,7 @@ export default function FpsAnalysisPage() {
       if (reportWindow) {
         reportWindow.location.replace(blobUrl);
       } else {
-        const fallbackWindow = window.open(blobUrl, "_blank");
+        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
         if (!fallbackWindow) {
           window.location.assign(blobUrl);
         }

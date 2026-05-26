@@ -42,9 +42,9 @@ class UpdateInputSolicitationRequest extends FormRequest
             'notification' => ['nullable', 'string', 'max:255'],
             'date' => ['nullable', 'date'],
             'adj' => ['nullable', 'string', 'in:SI,NO'],
-            'valido' => ['nullable', 'file', 'max:10240'],
-            'propuesto_1' => ['nullable', 'file', 'max:10240'],
-            'propuesto_2' => ['nullable', 'file', 'max:10240'],
+            'valido' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+            'propuesto_1' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+            'propuesto_2' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
         ];
     }
 }

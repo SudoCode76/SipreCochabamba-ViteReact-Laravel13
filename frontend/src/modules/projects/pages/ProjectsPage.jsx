@@ -473,10 +473,10 @@ export default function ProjectsPage() {
 
     setRecalculateStatus(null);
     setRecalculatePending(true);
-    const popup = window.open("", "_blank");
+    const popup = window.open("", "_blank", "noopener,noreferrer");
 
     if (popup) {
-      popup.document.write("<p>Generando PDF...</p>");
+      popup.document.body.textContent = "Generando PDF...";
     }
 
     try {
@@ -491,7 +491,7 @@ export default function ProjectsPage() {
       if (popup) {
         popup.location.href = url;
       } else {
-        window.open(url, "_blank");
+        window.open(url, "_blank", "noopener,noreferrer");
       }
 
       closeRecalculate();
@@ -513,10 +513,10 @@ export default function ProjectsPage() {
 
   const handleOpenBudgetByGroupPdf = async (project) => {
     setFeedback(null);
-    const popup = window.open("", "_blank");
+    const popup = window.open("", "_blank", "noopener,noreferrer");
 
     if (popup) {
-      popup.document.write("<p>Generando PDF...</p>");
+      popup.document.body.textContent = "Generando PDF...";
     }
 
     try {
@@ -531,7 +531,7 @@ export default function ProjectsPage() {
       if (popup) {
         popup.location.href = url;
       } else {
-        window.open(url, "_blank");
+        window.open(url, "_blank", "noopener,noreferrer");
       }
     } catch (pdfError) {
       if (popup) {
@@ -547,10 +547,10 @@ export default function ProjectsPage() {
 
   const handleOpenInputsReportPdf = async (project) => {
     setFeedback(null);
-    const popup = window.open("", "_blank");
+    const popup = window.open("", "_blank", "noopener,noreferrer");
 
     if (popup) {
-      popup.document.write("<p>Generando PDF...</p>");
+      popup.document.body.textContent = "Generando PDF...";
     }
 
     try {
@@ -565,7 +565,7 @@ export default function ProjectsPage() {
       if (popup) {
         popup.location.href = url;
       } else {
-        window.open(url, "_blank");
+        window.open(url, "_blank", "noopener,noreferrer");
       }
     } catch (pdfError) {
       if (popup) {
@@ -601,10 +601,10 @@ export default function ProjectsPage() {
     }
 
     setIncidenceStatus(null);
-    const popup = window.open("", "_blank");
+    const popup = window.open("", "_blank", "noopener,noreferrer");
 
     if (popup) {
-      popup.document.write("<p>Generando PDF...</p>");
+      popup.document.body.textContent = "Generando PDF...";
     }
 
     try {
@@ -619,7 +619,7 @@ export default function ProjectsPage() {
       if (popup) {
         popup.location.href = url;
       } else {
-        window.open(url, "_blank");
+        window.open(url, "_blank", "noopener,noreferrer");
       }
 
       closeIncidenceSummary();
@@ -657,10 +657,10 @@ export default function ProjectsPage() {
     }
 
     setGeneralBudgetStatus(null);
-    const popup = window.open("", "_blank");
+    const popup = window.open("", "_blank", "noopener,noreferrer");
 
     if (popup) {
-      popup.document.write("<p>Generando PDF...</p>");
+      popup.document.body.textContent = "Generando PDF...";
     }
 
     try {
@@ -675,7 +675,7 @@ export default function ProjectsPage() {
       if (popup) {
         popup.location.href = url;
       } else {
-        window.open(url, "_blank");
+        window.open(url, "_blank", "noopener,noreferrer");
       }
 
       closeGeneralBudget();
@@ -713,10 +713,10 @@ export default function ProjectsPage() {
     }
 
     setInputBreakdownStatus(null);
-    const popup = window.open("", "_blank");
+    const popup = window.open("", "_blank", "noopener,noreferrer");
 
     if (popup) {
-      popup.document.write("<p>Generando PDF...</p>");
+      popup.document.body.textContent = "Generando PDF...";
     }
 
     try {
@@ -731,7 +731,7 @@ export default function ProjectsPage() {
       if (popup) {
         popup.location.href = url;
       } else {
-        window.open(url, "_blank");
+        window.open(url, "_blank", "noopener,noreferrer");
       }
 
       closeInputBreakdown();

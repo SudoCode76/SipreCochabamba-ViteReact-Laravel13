@@ -17,7 +17,7 @@ import proj4 from "proj4";
 
 import { Button } from "@/components/ui/button";
 
-const GIS_BASE_URL = "http://192.168.105.219:6080/arcgis/services";
+const GIS_BASE_URL = import.meta.env.VITE_GIS_BASE_URL || "";
 const PROJECTION_CODE = "EPSG:32719";
 const LEGACY_BOUNDS = [
   788396.9511477941,

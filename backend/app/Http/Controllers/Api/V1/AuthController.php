@@ -11,6 +11,8 @@ use App\Services\AuditService;
 use App\Services\Auth\LegacyPasswordService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -57,18 +59,28 @@ class AuthController extends Controller
         $permissions = $user->activePermissions()->get();
         $user->setRelation('permissions', $permissions);
 
-        $token = $user->createToken($this->resolveDeviceName($request))->plainTextToken;
+        $hasSession = $request->hasSession();
+
+        if ($hasSession) {
+            Auth::guard('web')->login($user);
+            $request->session()->regenerate();
+        }
 
         $this->registerAudit($user, $request, 'Inicio de sesion exitoso');
+
+        $data = [
+            'user' => new AuthenticatedUserResource($user),
+        ];
+
+        if (! $hasSession || $request->boolean('issue_token')) {
+            $data['token'] = $user->createToken($this->resolveDeviceName($request))->plainTextToken;
+            $data['token_type'] = 'Bearer';
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'Inicio de sesion realizado correctamente.',
-            'data' => [
-                'token' => $token,
-                'token_type' => 'Bearer',
-                'user' => new AuthenticatedUserResource($user),
-            ],
+            'data' => $data,
         ]);
     }
 
@@ -92,7 +104,17 @@ class AuthController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
-        $user->currentAccessToken()?->delete();
+        $currentAccessToken = $user->currentAccessToken();
+
+        if ($currentAccessToken && method_exists($currentAccessToken, 'delete')) {
+            $currentAccessToken->delete();
+        }
+
+        if ($request->hasSession()) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         $this->registerAudit($user, $request, 'Cierre de sesion');
 
@@ -100,7 +122,8 @@ class AuthController extends Controller
             'success' => true,
             'message' => 'Sesion cerrada correctamente.',
             'data' => null,
-        ]);
+        ])->withCookie(Cookie::forget((string) config('session.cookie')))
+            ->withCookie(Cookie::forget('XSRF-TOKEN'));
     }
 
     public function changePassword(ChangePasswordRequest $request): JsonResponse

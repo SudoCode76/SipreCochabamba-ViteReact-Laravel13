@@ -36,8 +36,8 @@ class UpdateItemRequest extends FormRequest
                 'item' => ['required', 'string', 'max:100'],
                 'specification' => ['nullable', 'string', 'max:200'],
                 'sheet' => ['nullable', 'string', 'max:200'],
-                'specification_file' => ['nullable', 'file', 'max:10240'],
-                'sheet_file' => ['nullable', 'file', 'max:10240'],
+                'specification_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+                'sheet_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
             ];
         }
 
@@ -54,8 +54,8 @@ class UpdateItemRequest extends FormRequest
             'status' => ['required', 'string', 'size:2', 'in:AC,DC'],
             'specification' => ['nullable', 'string', 'max:200'],
             'sheet' => ['nullable', 'string', 'max:200'],
-            'specification_file' => ['nullable', 'file', 'max:10240'],
-            'sheet_file' => ['nullable', 'file', 'max:10240'],
+            'specification_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+            'sheet_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
         ];
     }
 

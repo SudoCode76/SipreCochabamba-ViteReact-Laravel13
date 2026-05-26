@@ -9,6 +9,8 @@ use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
@@ -264,8 +266,11 @@ class GeneralAndObrasItemApiTest extends TestCase
             'id_usuario' => 2,
             'grupo' => 1,
             'subgrupo' => 1,
-            'fecha_item' => now()->toDateString(),
         ]);
+        $this->assertSame(
+            now()->toDateString(),
+            Carbon::parse(DB::table('item')->where('item', 'EXCAVACION COMUN')->value('fecha_item'))->toDateString(),
+        );
 
         $this->postJson('/api/v1/items', [
             'group_id' => 2,
