@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { formatDate } from "@/lib/utils";
 import { inputsService } from "@/modules/dashboard/services/inputs.service";
 
 const statusLabel = {
@@ -164,7 +165,7 @@ export default function DashboardPage() {
                             {row.type?.description ?? "-"}
                           </Badge>
                         </td>
-                        <td className="px-5 py-4 align-top text-muted-foreground">{row.quote_date ?? "-"}</td>
+                        <td className="px-5 py-4 align-top text-muted-foreground">{formatDate(row.quote_date)}</td>
                         <td className="px-5 py-4 align-top">
                           <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClass[row.status] || "bg-slate-500 text-white"}`}>
                             {statusLabel[row.status] || row.status}

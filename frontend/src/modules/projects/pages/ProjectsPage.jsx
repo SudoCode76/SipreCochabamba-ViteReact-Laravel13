@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { formatDate, formatDateTime } from "@/lib/utils";
 import ProjectEditForm from "../components/ProjectEditForm";
 import { projectService } from "../services/project.service";
 
@@ -45,17 +46,6 @@ const historyActionOptions = [
   { value: "template_created", label: "Planilla creada" },
   { value: "created_from_template", label: "Creado desde planilla" },
 ];
-
-const formatHistoryDate = (value) => {
-  if (!value) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("es-BO", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-};
 
 const hasMetadata = (metadata) => metadata && Object.keys(metadata).length > 0;
 
@@ -103,9 +93,15 @@ const historyStatusLabels = {
 
 const labelHistoryField = (field) => historyFieldLabels[field] || field.replaceAll("_", " ");
 
-const formatHistoryValue = (value) => {
+const formatHistoryValue = (field, value) => {
   if (value === null || value === undefined || value === "") {
     return "-";
+  }
+
+  const normalizedField = String(field).toLowerCase();
+
+  if (normalizedField.includes("fecha") || normalizedField.includes("date")) {
+    return formatDate(value);
   }
 
   const normalized = String(value);
@@ -124,7 +120,7 @@ const formatHistoryValue = (value) => {
 const metadataRow = (label, value) => (
   <div key={label} className="rounded-xl border border-border/70 bg-background px-3 py-2">
     <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
-    <div className="mt-1 text-sm text-foreground">{formatHistoryValue(value)}</div>
+    <div className="mt-1 text-sm text-foreground">{formatHistoryValue(label, value)}</div>
   </div>
 );
 
@@ -886,7 +882,7 @@ export default function ProjectsPage() {
                           <div className="truncate">{project.ubicacion}</div>
                         </td>
                         <td className="px-5 py-4 align-top text-muted-foreground">
-                          {project.fecha}
+                          {formatDate(project.fecha)}
                         </td>
                         <td className="px-5 py-4 align-top text-foreground">
                           {project.responsable_nombre || project.responsable}
@@ -1205,7 +1201,7 @@ export default function ProjectsPage() {
                             <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-white">
                               {historyActionLabels[entry.action] || entry.action}
                             </Badge>
-                            <span className="text-xs text-muted-foreground">{formatHistoryDate(entry.occurred_at)}</span>
+                            <span className="text-xs text-muted-foreground">{formatDateTime(entry.occurred_at)}</span>
                           </div>
                           <h3 className="mt-3 text-base font-semibold text-foreground">{entry.title}</h3>
                           <p className="mt-1 text-sm leading-6 text-muted-foreground">{entry.detail || "Sin detalle adicional."}</p>

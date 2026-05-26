@@ -31,7 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { authorizationsService } from "@/modules/authorizations/services/authorizations.service";
 
 const statusClassMap = {
@@ -390,7 +390,7 @@ export default function AuthorizationsPage() {
                       {authorizations.map((item, index) => (
                         <tr key={item.id} className={index < authorizations.length - 1 ? "border-b border-border/60" : ""}>
                           <td className="px-5 py-4 align-top text-foreground">{(meta.from || 1) + index}</td>
-                          <td className="px-5 py-4 align-top text-muted-foreground whitespace-nowrap">{item.date || "-"}</td>
+                          <td className="px-5 py-4 align-top text-muted-foreground whitespace-nowrap">{formatDate(item.date)}</td>
                           <td className="px-5 py-4 align-top text-foreground">{item.element}</td>
                           <td className="px-5 py-4 align-top text-muted-foreground uppercase">{item.module}</td>
                           <td className="px-5 py-4 align-top text-muted-foreground">{item.requester || "-"}</td>
@@ -453,7 +453,7 @@ export default function AuthorizationsPage() {
                         </Badge>
                       </div>
                       <div className="grid gap-2 text-sm text-muted-foreground">
-                        <p><span className="font-medium text-foreground">Fecha:</span> {item.date || "-"}</p>
+                        <p><span className="font-medium text-foreground">Fecha:</span> {formatDate(item.date)}</p>
                         <p><span className="font-medium text-foreground">Módulo:</span> {item.module}</p>
                         <p><span className="font-medium text-foreground">N° autorización:</span> {item.authorization_number || "-"}</p>
                       </div>

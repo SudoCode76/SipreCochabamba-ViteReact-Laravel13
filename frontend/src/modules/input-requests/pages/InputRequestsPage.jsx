@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import apiClient from "@/lib/api/client";
+import { formatDate } from "@/lib/utils";
 import { storageUrl } from "@/modules/input-requests/utils/storage-url";
 
 const approvalStatusClass = {
@@ -225,7 +226,7 @@ export default function InputRequestsPage() {
                           {item.nombre_tipo}
                         </td>
                         <td className="px-3 py-4 align-top text-muted-foreground">
-                          {item.fecha}
+                          {formatDate(item.fecha)}
                         </td>
                         <td className="px-3 py-4 align-top text-foreground max-w-[120px]">
                           <div className="truncate">{item.nombre_completo}</div>
@@ -421,7 +422,7 @@ export default function InputRequestsPage() {
                       return (
                         <tr key={quote.id_cotizacion} className={index < visibleQuoteHistory.length - 1 ? "border-b border-border/60" : ""}>
                           <td className="px-3 py-4 align-top text-muted-foreground">{quoteStartRecord + index}</td>
-                          <td className="px-3 py-4 align-top text-muted-foreground">{quote.fecha ?? "-"}</td>
+                          <td className="px-3 py-4 align-top text-muted-foreground">{formatDate(quote.fecha)}</td>
                           <td className="px-3 py-4 align-top">
                             {renderQuoteLink(quote, "archivo", getQuoteLabel(absoluteIndex, "propuesta oficial"))}
                           </td>

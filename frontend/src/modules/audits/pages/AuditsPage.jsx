@@ -7,17 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { auditsService } from "@/modules/audits/services/audits.service";
-
-function formatDateTime(value) {
-  if (!value) return "-";
-
-  return new Intl.DateTimeFormat("es-BO", {
-    dateStyle: "short",
-    timeStyle: "medium",
-  }).format(new Date(value));
-}
 
 export default function AuditsPage() {
   const [page, setPage] = useState(1);

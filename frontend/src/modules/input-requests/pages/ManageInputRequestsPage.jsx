@@ -30,7 +30,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authService } from "@/modules/auth/services/auth.service";
 import { manageInputRequestsService } from "@/modules/input-requests/services/manage-input-requests.service";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 
 const approvalStatusClass = {
   PD: "bg-amber-500 text-white",
@@ -456,7 +456,7 @@ export default function ManageInputRequestsPage() {
                           <td className="px-4 py-4 align-top text-foreground whitespace-pre-line">{item.descripcion || "-"}</td>
                           <td className="px-4 py-4 align-top text-muted-foreground">{item.precio ?? "-"}</td>
                           <td className="px-4 py-4 align-top text-muted-foreground">{item.nombre_unidad_medida || "-"}</td>
-                          <td className="px-4 py-4 align-top text-muted-foreground">{item.fecha || "-"}</td>
+                          <td className="px-4 py-4 align-top text-muted-foreground">{formatDate(item.fecha)}</td>
                           <td className="px-4 py-4 align-top">
                             <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${approvalStatusClass[item.approval_status] || "bg-slate-500 text-white"}`}>
                               {item.approval_status_label || item.estado_aprobacion || "-"}
@@ -525,7 +525,7 @@ export default function ManageInputRequestsPage() {
                       </div>
                       <div className="grid gap-2 text-sm text-muted-foreground">
                         <p><span className="font-medium text-foreground">Precio:</span> {item.precio ?? "-"}</p>
-                        <p><span className="font-medium text-foreground">Fecha:</span> {item.fecha || "-"}</p>
+                        <p><span className="font-medium text-foreground">Fecha:</span> {formatDate(item.fecha)}</p>
                         <p><span className="font-medium text-foreground">Solicitante:</span> {item.nombre_completo || "-"}</p>
                         <p><span className="font-medium text-foreground">Ubicación:</span> {item.ubicacion || "-"}</p>
                         <p><span className="font-medium text-foreground">Justificación:</span> {item.justificacion || "-"}</p>

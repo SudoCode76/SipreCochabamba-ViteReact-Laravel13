@@ -131,9 +131,7 @@ export default function MainLayout() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 rounded-2xl border-border/70 bg-background/95 p-2 shadow-xl backdrop-blur-xl">
                 <DropdownMenuLabel className="px-2 py-2">
-                  <p className="text-sm font-medium text-foreground">{user?.username || "Usuario"}</p>
-                  <p className="text-xs text-muted-foreground">{user?.email || "Sin correo"}</p>
-                </DropdownMenuLabel>
+                  <p className="text-sm font-medium text-foreground">{user?.username || "Usuario"}</p>                </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-border/70" />
                 <DropdownMenuItem asChild className="rounded-xl px-3 py-2 cursor-pointer">
                   <Link to="/perfil/password">

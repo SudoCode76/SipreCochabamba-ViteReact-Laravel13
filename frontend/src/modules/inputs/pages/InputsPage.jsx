@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { inputsService } from "@/modules/inputs/services/inputs.service";
 import apiClient from "@/lib/api/client";
+import { formatDate, formatDateTime } from "@/lib/utils";
 
 const statusClass = {
   AC: "bg-emerald-600 text-white",
@@ -59,23 +60,6 @@ const getInputStatusBadge = (item) => {
 const getHistoryActionLabel = (action) => actionLabels[String(action ?? "").toUpperCase()] || action || "Movimiento de insumo";
 
 const getHistoryStatusLabel = (status) => statusLabels[String(status ?? "").toUpperCase()] || status || "-";
-
-const formatHistoryDate = (value) => {
-  if (!value) {
-    return "-";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("es-BO", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-};
 
 const formatMoney = (value) => {
   const number = Number(value);
@@ -682,7 +666,7 @@ export default function InputsPage() {
                           {item.abreviatura}
                         </td>
                         <td className="px-5 py-4 align-top text-muted-foreground">
-                          {item.fecha_cotiz}
+                          {formatDate(item.fecha_cotiz)}
                         </td>
                         <td className="px-5 py-4 align-top">
                           <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${getInputStatusBadge(item).className}`}>
@@ -1409,7 +1393,7 @@ export default function InputsPage() {
                         )}
                         {!inputHistoryLoading && !inputHistoryIsError && inputHistoryItems.map((history) => (
                           <tr key={history.id_historial ?? history.id} className="border-b border-border/60 last:border-b-0">
-                            <td className="px-5 py-4 align-top text-muted-foreground">{formatHistoryDate(history.fecha ?? history.performed_at)}</td>
+                            <td className="px-5 py-4 align-top text-muted-foreground">{formatDateTime(history.fecha ?? history.performed_at)}</td>
                             <td className="px-5 py-4 align-top text-foreground">{getHistoryActionLabel(history.accion ?? history.action)}</td>
                             <td className="px-5 py-4 align-top text-muted-foreground">{history.nombre_usuario ?? history.user?.full_name ?? history.usuario ?? "-"}</td>
                             <td className="px-5 py-4 align-top text-foreground">{formatMoney(history.precio ?? history.price)}</td>
@@ -1529,7 +1513,7 @@ export default function InputsPage() {
                         {!quoteHistoryLoading && visibleQuoteHistory.map((quote, index) => (
                           <tr key={quote.id_cotizacion} className={index < visibleQuoteHistory.length - 1 ? "border-b border-border/60" : ""}>
                             <td className="px-5 py-4 align-top text-foreground">{index + 1}</td>
-                            <td className="px-5 py-4 align-top text-muted-foreground">{quote.fecha ?? "-"}</td>
+                            <td className="px-5 py-4 align-top text-muted-foreground">{formatDate(quote.fecha)}</td>
                             <td className="px-5 py-4 align-top">
                               {renderQuoteFile(quote, "archivo")}
                             </td>
