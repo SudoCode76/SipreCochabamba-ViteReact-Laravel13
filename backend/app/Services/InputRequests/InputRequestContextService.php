@@ -15,7 +15,7 @@ class InputRequestContextService
     {
         $canView = $this->permissions->allows($user, ['SOLICITUD', 'NUEVA_SOLICITUD', 'INPUT_QUOTES', 'SOLICITUD_INSUMO', 'LISTAR_SOLICITUD_INSUMO']);
         $canCreate = $this->permissions->allows($user, ['NUEVA_SOLICITUD', 'CREAR_SOLICITUD_INSUMO']);
-        $canManage = $this->permissions->allows($user, ['SOLICITUD', 'GESTIONAR_SOLICITUD_INSUMO']);
+        $canManage = $this->permissions->allows($user, ['GESTIONAR_SOLICITUD_INSUMO']);
 
         return [
             'types' => InputType::query()

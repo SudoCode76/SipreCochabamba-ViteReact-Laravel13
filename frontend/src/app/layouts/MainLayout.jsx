@@ -54,9 +54,6 @@ export default function MainLayout() {
               <p className="truncate text-sm font-semibold uppercase tracking-[0.22em] text-foreground">
                 SIPRE
               </p>
-              <p className="truncate text-xs text-muted-foreground">
-                Sistema de Proyectos e Insumos
-              </p>
             </div>
           </Link>
 

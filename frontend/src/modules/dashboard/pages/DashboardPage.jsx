@@ -35,7 +35,7 @@ export default function DashboardPage() {
   const [page, setPage] = useState(1);
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["inputs", { page, perPage, description }],
+    queryKey: ["dashboard-inputs", { page, perPage, description }],
     queryFn: () => inputsService.list({ page, perPage, description }),
     keepPreviousData: true,
   });
