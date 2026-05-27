@@ -760,7 +760,7 @@ export default function ProjectsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className="border border-border/70 bg-white/86 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
+      <Card className="min-w-0 border border-border/70 bg-white/86 shadow-[0_24px_90px_rgba(15,23,42,0.08)]">
         <CardHeader className="gap-4 border-b border-border/70 bg-muted/25">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
@@ -774,7 +774,7 @@ export default function ProjectsPage() {
           </div>
         </CardHeader>
 
-        <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
+        <CardContent className="flex min-w-0 flex-col gap-6 p-5 sm:p-6">
           {feedback && (
             <Alert variant={feedback.type === "error" ? "destructive" : "default"} className="rounded-2xl">
               <AlertDescription>{feedback.message}</AlertDescription>
@@ -843,67 +843,83 @@ export default function ProjectsPage() {
           )}
 
           {!isLoading && !isError && (
-            <div className="overflow-hidden rounded-[28px] border border-border/70 bg-background/90">
+            <div className="max-w-full overflow-hidden rounded-[28px] border border-border/70 bg-background/90">
               {isFetching && (
                 <div className="border-b border-border/70 bg-muted/20 px-5 py-2 text-xs text-muted-foreground">
                   Buscando proyectos...
                 </div>
               )}
-              <div className="overflow-x-auto overflow-y-hidden">
-                <table className="min-w-full border-collapse text-sm">
+              <div className="max-w-full overflow-x-auto overflow-y-hidden">
+                <table className="w-full table-fixed border-collapse text-[13px]">
+                  <colgroup>
+                    <col className="w-[4%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[6%]" />
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-border/70 bg-muted/30 text-left">
-                      <th className="px-5 py-4 font-semibold text-foreground">N°</th>
-                      <th className="px-5 py-4 font-semibold text-foreground">Proyecto</th>
-                      <th className="px-5 py-4 font-semibold text-foreground">Ubicación</th>
-                      <th className="px-5 py-4 font-semibold text-foreground">Fecha</th>
-                      <th className="px-5 py-4 font-semibold text-foreground">Responsable</th>
-                      <th className="px-5 py-4 font-semibold text-foreground">Solicitante</th>
-                      <th className="px-5 py-4 font-semibold text-foreground">Condición</th>
-                      <th className="px-5 py-4 font-semibold text-foreground">Observación</th>
-                      <th className="px-5 py-4 font-semibold text-foreground">Estado</th>
-                      <th className="px-5 py-4 font-semibold text-foreground text-center">Opciones</th>
+                      <th className="whitespace-nowrap px-2 py-3 font-semibold text-foreground">N°</th>
+                      <th className="px-2 py-3 font-semibold text-foreground">Proyecto</th>
+                      <th className="px-2 py-3 font-semibold text-foreground">Ubicación</th>
+                      <th className="whitespace-nowrap px-2 py-3 font-semibold text-foreground">Fecha</th>
+                      <th className="px-2 py-3 font-semibold text-foreground">Responsable</th>
+                      <th className="px-2 py-3 font-semibold text-foreground">Solicitante</th>
+                      <th className="whitespace-nowrap px-2 py-3 font-semibold text-foreground">Condición</th>
+                      <th className="px-2 py-3 font-semibold text-foreground">Observación</th>
+                      <th className="whitespace-nowrap px-2 py-3 font-semibold text-foreground">Estado</th>
+                      <th className="whitespace-nowrap px-2 py-3 text-center font-semibold text-foreground">Opc.</th>
                     </tr>
                   </thead>
                   <tbody>
                     {projects.map((project, index) => (
                       <tr key={project.id_proyecto} className={index < projects.length - 1 ? "border-b border-border/60" : ""}>
-                        <td className="px-5 py-4 align-top text-foreground">
+                        <td className="whitespace-nowrap px-2 py-3 align-top text-foreground">
                           {index + 1}
                         </td>
-                        <td className="px-5 py-4 align-top text-foreground max-w-[250px]">
-                          <div className="leading-7 whitespace-normal break-words">
+                        <td className="px-2 py-3 align-top text-foreground">
+                          <div className="line-clamp-3 whitespace-normal break-words leading-6" title={project.nombre_proyecto || ""}>
                             {formatProjectNameLines(project.nombre_proyecto).map((line, lineIndex) => (
                               <div key={`${project.id_proyecto}-name-line-${lineIndex}`}>{line}</div>
                             ))}
                           </div>
                         </td>
-                        <td className="px-5 py-4 align-top text-muted-foreground max-w-[180px]">
-                          <div className="truncate">{project.ubicacion}</div>
+                        <td className="px-2 py-3 align-top text-muted-foreground">
+                          <div className="truncate" title={project.ubicacion || ""}>{project.ubicacion}</div>
                         </td>
-                        <td className="px-5 py-4 align-top text-muted-foreground">
+                        <td className="whitespace-nowrap px-2 py-3 align-top text-muted-foreground">
                           {formatDate(project.fecha)}
                         </td>
-                        <td className="px-5 py-4 align-top text-foreground">
-                          {project.responsable_nombre || project.responsable}
+                        <td className="px-2 py-3 align-top text-foreground">
+                          <div className="truncate" title={String(project.responsable_nombre || project.responsable || "")}>
+                            {project.responsable_nombre || project.responsable}
+                          </div>
                         </td>
-                        <td className="px-5 py-4 align-top text-foreground">
-                          {project.solicitante_nombre || project.solicitante}
+                        <td className="px-2 py-3 align-top text-foreground">
+                          <div className="line-clamp-3 whitespace-normal break-words leading-5" title={String(project.solicitante_nombre || project.solicitante || "")}>
+                            {project.solicitante_nombre || project.solicitante}
+                          </div>
                         </td>
-                        <td className="px-5 py-4 align-top">
-                          <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${approvalClass[project.aprobado] || "bg-slate-500 text-white"}`}>
+                        <td className="whitespace-nowrap px-2 py-3 align-top">
+                          <Badge className={`rounded-full px-2 py-1 text-[10px] uppercase tracking-[0.08em] ${approvalClass[project.aprobado] || "bg-slate-500 text-white"}`}>
                             {project.aprobado === "PD" ? "PENDIENTE" : project.aprobado === "RV" ? "REVISADO" : "APROBADO"}
                           </Badge>
                         </td>
-                        <td className="px-5 py-4 align-top text-muted-foreground max-w-[150px]">
-                          <div className="truncate">{project.observaciones || "-"}</div>
+                        <td className="px-2 py-3 align-top text-muted-foreground">
+                          <div className="truncate" title={project.observaciones || "-"}>{project.observaciones || "-"}</div>
                         </td>
-                        <td className="px-5 py-4 align-top">
-                          <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClass[project.estado] || "bg-slate-500 text-white"}`}>
+                        <td className="whitespace-nowrap px-2 py-3 align-top">
+                          <Badge className={`rounded-full px-2 py-1 text-[10px] uppercase tracking-[0.08em] ${statusClass[project.estado] || "bg-slate-500 text-white"}`}>
                             {project.estado === "AC" ? "ACTIVO" : "INACTIVO"}
                           </Badge>
                         </td>
-                        <td className="px-5 py-4 align-top text-center">
+                        <td className="whitespace-nowrap px-2 py-3 text-center align-top">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full">
