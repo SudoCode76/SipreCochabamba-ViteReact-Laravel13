@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, KeyRound } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { authService } from "../services/auth.service";
@@ -85,17 +85,21 @@ export default function LoginPage() {
 
       <div className="relative z-10 w-full max-w-[620px]">
         <Card className="border border-border/70 bg-white/88 shadow-[0_30px_120px_rgba(15,23,42,0.1)] backdrop-blur">
-          <CardHeader className="gap-4 px-8 pt-8 sm:px-10 sm:pt-10">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <CardTitle className="text-3xl tracking-[-0.05em] text-foreground">Iniciar sesión</CardTitle>
-                <CardDescription className="mt-2 max-w-sm text-sm leading-6">
-                  Accede al sistema con una interfaz más clara y enfocada en productividad.
-                </CardDescription>
-              </div>
-              <div className="flex size-12 items-center justify-center rounded-[18px] bg-foreground text-background">
-                <KeyRound className="size-5" />
-              </div>
+          <CardHeader className="gap-5 px-8 pt-8 text-center sm:px-10 sm:pt-10">
+            <div className="flex justify-center">
+              <img
+                src="/img/logo-dark.png"
+                alt="SIPRE"
+                width={780}
+                height={300}
+                className="h-auto w-full max-w-[260px] object-contain"
+              />
+            </div>
+            <div>
+              <CardTitle className="text-3xl tracking-[-0.05em] text-foreground">Iniciar sesión</CardTitle>
+              <CardDescription className="mx-auto mt-2 max-w-sm text-sm leading-6">
+                Accede al sistema con una interfaz más clara y enfocada en productividad.
+              </CardDescription>
             </div>
           </CardHeader>
 

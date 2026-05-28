@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { openPdfViewer } from "@/lib/utils/pdf";
 import { itemsService } from "@/modules/dashboard/services/items.service";
 import {
   DropdownMenu,
@@ -373,14 +374,6 @@ export default function ItemsPage() {
     },
   });
 
-  const breakdownMutation = useMutation({
-    mutationFn: itemsService.recalculateBreakdowns,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["items"] });
-      closeBreakdown();
-    },
-  });
-
   const items = data?.data?.items ?? [];
   const context = contextData?.data ?? {};
   const groups = context.groups ?? [];
@@ -443,45 +436,12 @@ export default function ItemsPage() {
     setReportFeedback(null);
     setReportLoadingItemId(item.id_item);
 
-    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
-
-    if (reportWindow) {
-      reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.textContent = "Generando analisis de precios unitarios...";
-    }
-
     try {
-      const pdfResponse = await itemsService.downloadLegacyUnitPriceAnalysisPdf(item.id_item);
-      const pdfBlob = pdfResponse instanceof Blob
-        ? pdfResponse
-        : new Blob([pdfResponse], { type: "application/pdf" });
-
-      if (pdfBlob.size === 0) {
-        throw new Error("El PDF se recibio vacio.");
-      }
-
-      const contentType = String(pdfBlob.type || "").toLowerCase();
-      if (contentType && !contentType.includes("pdf")) {
-        throw new Error("La respuesta no corresponde a un PDF valido.");
-      }
-
-      const blobUrl = URL.createObjectURL(pdfBlob);
-
-      if (reportWindow) {
-        reportWindow.location.replace(blobUrl);
-      } else {
-        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
-        if (!fallbackWindow) {
-          window.location.href = blobUrl;
-        }
-      }
-
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      openPdfViewer(itemsService.legacyUnitPriceAnalysisPdfUrl(item.id_item), {
+        title: "Análisis de precio unitario",
+        errorMessage: "No se pudo generar el análisis de precio unitario.",
+      });
     } catch (mutationError) {
-      if (reportWindow) {
-        reportWindow.close();
-      }
-
       setReportFeedback({
         type: "error",
         message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el analisis de precios unitarios.",
@@ -497,45 +457,12 @@ export default function ItemsPage() {
     setReportFeedback(null);
     setReportLoadingItemId(item.id_item);
 
-    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
-
-    if (reportWindow) {
-      reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.textContent = "Generando desglose de materiales...";
-    }
-
     try {
-      const pdfResponse = await itemsService.downloadMaterialBreakdownPdf(item.id_item);
-      const pdfBlob = pdfResponse instanceof Blob
-        ? pdfResponse
-        : new Blob([pdfResponse], { type: "application/pdf" });
-
-      if (pdfBlob.size === 0) {
-        throw new Error("El PDF se recibio vacio.");
-      }
-
-      const contentType = String(pdfBlob.type || "").toLowerCase();
-      if (contentType && !contentType.includes("pdf")) {
-        throw new Error("La respuesta no corresponde a un PDF valido.");
-      }
-
-      const blobUrl = URL.createObjectURL(pdfBlob);
-
-      if (reportWindow) {
-        reportWindow.location.replace(blobUrl);
-      } else {
-        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
-        if (!fallbackWindow) {
-          window.location.href = blobUrl;
-        }
-      }
-
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      openPdfViewer(itemsService.materialBreakdownPdfUrl(item.id_item), {
+        title: "Desglose de materiales",
+        errorMessage: "No se pudo generar el desglose de materiales.",
+      });
     } catch (mutationError) {
-      if (reportWindow) {
-        reportWindow.close();
-      }
-
       setReportFeedback({
         type: "error",
         message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el desglose de materiales.",
@@ -551,45 +478,12 @@ export default function ItemsPage() {
     setReportFeedback(null);
     setReportLoadingItemId(item.id_item);
 
-    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
-
-    if (reportWindow) {
-      reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.textContent = "Generando desglose de mano de obra...";
-    }
-
     try {
-      const pdfResponse = await itemsService.downloadLaborBreakdownPdf(item.id_item);
-      const pdfBlob = pdfResponse instanceof Blob
-        ? pdfResponse
-        : new Blob([pdfResponse], { type: "application/pdf" });
-
-      if (pdfBlob.size === 0) {
-        throw new Error("El PDF se recibio vacio.");
-      }
-
-      const contentType = String(pdfBlob.type || "").toLowerCase();
-      if (contentType && !contentType.includes("pdf")) {
-        throw new Error("La respuesta no corresponde a un PDF valido.");
-      }
-
-      const blobUrl = URL.createObjectURL(pdfBlob);
-
-      if (reportWindow) {
-        reportWindow.location.replace(blobUrl);
-      } else {
-        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
-        if (!fallbackWindow) {
-          window.location.href = blobUrl;
-        }
-      }
-
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      openPdfViewer(itemsService.laborBreakdownPdfUrl(item.id_item), {
+        title: "Desglose de mano de obra",
+        errorMessage: "No se pudo generar el desglose de mano de obra.",
+      });
     } catch (mutationError) {
-      if (reportWindow) {
-        reportWindow.close();
-      }
-
       setReportFeedback({
         type: "error",
         message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el desglose de mano de obra.",
@@ -605,45 +499,12 @@ export default function ItemsPage() {
     setReportFeedback(null);
     setReportLoadingItemId(item.id_item);
 
-    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
-
-    if (reportWindow) {
-      reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.textContent = "Generando desglose de herramientas...";
-    }
-
     try {
-      const pdfResponse = await itemsService.downloadMachineryBreakdownPdf(item.id_item);
-      const pdfBlob = pdfResponse instanceof Blob
-        ? pdfResponse
-        : new Blob([pdfResponse], { type: "application/pdf" });
-
-      if (pdfBlob.size === 0) {
-        throw new Error("El PDF se recibio vacio.");
-      }
-
-      const contentType = String(pdfBlob.type || "").toLowerCase();
-      if (contentType && !contentType.includes("pdf")) {
-        throw new Error("La respuesta no corresponde a un PDF valido.");
-      }
-
-      const blobUrl = URL.createObjectURL(pdfBlob);
-
-      if (reportWindow) {
-        reportWindow.location.replace(blobUrl);
-      } else {
-        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
-        if (!fallbackWindow) {
-          window.location.href = blobUrl;
-        }
-      }
-
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      openPdfViewer(itemsService.machineryBreakdownPdfUrl(item.id_item), {
+        title: "Desglose de herramientas",
+        errorMessage: "No se pudo generar el desglose de herramientas.",
+      });
     } catch (mutationError) {
-      if (reportWindow) {
-        reportWindow.close();
-      }
-
       setReportFeedback({
         type: "error",
         message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el desglose de herramientas.",
@@ -1110,51 +971,17 @@ export default function ItemsPage() {
     setReportFeedback(null);
     setReportLoadingItemId(breakdownItem.id_item);
 
-    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
-
-    if (reportWindow) {
-      reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.textContent = "Generando desglose historico...";
-    }
-
     try {
-      const pdfResponse = await breakdownMutation.mutateAsync({
+      openPdfViewer(itemsService.breakdownRecalculationPdfUrl({
         itemId: breakdownItem.id_item,
-        payload: {
-          fecha: breakdownDate,
-          tipo_desglose: breakdownType,
-        },
+        fecha: breakdownDate,
+        type: breakdownType,
+      }), {
+        title: "Desglose histórico",
+        errorMessage: "No se pudo generar el desglose histórico.",
       });
-      const pdfBlob = pdfResponse instanceof Blob
-        ? pdfResponse
-        : new Blob([pdfResponse], { type: "application/pdf" });
-
-      if (pdfBlob.size === 0) {
-        throw new Error("El PDF se recibio vacio.");
-      }
-
-      const contentType = String(pdfBlob.type || "").toLowerCase();
-      if (contentType && !contentType.includes("pdf")) {
-        throw new Error("La respuesta no corresponde a un PDF valido.");
-      }
-
-      const blobUrl = URL.createObjectURL(pdfBlob);
-
-      if (reportWindow) {
-        reportWindow.location.replace(blobUrl);
-      } else {
-        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
-        if (!fallbackWindow) {
-          window.location.href = blobUrl;
-        }
-      }
-
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      closeBreakdown();
     } catch (mutationError) {
-      if (reportWindow) {
-        reportWindow.close();
-      }
-
       setReportFeedback({
         type: "error",
         message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el desglose historico.",
@@ -2037,13 +1864,8 @@ export default function ItemsPage() {
                     <Input id="breakdown_date" type="date" value={breakdownDate} onChange={(event) => setBreakdownDate(event.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" required />
                   </div>
 
-                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={breakdownMutation.isPending}>
-                    {breakdownMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 size-4 animate-spin" />
-                        Recalculando...
-                      </>
-                    ) : "Recalcular Desgloses"}
+                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
+                    Recalcular Desgloses
                   </Button>
                 </form>
               </CardContent>

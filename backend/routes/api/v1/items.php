@@ -47,6 +47,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::put('/items/{item}/machinery/{itemInput}', [ItemCompositionController::class, 'updateMachinery']);
     Route::delete('/items/{item}/machinery/{itemInput}', [ItemCompositionController::class, 'deleteMachinery']);
     Route::get('/items/{item}/total', [ItemCompositionController::class, 'globalTotal']);
+    Route::get('/items/{item}/breakdowns/recalculate/pdf', [ItemBreakdownController::class, 'breakdownRecalculation']);
     Route::post('/items/{item}/breakdowns/recalculate', [ItemBreakdownController::class, 'breakdownRecalculation']);
     Route::get('/items/{item}/price-analysis', [ItemAnalysisController::class, 'priceAnalysis']);
     Route::get('/items/{item}/analisis-precios-unitarios', [ItemAnalysisController::class, 'legacyUnitPriceAnalysis']);

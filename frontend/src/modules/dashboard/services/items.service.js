@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api/client";
+import { buildApiUrl } from "@/lib/utils/pdf";
 
 export const itemsService = {
   list: async ({ page = 1, perPage = 10, search = "", order = "legacy" } = {}) => {
@@ -190,12 +191,19 @@ export const itemsService = {
     return response.data;
   },
 
+  priceRecalculationPdfUrl: ({ itemId, fecha, mode = "general" }) => buildApiUrl(`/v1/items/${itemId}/price-recalculation/pdf`, { fecha, mode }),
+
   recalculateBreakdowns: async ({ itemId, payload }) => {
     const response = await apiClient.post(`/v1/items/${itemId}/breakdowns/recalculate`, payload, {
       responseType: "blob",
     });
     return response.data;
   },
+
+  breakdownRecalculationPdfUrl: ({ itemId, fecha, type }) => buildApiUrl(`/v1/items/${itemId}/breakdowns/recalculate/pdf`, {
+    fecha,
+    tipo_desglose: type,
+  }),
 
   downloadLegacyUnitPriceAnalysisPdf: async (itemId, mode = "general") => {
     const response = await apiClient.get(`/v1/items/${itemId}/analisis-precios-unitarios/pdf`, {
@@ -205,12 +213,16 @@ export const itemsService = {
     return response.data;
   },
 
+  legacyUnitPriceAnalysisPdfUrl: (itemId, mode = "general") => buildApiUrl(`/v1/items/${itemId}/analisis-precios-unitarios/pdf`, { mode }),
+
   downloadMaterialBreakdownPdf: async (itemId) => {
     const response = await apiClient.get(`/v1/items/${itemId}/materials/pdf`, {
       responseType: "blob",
     });
     return response.data;
   },
+
+  materialBreakdownPdfUrl: (itemId) => buildApiUrl(`/v1/items/${itemId}/materials/pdf`),
 
   downloadLaborBreakdownPdf: async (itemId) => {
     const response = await apiClient.get(`/v1/items/${itemId}/labor/pdf`, {
@@ -219,10 +231,14 @@ export const itemsService = {
     return response.data;
   },
 
+  laborBreakdownPdfUrl: (itemId) => buildApiUrl(`/v1/items/${itemId}/labor/pdf`),
+
   downloadMachineryBreakdownPdf: async (itemId) => {
     const response = await apiClient.get(`/v1/items/${itemId}/machinery/pdf`, {
       responseType: "blob",
     });
     return response.data;
   },
+
+  machineryBreakdownPdfUrl: (itemId) => buildApiUrl(`/v1/items/${itemId}/machinery/pdf`),
 };

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Loader2, TrendingUp, Search, MoreHorizontal, RefreshCw, X } from "lucide-react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { openPdfViewer } from "@/lib/utils/pdf";
 import { itemsService } from "@/modules/dashboard/services/items.service";
 import {
   DropdownMenu,
@@ -41,55 +42,6 @@ export default function FpsAnalysisPage() {
   const [recalculateDate, setRecalculateDate] = useState("");
   const [recalculateStatus, setRecalculateStatus] = useState(null);
 
-  const recalculateMutation = useMutation({
-    mutationFn: async ({ itemId, fecha }) => {
-      const pdfResponse = await itemsService.downloadPriceRecalculationPdf({
-        itemId,
-        fecha,
-        mode: "fps",
-      });
-
-      const pdfBlob = pdfResponse instanceof Blob
-        ? pdfResponse
-        : new Blob([pdfResponse], { type: "application/pdf" });
-
-      if (pdfBlob.size === 0) {
-        throw new Error("El PDF se recibio vacio.");
-      }
-
-      const contentType = String(pdfBlob.type || "").toLowerCase();
-      if (contentType && !contentType.includes("pdf")) {
-        throw new Error("La respuesta no corresponde a un PDF valido.");
-      }
-
-      return pdfBlob;
-    },
-    onSuccess: (pdfBlob, variables) => {
-      const blobUrl = URL.createObjectURL(pdfBlob);
-
-      if (variables.reportWindow) {
-        variables.reportWindow.location.replace(blobUrl);
-      } else {
-        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
-        if (!fallbackWindow) {
-          window.location.assign(blobUrl);
-        }
-      }
-
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-      setRecalculateOpen(false);
-      setRecalculateItem(null);
-    },
-    onError: (error, variables) => {
-      if (variables?.reportWindow) {
-        variables.reportWindow.close();
-      }
-
-      const message = error.response?.data?.message || error.message || "Error al recalcular el precio";
-      setRecalculateStatus({ type: "error", message });
-    },
-  });
-
   const handleRecalculate = (item) => {
     setRecalculateItem(item);
     setRecalculateDate(new Date().toISOString().split("T")[0]);
@@ -100,18 +52,21 @@ export default function FpsAnalysisPage() {
   const handleSubmitRecalculate = (e) => {
     e.preventDefault();
 
-    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
-
-    if (reportWindow) {
-      reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.textContent = "Generando recalculo de precios unitarios FPS...";
+    if (!recalculateItem?.id_item || !recalculateDate) {
+      setRecalculateStatus({ type: "error", message: "Seleccione una fecha para recalcular el precio." });
+      return;
     }
 
-    recalculateMutation.mutate({
+    openPdfViewer(itemsService.priceRecalculationPdfUrl({
       itemId: recalculateItem.id_item,
       fecha: recalculateDate,
-      reportWindow,
+      mode: "fps",
+    }), {
+      title: "Recálculo precio item FPS",
+      errorMessage: "No se pudo generar el recálculo de precio item FPS.",
     });
+    setRecalculateOpen(false);
+    setRecalculateItem(null);
   };
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
@@ -151,45 +106,12 @@ export default function FpsAnalysisPage() {
     setReportFeedback(null);
     setReportLoadingItemId(item.id_item);
 
-    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
-
-    if (reportWindow) {
-      reportWindow.document.title = "Generando PDF";
-      reportWindow.document.body.textContent = "Generando analisis de precios unitarios FPS...";
-    }
-
     try {
-      const pdfResponse = await itemsService.downloadLegacyUnitPriceAnalysisPdf(item.id_item, "fps");
-      const pdfBlob = pdfResponse instanceof Blob
-        ? pdfResponse
-        : new Blob([pdfResponse], { type: "application/pdf" });
-
-      if (pdfBlob.size === 0) {
-        throw new Error("El PDF se recibio vacio.");
-      }
-
-      const contentType = String(pdfBlob.type || "").toLowerCase();
-      if (contentType && !contentType.includes("pdf")) {
-        throw new Error("La respuesta no corresponde a un PDF valido.");
-      }
-
-      const blobUrl = URL.createObjectURL(pdfBlob);
-
-      if (reportWindow) {
-        reportWindow.location.replace(blobUrl);
-      } else {
-        const fallbackWindow = window.open(blobUrl, "_blank", "noopener,noreferrer");
-        if (!fallbackWindow) {
-          window.location.assign(blobUrl);
-        }
-      }
-
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      openPdfViewer(itemsService.legacyUnitPriceAnalysisPdfUrl(item.id_item, "fps"), {
+        title: "Análisis de precio unitario FPS",
+        errorMessage: "No se pudo generar el análisis de precio unitario FPS.",
+      });
     } catch (mutationError) {
-      if (reportWindow) {
-        reportWindow.close();
-      }
-
       setReportFeedback({
         type: "error",
         message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el analisis de precios unitarios FPS.",
@@ -436,13 +358,8 @@ export default function FpsAnalysisPage() {
                     <Input id="fecha" type="date" value={recalculateDate} onChange={(e) => setRecalculateDate(e.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" required />
                   </div>
 
-                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={recalculateMutation.isPending}>
-                    {recalculateMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Recalculando...
-                      </>
-                    ) : "Recalcular"}
+                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
+                    Recalcular
                   </Button>
                 </form>
               </CardContent>

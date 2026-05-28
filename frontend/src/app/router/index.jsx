@@ -31,6 +31,7 @@ const loadNewProjectPage = () => import("@/modules/projects/pages/NewProjectPage
 const loadObrasAnalysisPage = () => import("@/modules/analysis/obras/pages/ObrasAnalysisPage");
 const loadObrasCalculationPercentagesPage = () => import("@/modules/calculation-percentages/pages/ObrasCalculationPercentagesPage");
 const loadPriceRecalculationPage = () => import("@/modules/analysis/pages/PriceRecalculationPage");
+const loadPdfViewerPage = () => import("@/modules/pdf/pages/PdfViewerPage");
 const loadProjectItemsPage = () => import("@/modules/projects/pages/ProjectItemsPage");
 const loadProjectTemplatesPage = () => import("@/modules/projects/pages/ProjectTemplatesPage");
 const loadProjectsPage = () => import("@/modules/projects/pages/ProjectsPage");
@@ -67,6 +68,7 @@ const NewProjectPage = lazy(loadNewProjectPage);
 const ObrasAnalysisPage = lazy(loadObrasAnalysisPage);
 const ObrasCalculationPercentagesPage = lazy(loadObrasCalculationPercentagesPage);
 const PriceRecalculationPage = lazy(loadPriceRecalculationPage);
+const PdfViewerPage = lazy(loadPdfViewerPage);
 const ProjectItemsPage = lazy(loadProjectItemsPage);
 const ProjectTemplatesPage = lazy(loadProjectTemplatesPage);
 const ProjectsPage = lazy(loadProjectsPage);
@@ -119,6 +121,10 @@ export const router = createBrowserRouter([
   {
     element: <ProtectedRoute />,
     children: [
+      {
+        path: "/pdf-viewer",
+        element: routeElement(<PdfViewerPage />),
+      },
       {
         element: <MainLayout />,
         children: [

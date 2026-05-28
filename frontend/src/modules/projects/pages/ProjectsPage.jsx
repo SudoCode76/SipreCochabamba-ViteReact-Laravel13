@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { openPdfViewer } from "@/lib/utils/pdf";
 import ProjectEditForm from "../components/ProjectEditForm";
 import { projectService } from "../services/project.service";
 
@@ -473,33 +474,14 @@ export default function ProjectsPage() {
 
     setRecalculateStatus(null);
     setRecalculatePending(true);
-    const popup = window.open("", "_blank", "noopener,noreferrer");
-
-    if (popup) {
-      popup.document.body.textContent = "Generando PDF...";
-    }
 
     try {
-      const blob = await projectService.downloadBudgetRecalculationPdf(recalculateProject.id_proyecto, recalculateDate);
-
-      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
-        throw new Error("La respuesta no contiene un PDF valido.");
-      }
-
-      const url = URL.createObjectURL(blob);
-
-      if (popup) {
-        popup.location.href = url;
-      } else {
-        window.open(url, "_blank", "noopener,noreferrer");
-      }
-
+      openPdfViewer(projectService.budgetRecalculationPdfUrl(recalculateProject.id_proyecto, recalculateDate), {
+        title: "Presupuesto recalculado del proyecto",
+        errorMessage: "No se pudo generar el presupuesto recalculado del proyecto.",
+      });
       closeRecalculate();
     } catch (pdfError) {
-      if (popup) {
-        popup.close();
-      }
-
       const fieldErrors = pdfError?.response?.data?.errors;
       const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
       setRecalculateStatus({
@@ -513,31 +495,13 @@ export default function ProjectsPage() {
 
   const handleOpenBudgetByGroupPdf = async (project) => {
     setFeedback(null);
-    const popup = window.open("", "_blank", "noopener,noreferrer");
-
-    if (popup) {
-      popup.document.body.textContent = "Generando PDF...";
-    }
 
     try {
-      const blob = await projectService.downloadBudgetByGroupPdf(project.id_proyecto);
-
-      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
-        throw new Error("La respuesta no contiene un PDF valido.");
-      }
-
-      const url = URL.createObjectURL(blob);
-
-      if (popup) {
-        popup.location.href = url;
-      } else {
-        window.open(url, "_blank", "noopener,noreferrer");
-      }
+      openPdfViewer(projectService.budgetByGroupPdfUrl(project.id_proyecto), {
+        title: "Presupuesto por rubros",
+        errorMessage: "No se pudo generar el presupuesto por rubros.",
+      });
     } catch (pdfError) {
-      if (popup) {
-        popup.close();
-      }
-
       setFeedback({
         type: "error",
         message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el presupuesto por rubros.",
@@ -547,31 +511,13 @@ export default function ProjectsPage() {
 
   const handleOpenInputsReportPdf = async (project) => {
     setFeedback(null);
-    const popup = window.open("", "_blank", "noopener,noreferrer");
-
-    if (popup) {
-      popup.document.body.textContent = "Generando PDF...";
-    }
 
     try {
-      const blob = await projectService.downloadInputsReportPdf(project.id_proyecto);
-
-      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
-        throw new Error("La respuesta no contiene un PDF valido.");
-      }
-
-      const url = URL.createObjectURL(blob);
-
-      if (popup) {
-        popup.location.href = url;
-      } else {
-        window.open(url, "_blank", "noopener,noreferrer");
-      }
+      openPdfViewer(projectService.inputsReportPdfUrl(project.id_proyecto), {
+        title: "Reporte de insumos del proyecto",
+        errorMessage: "No se pudo generar el reporte de insumos del proyecto.",
+      });
     } catch (pdfError) {
-      if (popup) {
-        popup.close();
-      }
-
       setFeedback({
         type: "error",
         message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el reporte de insumos del proyecto.",
@@ -601,33 +547,14 @@ export default function ProjectsPage() {
     }
 
     setIncidenceStatus(null);
-    const popup = window.open("", "_blank", "noopener,noreferrer");
-
-    if (popup) {
-      popup.document.body.textContent = "Generando PDF...";
-    }
 
     try {
-      const blob = await projectService.downloadIncidenceSummaryPdf(incidenceProject.id_proyecto, incidenceFormat);
-
-      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
-        throw new Error("La respuesta no contiene un PDF valido.");
-      }
-
-      const url = URL.createObjectURL(blob);
-
-      if (popup) {
-        popup.location.href = url;
-      } else {
-        window.open(url, "_blank", "noopener,noreferrer");
-      }
-
+      openPdfViewer(projectService.incidenceSummaryPdfUrl(incidenceProject.id_proyecto, incidenceFormat), {
+        title: "Resumen por incidencia",
+        errorMessage: "No se pudo generar el resumen por incidencia.",
+      });
       closeIncidenceSummary();
     } catch (pdfError) {
-      if (popup) {
-        popup.close();
-      }
-
       setIncidenceStatus({
         type: "error",
         message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el resumen por incidencia.",
@@ -657,33 +584,14 @@ export default function ProjectsPage() {
     }
 
     setGeneralBudgetStatus(null);
-    const popup = window.open("", "_blank", "noopener,noreferrer");
-
-    if (popup) {
-      popup.document.body.textContent = "Generando PDF...";
-    }
 
     try {
-      const blob = await projectService.downloadGeneralBudgetPdf(generalBudgetProject.id_proyecto, generalBudgetFormat);
-
-      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
-        throw new Error("La respuesta no contiene un PDF valido.");
-      }
-
-      const url = URL.createObjectURL(blob);
-
-      if (popup) {
-        popup.location.href = url;
-      } else {
-        window.open(url, "_blank", "noopener,noreferrer");
-      }
-
+      openPdfViewer(projectService.generalBudgetPdfUrl(generalBudgetProject.id_proyecto, generalBudgetFormat), {
+        title: "Presupuesto general",
+        errorMessage: "No se pudo generar el presupuesto general.",
+      });
       closeGeneralBudget();
     } catch (pdfError) {
-      if (popup) {
-        popup.close();
-      }
-
       setGeneralBudgetStatus({
         type: "error",
         message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el presupuesto general.",
@@ -713,33 +621,14 @@ export default function ProjectsPage() {
     }
 
     setInputBreakdownStatus(null);
-    const popup = window.open("", "_blank", "noopener,noreferrer");
-
-    if (popup) {
-      popup.document.body.textContent = "Generando PDF...";
-    }
 
     try {
-      const blob = await projectService.downloadInputBreakdownPdf(inputBreakdownProject.id_proyecto, inputBreakdownType);
-
-      if (!blob || blob.size === 0 || blob.type !== "application/pdf") {
-        throw new Error("La respuesta no contiene un PDF valido.");
-      }
-
-      const url = URL.createObjectURL(blob);
-
-      if (popup) {
-        popup.location.href = url;
-      } else {
-        window.open(url, "_blank", "noopener,noreferrer");
-      }
-
+      openPdfViewer(projectService.inputBreakdownPdfUrl(inputBreakdownProject.id_proyecto, inputBreakdownType), {
+        title: "Desglose de insumos del proyecto",
+        errorMessage: "No se pudo generar el desglose de insumos del proyecto.",
+      });
       closeInputBreakdown();
     } catch (pdfError) {
-      if (popup) {
-        popup.close();
-      }
-
       setInputBreakdownStatus({
         type: "error",
         message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el desglose de insumos del proyecto.",
