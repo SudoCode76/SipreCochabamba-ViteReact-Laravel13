@@ -528,6 +528,18 @@ export default function ProjectsPage() {
     });
   };
 
+  const openGroupedInputsReportExport = (project) => {
+    if (!project?.id_proyecto) return;
+    setFeedback(null);
+    setExportChoice({
+      title: "Proyecto agrupado por insumos",
+      description: project.nombre_proyecto,
+      pdfUrl: projectService.groupedInputsReportPdfUrl(project.id_proyecto),
+      xlsxUrl: projectService.groupedInputsReportXlsxUrl(project.id_proyecto),
+      errorMessage: "No se pudo generar el reporte de proyecto agrupado por insumos.",
+    });
+  };
+
   const handleExportChoicePdf = () => {
     if (!exportChoice?.pdfUrl) return;
 
@@ -921,6 +933,12 @@ export default function ProjectsPage() {
                                 <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openInputsReportExport(project)}>
                                   <ClipboardList className="h-4 w-4 text-muted-foreground" />
                                   <span>Reporte de Insumos PDF/XLSX</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewInputsReport && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openGroupedInputsReportExport(project)}>
+                                  <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                                  <span>Proyecto agrupado por insumos PDF/XLSX</span>
                                 </DropdownMenuItem>
                               )}
                               {!hasProjectRowActions && (

@@ -41,6 +41,8 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/projects/{project}/input-breakdown/xlsx', [ProjectReportController::class, 'inputBreakdownXlsx']);
     Route::get('/projects/{project}/inputs-report/pdf', [ProjectReportController::class, 'inputsReportPdf']);
     Route::get('/projects/{project}/inputs-report/xlsx', [ProjectReportController::class, 'inputsReportXlsx']);
+    Route::get('/projects/{project}/grouped-inputs-report/pdf', [ProjectReportController::class, 'groupedInputsReportPdf']);
+    Route::get('/projects/{project}/grouped-inputs-report/xlsx', [ProjectReportController::class, 'groupedInputsReportXlsx']);
     Route::post('/projects/{project}/breakdown-calculation', [ProjectBudgetController::class, 'breakdownCalculation']);
     Route::get('/projects/{project}/unit-prices', [ProjectBudgetController::class, 'unitPrices']);
     Route::get('/search/items', [SearchController::class, 'items']);

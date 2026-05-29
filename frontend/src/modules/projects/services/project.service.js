@@ -144,6 +144,8 @@ export const projectService = {
 
   inputsReportPdfUrl: (projectId) => buildApiUrl(`/v1/projects/${projectId}/inputs-report/pdf`),
   inputsReportXlsxUrl: (projectId) => buildApiUrl(`/v1/projects/${projectId}/inputs-report/xlsx`),
+  groupedInputsReportPdfUrl: (projectId) => buildApiUrl(`/v1/projects/${projectId}/grouped-inputs-report/pdf`),
+  groupedInputsReportXlsxUrl: (projectId) => buildApiUrl(`/v1/projects/${projectId}/grouped-inputs-report/xlsx`),
 
   items: async (projectId, format = "PCA") => {
     const response = await apiClient.get(`/v1/projects/${projectId}/items`, {

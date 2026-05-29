@@ -25,6 +25,7 @@ use App\Modules\Projects\Services\ProjectContextService;
 use App\Modules\Projects\Services\ProjectCrudService;
 use App\Modules\Projects\Services\ProjectIncidenceSummaryPdfService;
 use App\Modules\Projects\Services\ProjectInputBreakdownPdfService;
+use App\Modules\Projects\Services\ProjectInputsGroupedReportPdfService;
 use App\Modules\Projects\Services\ProjectInputsReportPdfService;
 use App\Modules\Projects\Services\ProjectGeneralBudgetPdfService;
 use App\Modules\Projects\Services\ProjectHistoryService;
@@ -48,6 +49,7 @@ class ProjectController extends Controller
         private readonly ProjectGeneralBudgetPdfService $projectGeneralBudgetPdfService,
         private readonly ProjectInputBreakdownPdfService $projectInputBreakdownPdfService,
         private readonly ProjectInputsReportPdfService $projectInputsReportPdfService,
+        private readonly ProjectInputsGroupedReportPdfService $projectInputsGroupedReportPdfService,
         private readonly ProjectPermissionService $projectPermissionService,
         private readonly ProjectHistoryService $projectHistoryService,
         private readonly AuditService $auditService,
@@ -410,6 +412,30 @@ class ProjectController extends Controller
         ]);
 
         return $this->projectBudgetXlsxService->inputsReport($project);
+    }
+
+    public function groupedInputsReportPdf(Request $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_inputs_report', 'No tiene permisos para consultar el reporte de insumos del proyecto.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el reporte de insumos del proyecto.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Proyecto agrupado por insumos');
+
+        return $this->projectInputsGroupedReportPdfService->stream($project);
+    }
+
+    public function groupedInputsReportXlsx(Request $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_inputs_report', 'No tiene permisos para consultar el reporte de insumos del proyecto.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el reporte de insumos del proyecto.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Proyecto agrupado por insumos XLSX', [
+            'export' => 'xlsx',
+        ]);
+
+        return $this->projectBudgetXlsxService->groupedInputsReport($project);
     }
 
     public function breakdownCalculation(ProjectFormatRequest $request, Project $project): JsonResponse

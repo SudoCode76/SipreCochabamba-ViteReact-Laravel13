@@ -19,6 +19,7 @@ class ProjectBudgetXlsxService
         private readonly ProjectLegacyUnitPriceService $projectLegacyUnitPriceService,
         private readonly ProjectInputBreakdownPdfService $projectInputBreakdownPdfService,
         private readonly ProjectInputsReportPdfService $projectInputsReportPdfService,
+        private readonly ProjectInputsGroupedReportPdfService $projectInputsGroupedReportPdfService,
     ) {}
 
     public function budgetByGroup(Project $project): Response
@@ -183,6 +184,40 @@ class ProjectBudgetXlsxService
 
         return SimpleXlsxResponse::make('reporte_consolidado_insumos.xlsx', [[
             'title' => 'Insumos',
+            'rows' => $rows,
+        ]]);
+    }
+
+    public function groupedInputsReport(Project $project): Response
+    {
+        $rows = [
+            ['Proyecto', $project->nombre_proyecto],
+            [],
+            ['Tipo', 'Insumo', 'Unidad', 'Prioridad', 'Item', 'Cant. Item', 'Cant. Insumo por Item', 'Cant. Total', 'P. Unitario', 'Parcial'],
+        ];
+        $total = 0.0;
+
+        foreach ($this->projectInputsGroupedReportPdfService->rows($project) as $row) {
+            $total += (float) $row['parcial'];
+            $rows[] = [
+                $row['tipo_nombre'],
+                $row['insumo'],
+                $row['unidad'],
+                $row['prioridad'],
+                $row['item'],
+                $row['cantidad_item'],
+                $row['cantidad_insumo_item'],
+                $row['cantidad_total'],
+                $row['precio_unitario'],
+                $row['parcial'],
+            ];
+        }
+
+        $rows[] = [];
+        $rows[] = ['TOTAL GENERAL', '', '', '', '', '', '', '', '', round($total, 2)];
+
+        return SimpleXlsxResponse::make('proyecto_agrupado_por_insumos.xlsx', [[
+            'title' => 'Agrupado por insumos',
             'rows' => $rows,
         ]]);
     }

@@ -786,6 +786,27 @@ class ProjectApiTest extends TestCase
             ->assertHeader('content-disposition', 'attachment; filename="reporte_consolidado_insumos.xlsx"');
         $this->assertStringStartsWith('PK', $xlsx->getContent());
 
+        $groupedRows = app(\App\Modules\Projects\Services\ProjectInputsGroupedReportPdfService::class)
+            ->rows(\App\Models\Project::findOrFail(1));
+
+        $this->assertSame(['Material Repetido', 'Material Repetido', 'Mano Consolidada', 'Herramienta Consolidada'], array_column($groupedRows, 'insumo'));
+        $this->assertSame(4.0, $groupedRows[0]['cantidad_total']);
+        $this->assertSame(40.0, $groupedRows[0]['parcial']);
+
+        $groupedPdf = $this->get('/api/v1/projects/1/grouped-inputs-report/pdf');
+
+        $groupedPdf->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertHeader('content-disposition', 'inline; filename="proyecto_agrupado_por_insumos.pdf"');
+        $this->assertStringStartsWith('%PDF', $groupedPdf->getContent());
+
+        $groupedXlsx = $this->get('/api/v1/projects/1/grouped-inputs-report/xlsx');
+
+        $groupedXlsx->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->assertHeader('content-disposition', 'attachment; filename="proyecto_agrupado_por_insumos.xlsx"');
+        $this->assertStringStartsWith('PK', $groupedXlsx->getContent());
+
         $this->assertDatabaseHas('proyecto_historial', [
             'id_proyecto' => 1,
             'id_usuario' => 1,
