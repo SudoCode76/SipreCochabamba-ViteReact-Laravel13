@@ -19,6 +19,7 @@ use App\Models\Project;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Modules\Projects\Services\ProjectBudgetService;
+use App\Modules\Projects\Services\ProjectBudgetXlsxService;
 use App\Modules\Projects\Services\ProjectBudgetByGroupPdfService;
 use App\Modules\Projects\Services\ProjectContextService;
 use App\Modules\Projects\Services\ProjectCrudService;
@@ -41,6 +42,7 @@ class ProjectController extends Controller
         private readonly ProjectCrudService $projectCrudService,
         private readonly ProjectItemService $projectItemService,
         private readonly ProjectBudgetService $projectBudgetService,
+        private readonly ProjectBudgetXlsxService $projectBudgetXlsxService,
         private readonly ProjectBudgetByGroupPdfService $projectBudgetByGroupPdfService,
         private readonly ProjectIncidenceSummaryPdfService $projectIncidenceSummaryPdfService,
         private readonly ProjectGeneralBudgetPdfService $projectGeneralBudgetPdfService,
@@ -243,6 +245,20 @@ class ProjectController extends Controller
         return $this->projectBudgetByGroupPdfService->streamHistorical($project, $data);
     }
 
+    public function budgetRecalculationXlsx(BudgetRecalculationRequest $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_recalculate_budget', 'No tiene permisos para recalcular el presupuesto del proyecto.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para recalcular el presupuesto del proyecto.');
+        }
+
+        $this->projectHistoryService->recordBudgetRecalculated($project, $request->user(), $request->ip(), $request->date('fecha')->toDateString(), [
+            'format' => 'xlsx',
+        ]);
+        $this->auditService->record($request->user(), $request->ip(), 'PROYECTOS: se exporto XLSX del presupuesto recalculado del proyecto '.$project->nombre_proyecto);
+
+        return $this->projectBudgetXlsxService->budgetRecalculation($project, $request->date('fecha'));
+    }
+
     public function budgetByGroup(Project $project): JsonResponse
     {
         if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view_budget_by_group', 'No tiene permisos para consultar presupuesto por rubros.')) {
@@ -265,6 +281,17 @@ class ProjectController extends Controller
         $this->projectHistoryService->recordPdfGenerated($project, request()->user(), request()->ip(), 'Presupuesto por rubros');
 
         return $this->projectBudgetByGroupPdfService->stream($project);
+    }
+
+    public function budgetByGroupXlsx(Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view_budget_by_group', 'No tiene permisos para consultar presupuesto por rubros.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar presupuesto por rubros.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, request()->user(), request()->ip(), 'Presupuesto por rubros XLSX');
+
+        return $this->projectBudgetXlsxService->budgetByGroup($project);
     }
 
     public function incidenceSummary(ProjectFormatRequest $request, Project $project): JsonResponse
@@ -293,6 +320,20 @@ class ProjectController extends Controller
         return $this->projectIncidenceSummaryPdfService->stream($project, $request->validated('format'));
     }
 
+    public function incidenceSummaryXlsx(ProjectFormatRequest $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_incidence_summary', 'No tiene permisos para consultar el resumen de incidencia.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el resumen de incidencia.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Resumen por incidencia XLSX', [
+            'format' => $request->validated('format'),
+            'export' => 'xlsx',
+        ]);
+
+        return $this->projectBudgetXlsxService->incidenceSummary($project, $request->validated('format'));
+    }
+
     public function generalBudgetPdf(ProjectFormatRequest $request, Project $project): \Illuminate\Http\Response
     {
         if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_general_budget', 'No tiene permisos para consultar el presupuesto general.')) {
@@ -304,6 +345,20 @@ class ProjectController extends Controller
         ]);
 
         return $this->projectGeneralBudgetPdfService->stream($project, $request->validated('format'));
+    }
+
+    public function generalBudgetXlsx(ProjectFormatRequest $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_general_budget', 'No tiene permisos para consultar el presupuesto general.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el presupuesto general.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Presupuesto general XLSX', [
+            'format' => $request->validated('format'),
+            'export' => 'xlsx',
+        ]);
+
+        return $this->projectBudgetXlsxService->generalBudget($project, $request->validated('format'));
     }
 
     public function inputBreakdownPdf(ProjectInputBreakdownRequest $request, Project $project): \Illuminate\Http\Response
@@ -319,6 +374,20 @@ class ProjectController extends Controller
         return $this->projectInputBreakdownPdfService->stream($project, (int) $request->validated('type'));
     }
 
+    public function inputBreakdownXlsx(ProjectInputBreakdownRequest $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_input_breakdown', 'No tiene permisos para consultar el desglose de insumos del proyecto.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el desglose de insumos del proyecto.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Desglose de insumos del proyecto XLSX', [
+            'type' => (int) $request->validated('type'),
+            'export' => 'xlsx',
+        ]);
+
+        return $this->projectBudgetXlsxService->inputBreakdown($project, (int) $request->validated('type'));
+    }
+
     public function inputsReportPdf(Request $request, Project $project): \Illuminate\Http\Response
     {
         if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_inputs_report', 'No tiene permisos para consultar el reporte de insumos del proyecto.')) {
@@ -328,6 +397,19 @@ class ProjectController extends Controller
         $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Reporte consolidado de insumos');
 
         return $this->projectInputsReportPdfService->stream($project);
+    }
+
+    public function inputsReportXlsx(Request $request, Project $project): \Illuminate\Http\Response
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_inputs_report', 'No tiene permisos para consultar el reporte de insumos del proyecto.')) {
+            abort(403, $response->getData()->message ?? 'No tiene permisos para consultar el reporte de insumos del proyecto.');
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Reporte consolidado de insumos XLSX', [
+            'export' => 'xlsx',
+        ]);
+
+        return $this->projectBudgetXlsxService->inputsReport($project);
     }
 
     public function breakdownCalculation(ProjectFormatRequest $request, Project $project): JsonResponse

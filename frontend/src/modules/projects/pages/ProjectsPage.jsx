@@ -2,7 +2,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, ClipboardList, X, Loader2, History, Copy } from "lucide-react";
+import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, ClipboardList, X, Loader2, History, Copy, FileDown } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { formatDate, formatDateTime } from "@/lib/utils";
-import { openPdfViewer } from "@/lib/utils/pdf";
+import { downloadUrl, openPdfViewer } from "@/lib/utils/pdf";
 import ProjectEditForm from "../components/ProjectEditForm";
 import { projectService } from "../services/project.service";
 
@@ -265,6 +265,7 @@ export default function ProjectsPage() {
   const [templatePending, setTemplatePending] = useState(false);
   const [templateStatus, setTemplateStatus] = useState(null);
   const [feedback, setFeedback] = useState(null);
+  const [exportChoice, setExportChoice] = useState(null);
   const deferredSearch = useDeferredValue(search.trim());
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
@@ -493,36 +494,61 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleOpenBudgetByGroupPdf = async (project) => {
+  const handleRecalculateXlsx = () => {
+    if (!recalculateProject?.id_proyecto || !recalculateDate) return;
+    downloadUrl(projectService.budgetRecalculationXlsxUrl(recalculateProject.id_proyecto, recalculateDate));
+    closeRecalculate();
+  };
+
+  const closeExportChoice = () => {
+    setExportChoice(null);
+  };
+
+  const openBudgetByGroupExport = (project) => {
+    if (!project?.id_proyecto) return;
     setFeedback(null);
+    setExportChoice({
+      title: "Presupuesto por rubros",
+      description: project.nombre_proyecto,
+      pdfUrl: projectService.budgetByGroupPdfUrl(project.id_proyecto),
+      xlsxUrl: projectService.budgetByGroupXlsxUrl(project.id_proyecto),
+      errorMessage: "No se pudo generar el presupuesto por rubros.",
+    });
+  };
+
+  const openInputsReportExport = (project) => {
+    if (!project?.id_proyecto) return;
+    setFeedback(null);
+    setExportChoice({
+      title: "Reporte de insumos del proyecto",
+      description: project.nombre_proyecto,
+      pdfUrl: projectService.inputsReportPdfUrl(project.id_proyecto),
+      xlsxUrl: projectService.inputsReportXlsxUrl(project.id_proyecto),
+      errorMessage: "No se pudo generar el reporte de insumos del proyecto.",
+    });
+  };
+
+  const handleExportChoicePdf = () => {
+    if (!exportChoice?.pdfUrl) return;
 
     try {
-      openPdfViewer(projectService.budgetByGroupPdfUrl(project.id_proyecto), {
-        title: "Presupuesto por rubros",
-        errorMessage: "No se pudo generar el presupuesto por rubros.",
+      openPdfViewer(exportChoice.pdfUrl, {
+        title: exportChoice.title,
+        errorMessage: exportChoice.errorMessage,
       });
+      closeExportChoice();
     } catch (pdfError) {
       setFeedback({
         type: "error",
-        message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el presupuesto por rubros.",
+        message: pdfError?.response?.data?.message || pdfError.message || exportChoice.errorMessage,
       });
     }
   };
 
-  const handleOpenInputsReportPdf = async (project) => {
-    setFeedback(null);
-
-    try {
-      openPdfViewer(projectService.inputsReportPdfUrl(project.id_proyecto), {
-        title: "Reporte de insumos del proyecto",
-        errorMessage: "No se pudo generar el reporte de insumos del proyecto.",
-      });
-    } catch (pdfError) {
-      setFeedback({
-        type: "error",
-        message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el reporte de insumos del proyecto.",
-      });
-    }
+  const handleExportChoiceXlsx = () => {
+    if (!exportChoice?.xlsxUrl) return;
+    downloadUrl(exportChoice.xlsxUrl);
+    closeExportChoice();
   };
 
   const openIncidenceSummary = (project) => {
@@ -562,6 +588,12 @@ export default function ProjectsPage() {
     }
   };
 
+  const handleIncidenceSummaryXlsx = () => {
+    if (!incidenceProject?.id_proyecto) return;
+    downloadUrl(projectService.incidenceSummaryXlsxUrl(incidenceProject.id_proyecto, incidenceFormat));
+    closeIncidenceSummary();
+  };
+
   const openGeneralBudget = (project) => {
     setGeneralBudgetProject(project);
     setGeneralBudgetFormat("PCA");
@@ -599,6 +631,12 @@ export default function ProjectsPage() {
     }
   };
 
+  const handleGeneralBudgetXlsx = () => {
+    if (!generalBudgetProject?.id_proyecto) return;
+    downloadUrl(projectService.generalBudgetXlsxUrl(generalBudgetProject.id_proyecto, generalBudgetFormat));
+    closeGeneralBudget();
+  };
+
   const openInputBreakdown = (project) => {
     setInputBreakdownProject(project);
     setInputBreakdownType("1");
@@ -634,6 +672,12 @@ export default function ProjectsPage() {
         message: pdfError?.response?.data?.message || pdfError.message || "No se pudo generar el desglose de insumos del proyecto.",
       });
     }
+  };
+
+  const handleInputBreakdownXlsx = () => {
+    if (!inputBreakdownProject?.id_proyecto) return;
+    downloadUrl(projectService.inputBreakdownXlsxUrl(inputBreakdownProject.id_proyecto, inputBreakdownType));
+    closeInputBreakdown();
   };
 
   const formatProjectNameLines = (value) => {
@@ -844,9 +888,9 @@ export default function ProjectsPage() {
                                 </DropdownMenuItem>
                               )}
                               {canViewBudgetByGroup && (
-                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => void handleOpenBudgetByGroupPdf(project)}>
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openBudgetByGroupExport(project)}>
                                   <Calculator className="h-4 w-4 text-muted-foreground" />
-                                  <span>Presupuesto por Rubros</span>
+                                  <span>Presupuesto por Rubros PDF/XLSX</span>
                                 </DropdownMenuItem>
                               )}
                               {canRecalculateBudget && (
@@ -864,7 +908,7 @@ export default function ProjectsPage() {
                               {canViewGeneralBudget && (
                                 <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openGeneralBudget(project)}>
                                   <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
-                                  <span>Presupuesto General</span>
+                                  <span>Presupuesto General PDF/XLSX</span>
                                 </DropdownMenuItem>
                               )}
                               {canViewInputBreakdown && (
@@ -874,9 +918,9 @@ export default function ProjectsPage() {
                                 </DropdownMenuItem>
                               )}
                               {canViewInputsReport && (
-                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => void handleOpenInputsReportPdf(project)}>
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openInputsReportExport(project)}>
                                   <ClipboardList className="h-4 w-4 text-muted-foreground" />
-                                  <span>Reporte de Insumos</span>
+                                  <span>Reporte de Insumos PDF/XLSX</span>
                                 </DropdownMenuItem>
                               )}
                               {!hasProjectRowActions && (
@@ -944,6 +988,37 @@ export default function ProjectsPage() {
           )}
         </CardContent>
       </Card>
+
+      {exportChoice && createPortal(
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/25 p-4 backdrop-blur-[1px]">
+          <Card className="w-full max-w-md border border-border/70 bg-white/95 shadow-[0_24px_90px_rgba(15,23,42,0.14)]">
+            <CardHeader className="border-b border-border/70 bg-muted/20">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-xl tracking-[-0.03em]">{exportChoice.title}</CardTitle>
+                  <CardDescription>{exportChoice.description || "Elige el formato de exportacion."}</CardDescription>
+                </div>
+
+                <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeExportChoice}>
+                  <X />
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
+              <Button type="button" variant="outline" className="h-12 gap-2 rounded-xl" onClick={handleExportChoicePdf}>
+                <FileSpreadsheet className="h-4 w-4" />
+                Generar PDF
+              </Button>
+              <Button type="button" className="h-12 gap-2 rounded-xl" onClick={handleExportChoiceXlsx}>
+                <FileDown className="h-4 w-4" />
+                Exportar XLSX
+              </Button>
+            </CardContent>
+          </Card>
+        </div>,
+        document.body,
+      )}
 
       {templateOpen && createPortal(
         <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
@@ -1249,6 +1324,9 @@ export default function ProjectsPage() {
                     <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={closeRecalculate}>
                       Cancelar
                     </Button>
+                    <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={handleRecalculateXlsx} disabled={recalculatePending || !recalculateDate}>
+                      Exportar XLSX
+                    </Button>
                     <Button type="submit" className="rounded-full bg-foreground text-background hover:bg-foreground/90" disabled={recalculatePending}>
                       {recalculatePending ? (
                         <>
@@ -1309,6 +1387,7 @@ export default function ProjectsPage() {
 
                   <div className="flex justify-end gap-3">
                     <Button type="button" variant="outline" onClick={closeIncidenceSummary}>Cancelar</Button>
+                    <Button type="button" variant="outline" onClick={handleIncidenceSummaryXlsx}>Exportar XLSX</Button>
                     <Button type="submit">Generar PDF</Button>
                   </div>
                 </form>
@@ -1362,6 +1441,10 @@ export default function ProjectsPage() {
 
                   <div className="flex justify-end gap-3">
                     <Button type="button" variant="outline" onClick={closeGeneralBudget}>Cancelar</Button>
+                    <Button type="button" variant="outline" className="gap-2" onClick={handleGeneralBudgetXlsx}>
+                      <FileDown className="h-4 w-4" />
+                      Exportar XLSX
+                    </Button>
                     <Button type="submit">Generar PDF</Button>
                   </div>
                 </form>
@@ -1413,6 +1496,7 @@ export default function ProjectsPage() {
 
                   <div className="flex justify-end gap-3">
                     <Button type="button" variant="outline" onClick={closeInputBreakdown}>Cancelar</Button>
+                    <Button type="button" variant="outline" onClick={handleInputBreakdownXlsx}>Exportar XLSX</Button>
                     <Button type="submit">Generar PDF</Button>
                   </div>
                 </form>

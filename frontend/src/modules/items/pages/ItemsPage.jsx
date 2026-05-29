@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { openPdfViewer } from "@/lib/utils/pdf";
+import { downloadUrl, openPdfViewer } from "@/lib/utils/pdf";
 import { itemsService } from "@/modules/dashboard/services/items.service";
 import {
   DropdownMenu,
@@ -64,6 +64,8 @@ export default function ItemsPage() {
   const [editUnitSearch, setEditUnitSearch] = useState("");
   const [editUnitComboboxOpen, setEditUnitComboboxOpen] = useState(false);
   const [editErrors, setEditErrors] = useState([]);
+  const [deactivateImpactOpen, setDeactivateImpactOpen] = useState(false);
+  const [pendingDeactivatePayload, setPendingDeactivatePayload] = useState(null);
   const [materialsOpen, setMaterialsOpen] = useState(false);
   const [materialsItem, setMaterialsItem] = useState(null);
   const [materialSearch, setMaterialSearch] = useState("");
@@ -140,6 +142,8 @@ export default function ItemsPage() {
     setEditUnitSearch("");
     setEditUnitComboboxOpen(false);
     setEditErrors([]);
+    setDeactivateImpactOpen(false);
+    setPendingDeactivatePayload(null);
   };
 
   const openMaterials = (item) => {
@@ -253,6 +257,17 @@ export default function ItemsPage() {
   const { data: contextData, isLoading: contextLoading } = useQuery({
     queryKey: ["items-context"],
     queryFn: itemsService.context,
+  });
+
+  const {
+    data: deactivateImpactData,
+    isLoading: deactivateImpactLoading,
+    isError: deactivateImpactIsError,
+  } = useQuery({
+    queryKey: ["item-deactivate-impact", editItem?.id_item],
+    queryFn: () => itemsService.deactivateImpact(editItem.id_item),
+    enabled: deactivateImpactOpen && Boolean(editItem?.id_item),
+    retry: false,
   });
 
   const createMutation = useMutation({
@@ -401,6 +416,10 @@ export default function ItemsPage() {
     })
     .slice(0, 30);
   const selectedEditUnitMeasure = unitMeasures.find((unit) => String(unit.id) === String(editUnitId));
+  const deactivateImpact = deactivateImpactData?.data ?? null;
+  const impactedProjects = deactivateImpact?.projects ?? [];
+  const impactedInputs = deactivateImpact?.inputs ?? [];
+  const deactivateImpactSummary = deactivateImpact?.summary ?? { projects_count: 0, inputs_count: 0 };
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
 
@@ -512,6 +531,30 @@ export default function ItemsPage() {
     } finally {
       setReportLoadingItemId(null);
     }
+  };
+
+  const handleDownloadUnitPriceAnalysisXlsx = (item) => {
+    if (!item?.id_item) return;
+    setReportFeedback(null);
+    downloadUrl(itemsService.legacyUnitPriceAnalysisXlsxUrl(item.id_item));
+  };
+
+  const handleDownloadMaterialBreakdownXlsx = (item) => {
+    if (!item?.id_item) return;
+    setReportFeedback(null);
+    downloadUrl(itemsService.materialBreakdownXlsxUrl(item.id_item));
+  };
+
+  const handleDownloadLaborBreakdownXlsx = (item) => {
+    if (!item?.id_item) return;
+    setReportFeedback(null);
+    downloadUrl(itemsService.laborBreakdownXlsxUrl(item.id_item));
+  };
+
+  const handleDownloadMachineryBreakdownXlsx = (item) => {
+    if (!item?.id_item) return;
+    setReportFeedback(null);
+    downloadUrl(itemsService.machineryBreakdownXlsxUrl(item.id_item));
   };
 
   const handleUnitSearchChange = (event) => {
@@ -653,6 +696,19 @@ export default function ItemsPage() {
       status: String(formData.get("status") || "").trim(),
     };
 
+    const currentStatus = String(editItem.status ?? editItem.estado ?? "").trim().toUpperCase();
+    const nextStatus = String(payload.status ?? "").trim().toUpperCase();
+
+    if (currentStatus === "AC" && nextStatus === "DC") {
+      setEditErrors([]);
+      setPendingDeactivatePayload({
+        id: editItem.id_item,
+        payload,
+      });
+      setDeactivateImpactOpen(true);
+      return;
+    }
+
     try {
       setEditErrors([]);
       await updateMutation.mutateAsync({
@@ -661,6 +717,24 @@ export default function ItemsPage() {
       });
     } catch (mutationError) {
       setEditErrors(collectValidationMessages(mutationError, "No se pudo actualizar el item."));
+    }
+  };
+
+  const closeDeactivateImpact = () => {
+    setDeactivateImpactOpen(false);
+    setPendingDeactivatePayload(null);
+  };
+
+  const confirmDeactivateItem = async () => {
+    if (!pendingDeactivatePayload) return;
+
+    try {
+      setEditErrors([]);
+      await updateMutation.mutateAsync(pendingDeactivatePayload);
+      closeDeactivateImpact();
+    } catch (mutationError) {
+      setEditErrors(collectValidationMessages(mutationError, "No se pudo desactivar el item."));
+      closeDeactivateImpact();
     }
   };
 
@@ -964,6 +1038,16 @@ export default function ItemsPage() {
     }
   };
 
+  const handleRecalculateXlsx = () => {
+    if (!recalculateItem?.id_item || !recalculateDate) return;
+    downloadUrl(itemsService.priceRecalculationXlsxUrl({
+      itemId: recalculateItem.id_item,
+      fecha: recalculateDate,
+      mode: "general",
+    }));
+    closeRecalculate();
+  };
+
   const handleBreakdownSubmit = async (event) => {
     event.preventDefault();
     if (!breakdownItem?.id_item || !breakdownDate || !breakdownType) return;
@@ -989,6 +1073,16 @@ export default function ItemsPage() {
     } finally {
       setReportLoadingItemId(null);
     }
+  };
+
+  const handleBreakdownXlsx = () => {
+    if (!breakdownItem?.id_item || !breakdownDate || !breakdownType) return;
+    downloadUrl(itemsService.breakdownRecalculationXlsxUrl({
+      itemId: breakdownItem.id_item,
+      fecha: breakdownDate,
+      type: breakdownType,
+    }));
+    closeBreakdown();
   };
 
   const materialOptions = inputOptionsData?.data?.items ?? [];
@@ -1237,6 +1331,10 @@ export default function ItemsPage() {
                                     <TrendingUp className="h-4 w-4 text-muted-foreground" />
                                     <span>{reportLoadingItemId === item.id_item ? "Generando PDF..." : "Análisis de precios unitarios"}</span>
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleDownloadUnitPriceAnalysisXlsx(item)}>
+                                    <FileDown className="h-4 w-4 text-muted-foreground" />
+                                    <span>Análisis de precios XLSX</span>
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openRecalculate(item)}>
                                     <RefreshCw className="h-4 w-4 text-muted-foreground" />
                                     <span>Recalcular Precio</span>
@@ -1250,6 +1348,10 @@ export default function ItemsPage() {
                                     <BarChart3 className="h-4 w-4 text-muted-foreground" />
                                     <span>Desglose Materiales</span>
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleDownloadMaterialBreakdownXlsx(item)}>
+                                    <FileDown className="h-4 w-4 text-muted-foreground" />
+                                    <span>Desglose Materiales XLSX</span>
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem
                                     className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
                                     onClick={() => handleOpenLaborBreakdownPdf(item)}
@@ -1258,6 +1360,10 @@ export default function ItemsPage() {
                                     <Users className="h-4 w-4 text-muted-foreground" />
                                     <span>{reportLoadingItemId === item.id_item ? "Generando PDF..." : "Desglose M.O."}</span>
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleDownloadLaborBreakdownXlsx(item)}>
+                                    <FileDown className="h-4 w-4 text-muted-foreground" />
+                                    <span>Desglose M.O. XLSX</span>
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem
                                     className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
                                     onClick={() => handleOpenMachineryBreakdownPdf(item)}
@@ -1265,6 +1371,10 @@ export default function ItemsPage() {
                                   >
                                     <Hammer className="h-4 w-4 text-muted-foreground" />
                                     <span>{reportLoadingItemId === item.id_item ? "Generando PDF..." : "Desglose Herramientas"}</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleDownloadMachineryBreakdownXlsx(item)}>
+                                    <FileDown className="h-4 w-4 text-muted-foreground" />
+                                    <span>Desglose Herramientas XLSX</span>
                                   </DropdownMenuItem>
                                   <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openBreakdown(item)}>
                                     <RefreshCw className="h-4 w-4 text-muted-foreground" />
@@ -1701,6 +1811,121 @@ export default function ItemsPage() {
         document.body,
       )}
 
+      {deactivateImpactOpen && createPortal(
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-[2px]">
+          <Card className="w-full max-w-3xl border border-border/70 bg-white/95 shadow-[0_24px_90px_rgba(15,23,42,0.18)]">
+            <CardHeader className="border-b border-border/70 bg-muted/20">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-2xl tracking-[-0.04em]">Desactivar Item</CardTitle>
+                  <CardDescription>
+                    Revisa en qué proyectos se usa y qué insumos componen este item antes de desactivarlo.
+                  </CardDescription>
+                </div>
+                <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeDeactivateImpact}>
+                  <X />
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="flex max-h-[78vh] flex-col gap-5 overflow-y-auto p-5 sm:p-6">
+              <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+                {deactivateImpactLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    Cargando impacto de desactivación...
+                  </div>
+                ) : deactivateImpactIsError ? (
+                  <Alert variant="destructive" className="rounded-2xl">
+                    <AlertDescription>No se pudo cargar el impacto de desactivación del ítem.</AlertDescription>
+                  </Alert>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    <p className="text-sm text-muted-foreground">
+                      Este ítem está usado en <strong className="text-foreground">{deactivateImpactSummary.projects_count}</strong> proyecto(s)
+                      {" "}y tiene <strong className="text-foreground">{deactivateImpactSummary.inputs_count}</strong> insumo(s) activo(s).
+                    </p>
+
+                    {deactivateImpactSummary.projects_count === 0 && deactivateImpactSummary.inputs_count === 0 && (
+                      <p className="rounded-xl border border-border/70 bg-background/80 p-3 text-sm text-muted-foreground">
+                        No se encontraron proyectos ni insumos afectados.
+                      </p>
+                    )}
+
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-2xl border border-border/70 bg-background/90 p-4">
+                        <h3 className="text-sm font-semibold text-foreground">Proyectos afectados</h3>
+                        <div className="mt-3 max-h-64 overflow-y-auto">
+                          {impactedProjects.length > 0 ? (
+                            <div className="flex flex-col divide-y divide-border/70">
+                              {impactedProjects.map((project) => (
+                                <div key={`${project.id_proyecto}-${project.module}-${project.quantity}`} className="py-3 first:pt-0 last:pb-0">
+                                  <p className="text-sm font-medium leading-6 text-foreground">{project.name}</p>
+                                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                    <span>Estado: {project.approval_label ?? project.approval_status ?? "-"}</span>
+                                    <span>Cantidad: {Number(project.quantity || 0).toLocaleString("es-BO")}</span>
+                                    <span>Módulo: {project.module ?? "General"}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No hay proyectos activos usando este ítem.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-border/70 bg-background/90 p-4">
+                        <h3 className="text-sm font-semibold text-foreground">Insumos del ítem</h3>
+                        <div className="mt-3 max-h-64 overflow-y-auto">
+                          {impactedInputs.length > 0 ? (
+                            <div className="flex flex-col divide-y divide-border/70">
+                              {impactedInputs.map((input) => (
+                                <div key={input.id_insumo} className="py-3 first:pt-0 last:pb-0">
+                                  <p className="text-sm font-medium leading-6 text-foreground">{input.description}</p>
+                                  <div className="mt-1 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                                    <span>Tipo: {input.type ?? "-"}</span>
+                                    <span>Unidad: {input.unit ?? "-"}</span>
+                                    <span>Cantidad: {Number(input.quantity || 0).toLocaleString("es-BO")}</span>
+                                    <span>Parcial: {Number(input.partial || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No hay insumos activos en este ítem.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={closeDeactivateImpact}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  className="rounded-full bg-rose-600 text-white hover:bg-rose-700"
+                  disabled={deactivateImpactLoading || deactivateImpactIsError || updateMutation.isPending}
+                  onClick={confirmDeactivateItem}
+                >
+                  {updateMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                      Desactivando...
+                    </>
+                  ) : "Desactivar de todos modos"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>,
+        document.body,
+      )}
+
       {filesOpen && createPortal(
         <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
           <div className="w-full max-w-3xl overflow-y-auto border-l border-border/70 bg-background/96 p-4 shadow-[0_0_60px_rgba(15,23,42,0.16)] backdrop-blur xl:p-6">
@@ -1810,14 +2035,19 @@ export default function ItemsPage() {
                     <Input id="recalculate_date" type="date" value={recalculateDate} onChange={(event) => setRecalculateDate(event.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" required />
                   </div>
 
-                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={recalculateMutation.isPending}>
-                    {recalculateMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 size-4 animate-spin" />
-                        Recalculando...
-                      </>
-                    ) : "Recalcular"}
-                  </Button>
+                  <div className="flex justify-end gap-3">
+                    <Button type="button" variant="outline" onClick={handleRecalculateXlsx} disabled={recalculateMutation.isPending || !recalculateDate}>
+                      Exportar XLSX
+                    </Button>
+                    <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={recalculateMutation.isPending}>
+                      {recalculateMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                          Recalculando...
+                        </>
+                      ) : "Recalcular"}
+                    </Button>
+                  </div>
                 </form>
               </CardContent>
             </Card>
@@ -1864,9 +2094,14 @@ export default function ItemsPage() {
                     <Input id="breakdown_date" type="date" value={breakdownDate} onChange={(event) => setBreakdownDate(event.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" required />
                   </div>
 
-                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
-                    Recalcular Desgloses
-                  </Button>
+                  <div className="flex justify-end gap-3">
+                    <Button type="button" variant="outline" onClick={handleBreakdownXlsx} disabled={!breakdownDate || !breakdownType}>
+                      Exportar XLSX
+                    </Button>
+                    <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
+                      Recalcular Desgloses
+                    </Button>
+                  </div>
                 </form>
               </CardContent>
             </Card>

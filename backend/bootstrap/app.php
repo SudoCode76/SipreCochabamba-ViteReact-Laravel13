@@ -12,6 +12,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
+        $middleware->redirectGuestsTo(fn (Request $request): ?string => $request->is('api/*') ? null : route('login'));
 
         $middleware->alias([
             'admin' => EnsureUserIsAdministrator::class,
@@ -31,7 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (ValidationException $exception, Request $request) {
-            if ($request->expectsJson() === false) {
+            if ($request->expectsJson() === false && $request->is('api/*') === false) {
                 return null;
             }
 
@@ -39,7 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (AuthenticationException $exception, Request $request) {
-            if ($request->expectsJson() === false) {
+            if ($request->expectsJson() === false && $request->is('api/*') === false) {
                 return null;
             }
 
@@ -47,7 +49,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (AuthorizationException $exception, Request $request) {
-            if ($request->expectsJson() === false) {
+            if ($request->expectsJson() === false && $request->is('api/*') === false) {
                 return null;
             }
 
@@ -57,7 +59,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (ModelNotFoundException $exception, Request $request) {
-            if ($request->expectsJson() === false) {
+            if ($request->expectsJson() === false && $request->is('api/*') === false) {
                 return null;
             }
 
@@ -65,7 +67,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (Throwable $exception, Request $request) {
-            if ($request->expectsJson() === false) {
+            if ($request->expectsJson() === false && $request->is('api/*') === false) {
                 return null;
             }
 
@@ -74,6 +76,18 @@ return Application::configure(basePath: dirname(__DIR__))
                 || $exception instanceof AuthorizationException
                 || $exception instanceof ModelNotFoundException) {
                 return null;
+            }
+
+            if ($exception instanceof HttpExceptionInterface) {
+                $status = $exception->getStatusCode();
+                $message = match ($status) {
+                    401 => 'No autenticado.',
+                    403 => 'No tiene permisos para acceder a este recurso.',
+                    404 => 'Recurso no encontrado.',
+                    default => $exception->getMessage() !== '' ? $exception->getMessage() : 'Error en la solicitud.',
+                };
+
+                return ApiResponse::error($message, null, $status);
             }
 
             report($exception);

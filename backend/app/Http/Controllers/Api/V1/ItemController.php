@@ -21,6 +21,7 @@ use App\Modules\Items\Services\Analysis\ItemAnalysisPermissionService;
 use App\Modules\Items\Services\Analysis\ItemPriceAnalysisService;
 use App\Modules\Items\Services\Analysis\ListAnalysisItemsService;
 use App\Modules\Items\Services\HistoricalBreakdownPdfService;
+use App\Modules\Items\Services\ItemBudgetXlsxService;
 use App\Modules\Items\Services\ItemCompositionService;
 use App\Modules\Items\Services\LaborBreakdownPdfService;
 use App\Modules\Items\Services\LegacyUnitPriceAnalysisPdfService;
@@ -32,6 +33,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Request as HttpRequest;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
@@ -50,6 +52,7 @@ class ItemController extends Controller
         private readonly LaborBreakdownPdfService $laborBreakdownPdfService,
         private readonly MachineryBreakdownPdfService $machineryBreakdownPdfService,
         private readonly HistoricalBreakdownPdfService $historicalBreakdownPdfService,
+        private readonly ItemBudgetXlsxService $itemBudgetXlsxService,
         private readonly AuditService $auditService,
     ) {}
 
@@ -440,6 +443,94 @@ class ItemController extends Controller
         ]);
     }
 
+    public function deactivateImpact(Item $item, Request $request): JsonResponse
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_edit']) {
+            return $this->forbiddenResponse('No tiene permisos para editar items.');
+        }
+
+        $projects = DB::table('proyecto_item')
+            ->join('proyecto', 'proyecto.id_proyecto', '=', 'proyecto_item.id_proyecto')
+            ->leftJoin('modulo', 'modulo.id_modulo', '=', 'proyecto_item.id_modulo')
+            ->where('proyecto_item.id_item', $item->id_item)
+            ->where('proyecto_item.estado', 'AC')
+            ->where('proyecto.estado', 'AC')
+            ->orderBy('proyecto.nombre_proyecto')
+            ->orderBy('proyecto_item.id_proyecto_item')
+            ->get([
+                'proyecto.id_proyecto',
+                'proyecto.nombre_proyecto as name',
+                'proyecto.aprobado as approval_status',
+                'proyecto.estado as status',
+                'proyecto_item.cantidad as quantity',
+                'modulo.nombre_modulo as module',
+            ])
+            ->map(fn ($project): array => [
+                'id_proyecto' => (int) $project->id_proyecto,
+                'name' => $project->name,
+                'approval_status' => $project->approval_status,
+                'approval_label' => match ($project->approval_status) {
+                    'AP' => 'APROBADO',
+                    'RC' => 'RECHAZADO',
+                    default => 'PENDIENTE',
+                },
+                'status' => $project->status,
+                'quantity' => round((float) $project->quantity, 4),
+                'module' => $project->module ?: 'General',
+            ])
+            ->values();
+
+        $inputs = DB::table('item_insumo')
+            ->join('insumo', 'insumo.id_insumo', '=', 'item_insumo.id_insumo')
+            ->leftJoin('tipo_insumo', 'tipo_insumo.id_tipo', '=', 'insumo.tipo')
+            ->leftJoin('unidad_medida', 'unidad_medida.id_unidad_medida', '=', 'insumo.unidad_medida')
+            ->where('item_insumo.id_item', $item->id_item)
+            ->where('item_insumo.estado', 'AC')
+            ->where('insumo.estado', 'AC')
+            ->orderBy('insumo.tipo')
+            ->orderBy('insumo.descripcion')
+            ->get([
+                'insumo.id_insumo',
+                'insumo.descripcion as description',
+                'insumo.tipo',
+                'tipo_insumo.descripcion as type_description',
+                'unidad_medida.abreviatura',
+                'unidad_medida.descripcion as unit_description',
+                'item_insumo.cantidad as quantity',
+                'insumo.precio as unit_price',
+            ])
+            ->map(fn ($input): array => [
+                'id_insumo' => (int) $input->id_insumo,
+                'description' => $input->description,
+                'type' => $input->type_description ?: match ((int) $input->tipo) {
+                    1 => 'Material',
+                    2 => 'Mano de Obra',
+                    3 => 'Maquinaria y Herramientas',
+                    default => 'Insumo',
+                },
+                'unit' => $input->abreviatura ?: $input->unit_description,
+                'quantity' => round((float) $input->quantity, 4),
+                'unit_price' => round((float) $input->unit_price, 4),
+                'partial' => round(((float) $input->quantity) * ((float) $input->unit_price), 4),
+            ])
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Impacto de desactivacion del item obtenido correctamente.',
+            'data' => [
+                'projects' => $projects->all(),
+                'inputs' => $inputs->all(),
+                'summary' => [
+                    'projects_count' => $projects->count(),
+                    'inputs_count' => $inputs->count(),
+                ],
+            ],
+        ]);
+    }
+
     public function updateFiles(Item $item, UpdateItemFilesRequest $request): JsonResponse
     {
         $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
@@ -517,6 +608,20 @@ class ItemController extends Controller
         return $this->legacyUnitPriceAnalysisPdfService->stream($item, $mode);
     }
 
+    public function legacyUnitPriceAnalysisXlsx(ShowItemPriceAnalysisRequest $request, Item $item): Response
+    {
+        $mode = strtolower((string) $request->input('mode', 'general'));
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), $mode);
+
+        if (! $permissions['can_view_price_analysis']) {
+            abort(403, 'No tiene permisos para ver el analisis de precios unitarios del item.');
+        }
+
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se exporto XLSX del analisis '.$mode.' del item '.$item->item);
+
+        return $this->itemBudgetXlsxService->priceAnalysis($item, $mode);
+    }
+
     public function priceRecalculation(RecalculateItemPriceRequest $request, Item $item): JsonResponse
     {
         $mode = strtolower((string) $request->input('mode', 'general'));
@@ -556,6 +661,26 @@ class ItemController extends Controller
         }
 
         $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se genero el reporte recalculado '.$mode.' del item '.$item->item);
+
+        return $response;
+    }
+
+    public function priceRecalculationXlsx(RecalculateItemPriceRequest $request, Item $item): Response
+    {
+        $mode = strtolower((string) $request->input('mode', 'general'));
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), $mode);
+
+        if (! $permissions['can_recalculate']) {
+            abort(403, 'No tiene permisos para recalcular el analisis '.strtoupper($mode).' del item.');
+        }
+
+        try {
+            $response = $this->itemBudgetXlsxService->priceAnalysis($item, $mode, $request->date('fecha'));
+        } catch (InvalidArgumentException $exception) {
+            abort(422, $exception->getMessage());
+        }
+
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se exporto XLSX del reporte recalculado '.$mode.' del item '.$item->item);
 
         return $response;
     }
@@ -604,6 +729,17 @@ class ItemController extends Controller
         }
 
         return $this->materialBreakdownPdfService->stream($item);
+    }
+
+    public function materialsXlsx(Item $item, Request $request): Response
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            abort(403, 'No tiene permisos para consultar el desglose de materiales del item.');
+        }
+
+        return $this->itemBudgetXlsxService->currentBreakdown($item, 1);
     }
 
     public function storeMaterial(Item $item, StoreItemCompositionInputRequest $request): JsonResponse
@@ -670,6 +806,17 @@ class ItemController extends Controller
         return $this->laborBreakdownPdfService->stream($item);
     }
 
+    public function laborXlsx(Item $item, Request $request): Response
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view_price_analysis']) {
+            abort(403, 'No tiene permisos para consultar el desglose de mano de obra del item.');
+        }
+
+        return $this->itemBudgetXlsxService->currentBreakdown($item, 2);
+    }
+
     public function storeLabor(Item $item, StoreItemCompositionInputRequest $request): JsonResponse
     {
         return $this->compositionStoreResponse($item, 2, $request, 'Mano de obra agregada correctamente al item.');
@@ -732,6 +879,17 @@ class ItemController extends Controller
         }
 
         return $this->machineryBreakdownPdfService->stream($item);
+    }
+
+    public function machineryXlsx(Item $item, Request $request): Response
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view_price_analysis']) {
+            abort(403, 'No tiene permisos para consultar el desglose de maquinaria y herramientas del item.');
+        }
+
+        return $this->itemBudgetXlsxService->currentBreakdown($item, 3);
     }
 
     public function storeMachinery(Item $item, StoreItemCompositionInputRequest $request): JsonResponse
@@ -822,6 +980,36 @@ class ItemController extends Controller
         try {
             $response = $this->historicalBreakdownPdfService->stream($item, $type, $request->date('fecha'));
             $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se recalculo el desglose historico del item '.$item->item);
+
+            return $response;
+        } catch (InvalidArgumentException $exception) {
+            return $this->validationFailureResponse($exception->getMessage());
+        }
+    }
+
+    public function breakdownRecalculationXlsx(Item $item, Request $request): Response|JsonResponse
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_recalculate']) {
+            return $this->forbiddenResponse('No tiene permisos para recalcular desgloses del item.');
+        }
+
+        $validated = $request->validate([
+            'fecha' => ['required', 'date'],
+            'tipo' => ['nullable'],
+            'tipo_desglose' => ['nullable'],
+        ]);
+
+        $type = $validated['tipo'] ?? $validated['tipo_desglose'] ?? null;
+
+        if ($type === null || $type === '') {
+            return $this->validationFailureResponse('El tipo de desglose es obligatorio.');
+        }
+
+        try {
+            $response = $this->itemBudgetXlsxService->historicalBreakdown($item, $type, $request->date('fecha'));
+            $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se exporto XLSX del desglose historico del item '.$item->item);
 
             return $response;
         } catch (InvalidArgumentException $exception) {

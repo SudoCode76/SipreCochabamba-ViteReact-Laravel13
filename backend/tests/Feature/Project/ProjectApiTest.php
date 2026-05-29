@@ -390,6 +390,14 @@ class ProjectApiTest extends TestCase
 
         $this->assertStringStartsWith('%PDF', $pdf->getContent());
 
+        $xlsx = $this->get('/api/v1/projects/1/budget-by-group/xlsx');
+
+        $xlsx->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->assertHeader('content-disposition', 'attachment; filename="presupuesto_por_rubros.xlsx"');
+
+        $this->assertStringStartsWith('PK', $xlsx->getContent());
+
         $this->assertDatabaseHas('proyecto_historial', [
             'id_proyecto' => 1,
             'id_usuario' => 1,
@@ -414,6 +422,14 @@ class ProjectApiTest extends TestCase
             ->assertHeader('content-disposition', 'inline; filename="presupuesto_por_rubros.pdf"');
 
         $this->assertStringStartsWith('%PDF', $historicalPdf->getContent());
+
+        $historicalXlsx = $this->get('/api/v1/projects/1/budget-recalculation/xlsx?fecha=2026-04-30');
+
+        $historicalXlsx->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->assertHeader('content-disposition', 'attachment; filename="presupuesto_recalculado.xlsx"');
+
+        $this->assertStringStartsWith('PK', $historicalXlsx->getContent());
 
         $this->assertDatabaseHas('proyecto_historial', [
             'id_proyecto' => 1,
@@ -628,6 +644,13 @@ class ProjectApiTest extends TestCase
             ->assertHeader('content-type', 'application/pdf')
             ->assertHeader('content-disposition', 'inline; filename="presupuesto_general.pdf"');
         $this->assertStringStartsWith('%PDF', $response->getContent());
+
+        $xlsx = $this->get('/api/v1/projects/1/general-budget/xlsx?format=PCA');
+
+        $xlsx->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->assertHeader('content-disposition', 'attachment; filename="presupuesto_general.xlsx"');
+        $this->assertStringStartsWith('PK', $xlsx->getContent());
     }
 
     public function test_general_budget_pdf_is_valid_when_project_has_no_items(): void
@@ -671,6 +694,12 @@ class ProjectApiTest extends TestCase
                 ->assertHeader('content-type', 'application/pdf')
                 ->assertHeader('content-disposition', 'inline; filename="'.$filename.'"');
             $this->assertStringStartsWith('%PDF', $response->getContent());
+
+            $xlsx = $this->get('/api/v1/projects/1/input-breakdown/xlsx?type='.$type);
+
+            $xlsx->assertOk()
+                ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            $this->assertStringStartsWith('PK', $xlsx->getContent());
         }
     }
 
@@ -749,6 +778,13 @@ class ProjectApiTest extends TestCase
             ->assertHeader('content-type', 'application/pdf')
             ->assertHeader('content-disposition', 'inline; filename="reporte_consolidado_insumos.pdf"');
         $this->assertStringStartsWith('%PDF', $response->getContent());
+
+        $xlsx = $this->get('/api/v1/projects/1/inputs-report/xlsx');
+
+        $xlsx->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->assertHeader('content-disposition', 'attachment; filename="reporte_consolidado_insumos.xlsx"');
+        $this->assertStringStartsWith('PK', $xlsx->getContent());
 
         $this->assertDatabaseHas('proyecto_historial', [
             'id_proyecto' => 1,

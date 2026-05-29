@@ -20,6 +20,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/items/upre/context', [ItemCatalogController::class, 'upreContext']);
     Route::get('/items/upre', [ItemCatalogController::class, 'upreIndex']);
     Route::post('/items', [ItemCatalogController::class, 'store']);
+    Route::get('/items/{item}/deactivate-impact', [ItemCatalogController::class, 'deactivateImpact']);
     Route::get('/items/{item}', [ItemCatalogController::class, 'show']);
     Route::put('/items/{item}', [ItemCatalogController::class, 'update']);
     Route::post('/items/{item}/files', [ItemCatalogController::class, 'updateFiles']);
@@ -27,6 +28,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/items/{item}/composition', [ItemCompositionController::class, 'composition']);
     Route::get('/items/{item}/materials', [ItemCompositionController::class, 'materials']);
     Route::get('/items/{item}/materials/pdf', [ItemCompositionController::class, 'materialsPdf']);
+    Route::get('/items/{item}/materials/xlsx', [ItemCompositionController::class, 'materialsXlsx']);
     Route::post('/items/{item}/materials/sync', [ItemCompositionController::class, 'syncMaterials']);
     Route::post('/items/{item}/materials', [ItemCompositionController::class, 'storeMaterial']);
     Route::get('/items/{item}/materials/total', [ItemCompositionController::class, 'materialsTotal']);
@@ -34,6 +36,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::delete('/items/{item}/materials/{itemInput}', [ItemCompositionController::class, 'deleteMaterial']);
     Route::get('/items/{item}/labor', [ItemCompositionController::class, 'labor']);
     Route::get('/items/{item}/labor/pdf', [ItemCompositionController::class, 'laborPdf']);
+    Route::get('/items/{item}/labor/xlsx', [ItemCompositionController::class, 'laborXlsx']);
     Route::post('/items/{item}/labor/sync', [ItemCompositionController::class, 'syncLabor']);
     Route::post('/items/{item}/labor', [ItemCompositionController::class, 'storeLabor']);
     Route::get('/items/{item}/labor/total', [ItemCompositionController::class, 'laborTotal']);
@@ -41,6 +44,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::delete('/items/{item}/labor/{itemInput}', [ItemCompositionController::class, 'deleteLabor']);
     Route::get('/items/{item}/machinery', [ItemCompositionController::class, 'machinery']);
     Route::get('/items/{item}/machinery/pdf', [ItemCompositionController::class, 'machineryPdf']);
+    Route::get('/items/{item}/machinery/xlsx', [ItemCompositionController::class, 'machineryXlsx']);
     Route::post('/items/{item}/machinery/sync', [ItemCompositionController::class, 'syncMachinery']);
     Route::post('/items/{item}/machinery', [ItemCompositionController::class, 'storeMachinery']);
     Route::get('/items/{item}/machinery/total', [ItemCompositionController::class, 'machineryTotal']);
@@ -48,10 +52,13 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::delete('/items/{item}/machinery/{itemInput}', [ItemCompositionController::class, 'deleteMachinery']);
     Route::get('/items/{item}/total', [ItemCompositionController::class, 'globalTotal']);
     Route::get('/items/{item}/breakdowns/recalculate/pdf', [ItemBreakdownController::class, 'breakdownRecalculation']);
+    Route::get('/items/{item}/breakdowns/recalculate/xlsx', [ItemBreakdownController::class, 'breakdownRecalculationXlsx']);
     Route::post('/items/{item}/breakdowns/recalculate', [ItemBreakdownController::class, 'breakdownRecalculation']);
     Route::get('/items/{item}/price-analysis', [ItemAnalysisController::class, 'priceAnalysis']);
     Route::get('/items/{item}/analisis-precios-unitarios', [ItemAnalysisController::class, 'legacyUnitPriceAnalysis']);
     Route::get('/items/{item}/analisis-precios-unitarios/pdf', [ItemAnalysisController::class, 'legacyUnitPriceAnalysisPdf']);
+    Route::get('/items/{item}/analisis-precios-unitarios/xlsx', [ItemAnalysisController::class, 'legacyUnitPriceAnalysisXlsx']);
     Route::post('/items/{item}/price-recalculation', [ItemAnalysisController::class, 'priceRecalculation']);
     Route::get('/items/{item}/price-recalculation/pdf', [ItemAnalysisController::class, 'priceRecalculationPdf']);
+    Route::get('/items/{item}/price-recalculation/xlsx', [ItemAnalysisController::class, 'priceRecalculationXlsx']);
 });

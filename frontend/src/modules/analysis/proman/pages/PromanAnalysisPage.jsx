@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Loader2, TrendingUp, Search, MoreHorizontal, RefreshCw, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, TrendingUp, Search, MoreHorizontal, RefreshCw, X, FileDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { openPdfViewer } from "@/lib/utils/pdf";
+import { downloadUrl, openPdfViewer } from "@/lib/utils/pdf";
 import { itemsService } from "@/modules/dashboard/services/items.service";
 import {
   DropdownMenu,
@@ -65,6 +65,18 @@ export default function PromanAnalysisPage() {
       title: "Recálculo precio item PROMAN",
       errorMessage: "No se pudo generar el recálculo de precio item PROMAN.",
     });
+    setRecalculateOpen(false);
+    setRecalculateItem(null);
+  };
+
+
+  const handleDownloadRecalculationXlsx = () => {
+    if (!recalculateItem?.id_item || !recalculateDate) return;
+    downloadUrl(itemsService.priceRecalculationXlsxUrl({
+      itemId: recalculateItem.id_item,
+      fecha: recalculateDate,
+      mode: "proman",
+    }));
     setRecalculateOpen(false);
     setRecalculateItem(null);
   };
@@ -119,6 +131,13 @@ export default function PromanAnalysisPage() {
     } finally {
       setReportLoadingItemId(null);
     }
+  };
+
+
+  const handleDownloadUnitPriceAnalysisXlsx = (item) => {
+    if (!item?.id_item) return;
+    setReportFeedback(null);
+    downloadUrl(itemsService.legacyUnitPriceAnalysisXlsxUrl(item.id_item, "proman"));
   };
 
   return (
@@ -254,6 +273,13 @@ export default function PromanAnalysisPage() {
                                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
                                 <span>{reportLoadingItemId === item.id_item ? "Generando PDF..." : "Análisis de Precio"}</span>
                               </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
+                                onClick={() => handleDownloadUnitPriceAnalysisXlsx(item)}
+                              >
+                                <FileDown className="h-4 w-4 text-muted-foreground" />
+                                <span>Análisis de Precio XLSX</span>
+                              </DropdownMenuItem>
                               <DropdownMenuItem 
                                 className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
                                 onClick={() => handleRecalculate(item)}
@@ -358,9 +384,14 @@ export default function PromanAnalysisPage() {
                     <Input id="fecha" type="date" value={recalculateDate} onChange={(e) => setRecalculateDate(e.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" required />
                   </div>
 
-                  <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
-                    Recalcular
-                  </Button>
+                  <div className="flex justify-end gap-3">
+                    <Button type="button" variant="outline" onClick={handleDownloadRecalculationXlsx}>
+                      Exportar XLSX
+                    </Button>
+                    <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
+                      Recalcular
+                    </Button>
+                  </div>
                 </form>
               </CardContent>
             </Card>

@@ -84,6 +84,11 @@ export const itemsService = {
     return response.data;
   },
 
+  deactivateImpact: async (itemId) => {
+    const response = await apiClient.get(`/v1/items/${itemId}/deactivate-impact`);
+    return response.data;
+  },
+
   getById: async (itemId) => {
     const response = await apiClient.get(`/v1/items/${itemId}`);
     return response.data;
@@ -192,6 +197,7 @@ export const itemsService = {
   },
 
   priceRecalculationPdfUrl: ({ itemId, fecha, mode = "general" }) => buildApiUrl(`/v1/items/${itemId}/price-recalculation/pdf`, { fecha, mode }),
+  priceRecalculationXlsxUrl: ({ itemId, fecha, mode = "general" }) => buildApiUrl(`/v1/items/${itemId}/price-recalculation/xlsx`, { fecha, mode }),
 
   recalculateBreakdowns: async ({ itemId, payload }) => {
     const response = await apiClient.post(`/v1/items/${itemId}/breakdowns/recalculate`, payload, {
@@ -201,6 +207,10 @@ export const itemsService = {
   },
 
   breakdownRecalculationPdfUrl: ({ itemId, fecha, type }) => buildApiUrl(`/v1/items/${itemId}/breakdowns/recalculate/pdf`, {
+    fecha,
+    tipo_desglose: type,
+  }),
+  breakdownRecalculationXlsxUrl: ({ itemId, fecha, type }) => buildApiUrl(`/v1/items/${itemId}/breakdowns/recalculate/xlsx`, {
     fecha,
     tipo_desglose: type,
   }),
@@ -214,6 +224,7 @@ export const itemsService = {
   },
 
   legacyUnitPriceAnalysisPdfUrl: (itemId, mode = "general") => buildApiUrl(`/v1/items/${itemId}/analisis-precios-unitarios/pdf`, { mode }),
+  legacyUnitPriceAnalysisXlsxUrl: (itemId, mode = "general") => buildApiUrl(`/v1/items/${itemId}/analisis-precios-unitarios/xlsx`, { mode }),
 
   downloadMaterialBreakdownPdf: async (itemId) => {
     const response = await apiClient.get(`/v1/items/${itemId}/materials/pdf`, {
@@ -223,6 +234,7 @@ export const itemsService = {
   },
 
   materialBreakdownPdfUrl: (itemId) => buildApiUrl(`/v1/items/${itemId}/materials/pdf`),
+  materialBreakdownXlsxUrl: (itemId) => buildApiUrl(`/v1/items/${itemId}/materials/xlsx`),
 
   downloadLaborBreakdownPdf: async (itemId) => {
     const response = await apiClient.get(`/v1/items/${itemId}/labor/pdf`, {
@@ -232,6 +244,7 @@ export const itemsService = {
   },
 
   laborBreakdownPdfUrl: (itemId) => buildApiUrl(`/v1/items/${itemId}/labor/pdf`),
+  laborBreakdownXlsxUrl: (itemId) => buildApiUrl(`/v1/items/${itemId}/labor/xlsx`),
 
   downloadMachineryBreakdownPdf: async (itemId) => {
     const response = await apiClient.get(`/v1/items/${itemId}/machinery/pdf`, {
@@ -241,4 +254,5 @@ export const itemsService = {
   },
 
   machineryBreakdownPdfUrl: (itemId) => buildApiUrl(`/v1/items/${itemId}/machinery/pdf`),
+  machineryBreakdownXlsxUrl: (itemId) => buildApiUrl(`/v1/items/${itemId}/machinery/xlsx`),
 };

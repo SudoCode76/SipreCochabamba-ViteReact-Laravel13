@@ -1,4 +1,4 @@
-import { apiBaseUrl } from "@/lib/api/client";
+import apiClient, { apiBaseUrl } from "@/lib/api/client";
 
 export function buildApiUrl(path, params = {}) {
   const base = apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`;
@@ -45,4 +45,30 @@ export function openPdfViewer(url, options = {}) {
 
 export function openPdfInNewTab(path, params = {}) {
   return openPdfViewer(buildApiUrl(path, params));
+}
+
+function filenameFromContentDisposition(contentDisposition) {
+  const match = contentDisposition?.match(/filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i);
+  const filename = match?.[1] || match?.[2];
+
+  return filename ? decodeURIComponent(filename) : "reporte.xlsx";
+}
+
+export async function downloadUrl(url) {
+  const response = await apiClient.get(url, {
+    responseType: "blob",
+    headers: {
+      Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json",
+    },
+  });
+  const blobUrl = URL.createObjectURL(response.data);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = filenameFromContentDisposition(response.headers["content-disposition"]);
+  link.rel = "noopener noreferrer";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(blobUrl);
 }

@@ -90,6 +90,7 @@ export const projectService = {
   },
 
   budgetRecalculationPdfUrl: (projectId, fecha) => buildApiUrl(`/v1/projects/${projectId}/budget-recalculation/pdf`, { fecha }),
+  budgetRecalculationXlsxUrl: (projectId, fecha) => buildApiUrl(`/v1/projects/${projectId}/budget-recalculation/xlsx`, { fecha }),
 
   downloadBudgetByGroupPdf: async (projectId) => {
     const response = await apiClient.get(`/v1/projects/${projectId}/budget-by-group/pdf`, {
@@ -99,6 +100,7 @@ export const projectService = {
   },
 
   budgetByGroupPdfUrl: (projectId) => buildApiUrl(`/v1/projects/${projectId}/budget-by-group/pdf`),
+  budgetByGroupXlsxUrl: (projectId) => buildApiUrl(`/v1/projects/${projectId}/budget-by-group/xlsx`),
 
   downloadIncidenceSummaryPdf: async (projectId, format) => {
     const response = await apiClient.get(`/v1/projects/${projectId}/incidence-summary/pdf`, {
@@ -109,6 +111,7 @@ export const projectService = {
   },
 
   incidenceSummaryPdfUrl: (projectId, format) => buildApiUrl(`/v1/projects/${projectId}/incidence-summary/pdf`, { format }),
+  incidenceSummaryXlsxUrl: (projectId, format) => buildApiUrl(`/v1/projects/${projectId}/incidence-summary/xlsx`, { format }),
 
   downloadGeneralBudgetPdf: async (projectId, format) => {
     const response = await apiClient.get(`/v1/projects/${projectId}/general-budget/pdf`, {
@@ -119,6 +122,7 @@ export const projectService = {
   },
 
   generalBudgetPdfUrl: (projectId, format) => buildApiUrl(`/v1/projects/${projectId}/general-budget/pdf`, { format }),
+  generalBudgetXlsxUrl: (projectId, format) => buildApiUrl(`/v1/projects/${projectId}/general-budget/xlsx`, { format }),
 
   downloadInputBreakdownPdf: async (projectId, type) => {
     const response = await apiClient.get(`/v1/projects/${projectId}/input-breakdown/pdf`, {
@@ -129,6 +133,7 @@ export const projectService = {
   },
 
   inputBreakdownPdfUrl: (projectId, type) => buildApiUrl(`/v1/projects/${projectId}/input-breakdown/pdf`, { type }),
+  inputBreakdownXlsxUrl: (projectId, type) => buildApiUrl(`/v1/projects/${projectId}/input-breakdown/xlsx`, { type }),
 
   downloadInputsReportPdf: async (projectId) => {
     const response = await apiClient.get(`/v1/projects/${projectId}/inputs-report/pdf`, {
@@ -138,6 +143,7 @@ export const projectService = {
   },
 
   inputsReportPdfUrl: (projectId) => buildApiUrl(`/v1/projects/${projectId}/inputs-report/pdf`),
+  inputsReportXlsxUrl: (projectId) => buildApiUrl(`/v1/projects/${projectId}/inputs-report/xlsx`),
 
   items: async (projectId, format = "PCA") => {
     const response = await apiClient.get(`/v1/projects/${projectId}/items`, {
