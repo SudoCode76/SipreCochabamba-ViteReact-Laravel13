@@ -50,6 +50,7 @@ export default function ItemsPage() {
   const [page, setPage] = useState(1);
   const [reportLoadingItemId, setReportLoadingItemId] = useState(null);
   const [reportFeedback, setReportFeedback] = useState(null);
+  const [exportChoice, setExportChoice] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createGroupId, setCreateGroupId] = useState("");
   const [createUnitId, setCreateUnitId] = useState("");
@@ -449,6 +450,14 @@ export default function ItemsPage() {
     setPage(1);
   };
 
+  const closeExportChoice = () => setExportChoice(null);
+
+  const openExportChoice = (item, report) => {
+    if (!item?.id_item) return;
+    setReportFeedback(null);
+    setExportChoice({ item, report });
+  };
+
   const handleOpenUnitPriceAnalysisPdf = async (item) => {
     if (!item?.id_item) return;
 
@@ -555,6 +564,54 @@ export default function ItemsPage() {
     if (!item?.id_item) return;
     setReportFeedback(null);
     downloadUrl(itemsService.machineryBreakdownXlsxUrl(item.id_item));
+  };
+
+  const handleExportChoicePdf = () => {
+    if (!exportChoice?.item?.id_item) return;
+
+    const { item, report } = exportChoice;
+
+    if (report === "unit-price") {
+      handleOpenUnitPriceAnalysisPdf(item);
+    }
+
+    if (report === "materials") {
+      handleOpenMaterialBreakdownPdf(item);
+    }
+
+    if (report === "labor") {
+      handleOpenLaborBreakdownPdf(item);
+    }
+
+    if (report === "machinery") {
+      handleOpenMachineryBreakdownPdf(item);
+    }
+
+    closeExportChoice();
+  };
+
+  const handleExportChoiceXlsx = () => {
+    if (!exportChoice?.item?.id_item) return;
+
+    const { item, report } = exportChoice;
+
+    if (report === "unit-price") {
+      handleDownloadUnitPriceAnalysisXlsx(item);
+    }
+
+    if (report === "materials") {
+      handleDownloadMaterialBreakdownXlsx(item);
+    }
+
+    if (report === "labor") {
+      handleDownloadLaborBreakdownXlsx(item);
+    }
+
+    if (report === "machinery") {
+      handleDownloadMachineryBreakdownXlsx(item);
+    }
+
+    closeExportChoice();
   };
 
   const handleUnitSearchChange = (event) => {
@@ -1327,13 +1384,9 @@ export default function ItemsPage() {
                                   </DropdownMenuItem>
 
                                   <DropdownMenuSeparator className="my-1 bg-border/50" />
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleOpenUnitPriceAnalysisPdf(item)} disabled={reportLoadingItemId === item.id_item}>
+                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openExportChoice(item, "unit-price")} disabled={reportLoadingItemId === item.id_item}>
                                     <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                                    <span>{reportLoadingItemId === item.id_item ? "Generando PDF..." : "Análisis de precios unitarios"}</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleDownloadUnitPriceAnalysisXlsx(item)}>
-                                    <FileDown className="h-4 w-4 text-muted-foreground" />
-                                    <span>Análisis de precios XLSX</span>
+                                    <span>{reportLoadingItemId === item.id_item ? "Generando..." : "Análisis de precios unitarios"}</span>
                                   </DropdownMenuItem>
                                   <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openRecalculate(item)}>
                                     <RefreshCw className="h-4 w-4 text-muted-foreground" />
@@ -1343,38 +1396,26 @@ export default function ItemsPage() {
                                   <DropdownMenuSeparator className="my-1 bg-border/50" />
                                   <DropdownMenuItem
                                     className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
-                                    onClick={() => handleOpenMaterialBreakdownPdf(item)}
+                                    onClick={() => openExportChoice(item, "materials")}
                                   >
                                     <BarChart3 className="h-4 w-4 text-muted-foreground" />
                                     <span>Desglose Materiales</span>
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleDownloadMaterialBreakdownXlsx(item)}>
-                                    <FileDown className="h-4 w-4 text-muted-foreground" />
-                                    <span>Desglose Materiales XLSX</span>
-                                  </DropdownMenuItem>
                                   <DropdownMenuItem
                                     className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
-                                    onClick={() => handleOpenLaborBreakdownPdf(item)}
+                                    onClick={() => openExportChoice(item, "labor")}
                                     disabled={reportLoadingItemId === item.id_item}
                                   >
                                     <Users className="h-4 w-4 text-muted-foreground" />
-                                    <span>{reportLoadingItemId === item.id_item ? "Generando PDF..." : "Desglose M.O."}</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleDownloadLaborBreakdownXlsx(item)}>
-                                    <FileDown className="h-4 w-4 text-muted-foreground" />
-                                    <span>Desglose M.O. XLSX</span>
+                                    <span>{reportLoadingItemId === item.id_item ? "Generando..." : "Desglose M.O."}</span>
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
-                                    onClick={() => handleOpenMachineryBreakdownPdf(item)}
+                                    onClick={() => openExportChoice(item, "machinery")}
                                     disabled={reportLoadingItemId === item.id_item}
                                   >
                                     <Hammer className="h-4 w-4 text-muted-foreground" />
-                                    <span>{reportLoadingItemId === item.id_item ? "Generando PDF..." : "Desglose Herramientas"}</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => handleDownloadMachineryBreakdownXlsx(item)}>
-                                    <FileDown className="h-4 w-4 text-muted-foreground" />
-                                    <span>Desglose Herramientas XLSX</span>
+                                    <span>{reportLoadingItemId === item.id_item ? "Generando..." : "Desglose Herramientas"}</span>
                                   </DropdownMenuItem>
                                   <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openBreakdown(item)}>
                                     <RefreshCw className="h-4 w-4 text-muted-foreground" />
@@ -2003,6 +2044,48 @@ export default function ItemsPage() {
               </CardContent>
             </Card>
           </div>
+        </div>,
+        document.body,
+      )}
+
+      {exportChoice && createPortal(
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-[1px]">
+          <Card className="w-full max-w-md border border-border/70 bg-white shadow-[0_24px_90px_rgba(15,23,42,0.18)]">
+            <CardHeader className="border-b border-border/70 bg-muted/20">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-2xl tracking-[-0.04em]">Formato del reporte</CardTitle>
+                  <CardDescription>
+                    {exportChoice.report === "unit-price" && "Análisis de precios unitarios"}
+                    {exportChoice.report === "materials" && "Desglose de materiales"}
+                    {exportChoice.report === "labor" && "Desglose de mano de obra"}
+                    {exportChoice.report === "machinery" && "Desglose de herramientas"}
+                  </CardDescription>
+                </div>
+                <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeExportChoice}>
+                  <X />
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-5 p-5 sm:p-6">
+              <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Item</p>
+                <p className="mt-2 text-sm font-semibold text-foreground">{exportChoice.item?.name ?? exportChoice.item?.item ?? "-"}</p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Button type="button" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" onClick={handleExportChoicePdf}>
+                  <FileText className="mr-2 size-4" />
+                  PDF
+                </Button>
+                <Button type="button" variant="outline" className="h-12 rounded-full" onClick={handleExportChoiceXlsx}>
+                  <FileDown className="mr-2 size-4" />
+                  XLSX
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>,
         document.body,
       )}
