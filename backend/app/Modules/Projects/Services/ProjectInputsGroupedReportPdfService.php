@@ -112,7 +112,7 @@ class ProjectInputsGroupedReportPdfService
   <th colspan="7">'.htmlentities(mb_strtoupper((string) $project->nombre_proyecto, 'UTF-8')).'</th>
  </tr>
  </table>
- <table cellpadding="5px">
+ <table cellpadding="5px" width="610">
  <thead>
    <tr bgcolor="#55827e">
    <th width="35"><font color="#fcfdfd">Nro</font></th>
@@ -135,7 +135,7 @@ class ProjectInputsGroupedReportPdfService
 
             $html .= '
           <tr class="input">
-            <td colspan="8"><b>'.htmlentities((string) $first['tipo_nombre']).' - '.htmlentities((string) $first['insumo']).' | Unidad: '.htmlentities((string) ($first['unidad'] ?? '')).' | Cantidad total: '.LegacyPdfFormat::number($inputQuantity, 4).'</b></td>
+            <td width="610" colspan="8"><b>'.htmlentities((string) $first['tipo_nombre']).' - '.htmlentities((string) $first['insumo']).' | Unidad: '.htmlentities((string) ($first['unidad'] ?? '')).' | Cantidad total: '.LegacyPdfFormat::number($inputQuantity, 4).'</b></td>
           </tr>';
 
             foreach ($inputRows->values() as $index => $row) {
@@ -154,18 +154,18 @@ class ProjectInputsGroupedReportPdfService
 
             $html .= '
       <tr class="total">
-        <td colspan="7"><b>SUBTOTAL INSUMO</b></td>
-        <td align="right"><b>'.LegacyPdfFormat::number($inputTotal, 2).'</b></td>
+        <td width="530" colspan="7"><b>SUBTOTAL INSUMO</b></td>
+        <td width="80" align="right"><b>'.LegacyPdfFormat::number($inputTotal, 2).'</b></td>
       </tr>';
         }
 
         $html .= '
       <tr bgcolor="#ccebe8">
-        <td colspan="7"><b>TOTAL GENERAL</b></td>
-        <td align="right"><b>'.LegacyPdfFormat::number($grandTotal, 2).'</b></td>
+        <td width="530" colspan="7"><b>TOTAL GENERAL</b></td>
+        <td width="80" align="right"><b>'.LegacyPdfFormat::number($grandTotal, 2).'</b></td>
       </tr>
       <tr>
-        <td width="100%"><b>SON:'.LegacyPdfFormat::amountLiteral($grandTotal).' BOLIVIANOS.</b></td>
+        <td width="610" colspan="8"><b>SON:'.LegacyPdfFormat::amountLiteral($grandTotal).' BOLIVIANOS.</b></td>
       </tr>
       </tbody>
       </table>';
