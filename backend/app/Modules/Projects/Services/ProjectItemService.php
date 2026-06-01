@@ -19,6 +19,7 @@ class ProjectItemService
         private readonly ProjectFormatResolver $formatResolver,
         private readonly ProjectHistoryService $projectHistoryService,
         private readonly ModuleService $moduleService,
+        private readonly ProjectItemInputSnapshotService $snapshotService,
     ) {}
 
     public function sync(Project $project, array $items, User $user, ?string $ip = null): Project
@@ -64,14 +65,16 @@ class ProjectItemService
                 if ($existingItem instanceof ProjectItem) {
                     $this->trackUpdatedProjectItem($historySummary, $existingItem, $payload);
                     $existingItem->update($payload);
+                    $this->snapshotService->syncForProjectItem($existingItem->refresh());
 
                     continue;
                 }
 
                 $historySummary['added'][] = $this->historyItemPayload($itemId, $payload);
-                ProjectItem::query()->create(array_merge($payload, [
+                $createdProjectItem = ProjectItem::query()->create(array_merge($payload, [
                     'id_proyecto' => $project->id_proyecto,
                 ]));
+                $this->snapshotService->syncForProjectItem($createdProjectItem);
             }
 
             $removedItems = ProjectItem::query()
@@ -117,6 +120,11 @@ class ProjectItemService
 
     public function listProjectItems(Project $project, string $format): array
     {
+        $this->snapshotService->ensureForProject($project);
+        $warnings = $this->snapshotService->warnings($project);
+        $warningItemsByProjectItem = collect($warnings['items'] ?? [])->keyBy('id_proyecto_item');
+        $warningInputsByProjectItem = collect($warnings['inputs'] ?? [])->groupBy('id_proyecto_item');
+
         $items = ProjectItem::query()
             ->with(['module', 'item.groupCatalog', 'item.subgroupCatalog', 'item.unitMeasure'])
             ->where('id_proyecto', $project->id_proyecto)
@@ -127,9 +135,11 @@ class ProjectItemService
             ->orderBy('id_proyecto_item')
             ->get();
 
-        return $items->map(function (ProjectItem $projectItem) use ($format): array {
+        return $items->map(function (ProjectItem $projectItem) use ($format, $warningItemsByProjectItem, $warningInputsByProjectItem): array {
             $item = $projectItem->item;
             $price = $item ? round($this->legacyUnitPriceService->resolve($item, $format), 2) : null;
+            $itemWarning = $warningItemsByProjectItem->get($projectItem->id_proyecto_item);
+            $inputWarnings = $warningInputsByProjectItem->get($projectItem->id_proyecto_item, collect())->values();
 
             return [
                 'id_proyecto_item' => $projectItem->id_proyecto_item,
@@ -152,6 +162,12 @@ class ProjectItemService
                     'descripcion' => $item->subgroupCatalog->descripcion,
                 ] : null,
                 'item' => $item?->item,
+                'item_estado' => $item?->estado,
+                'has_warnings' => (bool) $itemWarning || $inputWarnings->isNotEmpty(),
+                'warnings' => [
+                    'item' => $itemWarning,
+                    'inputs' => $inputWarnings->all(),
+                ],
                 'unidad' => $item?->unitMeasure ? [
                     'id_unidad_medida' => $item->unitMeasure->id_unidad_medida,
                     'nombre_unidad_medida' => $item->unitMeasure->descripcion,

@@ -38,6 +38,11 @@ export const projectService = {
     return response.data;
   },
 
+  reportWarnings: async (projectId) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/report-warnings`);
+    return response.data;
+  },
+
   update: async (projectId, payload) => {
     const response = await apiClient.put(`/v1/projects/${projectId}`, payload);
     return response.data;
@@ -146,6 +151,8 @@ export const projectService = {
   inputsReportXlsxUrl: (projectId) => buildApiUrl(`/v1/projects/${projectId}/inputs-report/xlsx`),
   groupedInputsReportPdfUrl: (projectId) => buildApiUrl(`/v1/projects/${projectId}/grouped-inputs-report/pdf`),
   groupedInputsReportXlsxUrl: (projectId) => buildApiUrl(`/v1/projects/${projectId}/grouped-inputs-report/xlsx`),
+  unitPricesPdfUrl: (projectId, format) => buildApiUrl(`/v1/projects/${projectId}/unit-prices/pdf`, { format }),
+  specificationsPdfUrl: (projectId) => buildApiUrl(`/v1/projects/${projectId}/specifications/pdf`),
 
   items: async (projectId, format = "PCA") => {
     const response = await apiClient.get(`/v1/projects/${projectId}/items`, {

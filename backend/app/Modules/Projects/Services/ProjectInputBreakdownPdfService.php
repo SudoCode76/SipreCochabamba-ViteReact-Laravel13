@@ -11,6 +11,10 @@ use InvalidArgumentException;
 
 class ProjectInputBreakdownPdfService
 {
+    public function __construct(
+        private readonly ProjectItemInputSnapshotService $snapshotService,
+    ) {}
+
     public function stream(Project $project, int $type): Response
     {
         $rows = $this->rows($project, $type);
@@ -53,29 +57,26 @@ class ProjectInputBreakdownPdfService
 
     private function queryRows(Project $project, int $type)
     {
-        return DB::table('item_insumo')
-            ->join('item', 'item.id_item', '=', 'item_insumo.id_item')
-            ->join('insumo', 'insumo.id_insumo', '=', 'item_insumo.id_insumo')
-            ->join('tipo_insumo', 'tipo_insumo.id_tipo', '=', 'insumo.tipo')
-            ->join('proyecto_item', 'proyecto_item.id_item', '=', 'item.id_item')
-            ->join('proyecto', 'proyecto.id_proyecto', '=', 'proyecto_item.id_proyecto')
-            ->leftJoin('unidad_medida', 'unidad_medida.id_unidad_medida', '=', 'insumo.unidad_medida')
-            ->where('item_insumo.estado', 'AC')
+        $this->snapshotService->ensureForProject($project);
+
+        return DB::table('proyecto_item_insumo_snapshot')
+            ->join('proyecto_item', 'proyecto_item.id_proyecto_item', '=', 'proyecto_item_insumo_snapshot.id_proyecto_item')
+            ->join('item', 'item.id_item', '=', 'proyecto_item.id_item')
+            ->where('proyecto_item_insumo_snapshot.estado', 'AC')
             ->where('proyecto_item.estado', 'AC')
             ->where('proyecto_item.id_proyecto', $project->id_proyecto)
-            ->where('insumo.tipo', $type)
-            ->where('insumo.estado', 'AC')
+            ->where('proyecto_item_insumo_snapshot.tipo', $type)
             ->orderBy('proyecto_item.prioridad')
             ->select([
-                'item_insumo.id_item_insumo',
-                'item_insumo.id_insumo',
-                'item_insumo.id_item',
-                'item_insumo.cantidad',
+                'proyecto_item_insumo_snapshot.id_snapshot as id_item_insumo',
+                'proyecto_item_insumo_snapshot.id_insumo',
+                'proyecto_item.id_item',
+                'proyecto_item_insumo_snapshot.cantidad',
                 'proyecto_item.prioridad',
                 'item.item as nombre_item',
-                'insumo.descripcion',
-                'insumo.precio',
-                'unidad_medida.abreviatura as unidad',
+                'proyecto_item_insumo_snapshot.descripcion',
+                'proyecto_item_insumo_snapshot.precio_unitario as precio',
+                'proyecto_item_insumo_snapshot.unidad',
             ])
             ->get();
     }

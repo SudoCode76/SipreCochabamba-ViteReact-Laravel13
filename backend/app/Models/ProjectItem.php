@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProjectItem extends Model
 {
@@ -57,6 +58,11 @@ class ProjectItem extends Model
     public function module(): BelongsTo
     {
         return $this->belongsTo(ModuleCatalog::class, 'id_modulo', 'id_modulo');
+    }
+
+    public function inputSnapshots(): HasMany
+    {
+        return $this->hasMany(ProjectItemInputSnapshot::class, 'id_proyecto_item', 'id_proyecto_item');
     }
 
     public function scopeActive(Builder $query): Builder

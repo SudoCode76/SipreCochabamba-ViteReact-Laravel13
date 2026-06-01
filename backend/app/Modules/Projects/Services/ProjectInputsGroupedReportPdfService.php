@@ -11,6 +11,10 @@ use Illuminate\Support\Facades\DB;
 
 class ProjectInputsGroupedReportPdfService
 {
+    public function __construct(
+        private readonly ProjectItemInputSnapshotService $snapshotService,
+    ) {}
+
     private const TYPE_LABELS = [
         1 => 'MATERIAL',
         2 => 'MANO DE OBRA',
@@ -64,30 +68,29 @@ class ProjectInputsGroupedReportPdfService
 
     private function queryRows(Project $project): Collection
     {
-        return DB::table('item_insumo')
-            ->join('item', 'item.id_item', '=', 'item_insumo.id_item')
-            ->join('insumo', 'insumo.id_insumo', '=', 'item_insumo.id_insumo')
-            ->join('proyecto_item', 'proyecto_item.id_item', '=', 'item.id_item')
-            ->leftJoin('unidad_medida', 'unidad_medida.id_unidad_medida', '=', 'insumo.unidad_medida')
-            ->where('item_insumo.estado', 'AC')
+        $this->snapshotService->ensureForProject($project);
+
+        return DB::table('proyecto_item_insumo_snapshot')
+            ->join('proyecto_item', 'proyecto_item.id_proyecto_item', '=', 'proyecto_item_insumo_snapshot.id_proyecto_item')
+            ->join('item', 'item.id_item', '=', 'proyecto_item.id_item')
+            ->where('proyecto_item_insumo_snapshot.estado', 'AC')
             ->where('proyecto_item.estado', 'AC')
             ->where('proyecto_item.id_proyecto', $project->id_proyecto)
-            ->where('insumo.estado', 'AC')
-            ->whereIn('insumo.tipo', [1, 2, 3])
-            ->orderBy('insumo.tipo')
-            ->orderBy('insumo.descripcion')
+            ->whereIn('proyecto_item_insumo_snapshot.tipo', [1, 2, 3])
+            ->orderBy('proyecto_item_insumo_snapshot.tipo')
+            ->orderBy('proyecto_item_insumo_snapshot.descripcion')
             ->orderBy('proyecto_item.prioridad')
             ->select([
-                'insumo.id_insumo',
-                'insumo.descripcion as insumo',
-                'insumo.tipo',
-                'insumo.precio as precio_unitario',
-                'unidad_medida.abreviatura as unidad',
+                'proyecto_item_insumo_snapshot.id_insumo',
+                'proyecto_item_insumo_snapshot.descripcion as insumo',
+                'proyecto_item_insumo_snapshot.tipo',
+                'proyecto_item_insumo_snapshot.precio_unitario',
+                'proyecto_item_insumo_snapshot.unidad',
                 'item.id_item',
                 'item.item',
                 'proyecto_item.prioridad',
                 'proyecto_item.cantidad as cantidad_item_proyecto',
-                'item_insumo.cantidad as cantidad_insumo_item',
+                'proyecto_item_insumo_snapshot.cantidad as cantidad_insumo_item',
             ])
             ->get();
     }

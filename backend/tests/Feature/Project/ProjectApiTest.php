@@ -10,6 +10,7 @@ use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\InteractsWithLegacyAuth;
 use Tests\Concerns\InteractsWithLegacyInputs;
@@ -450,10 +451,74 @@ class ProjectApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.items.0.analysis.meta.mode', 'general');
 
+        $unitPricesPdf = $this->get('/api/v1/projects/1/unit-prices/pdf?format=PC_OBRAS');
+
+        $unitPricesPdf->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertHeader('content-disposition', 'inline; filename="analisis_de_precios_unitarios_print.pdf"');
+
+        $this->assertStringStartsWith('%PDF', $unitPricesPdf->getContent());
+
         $this->getJson('/api/v1/users/1/display-name')
             ->assertOk()
             ->assertJsonPath('data.id_usuario', 1)
             ->assertJsonPath('data.funcionario', 'Usuario Demo');
+    }
+
+    public function test_can_generate_project_specifications_pdf(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        Storage::fake('public');
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+
+        Storage::disk('public')->put('archivos/items/especificaciones/item-1.pdf', $this->fakePdf('Especificación 1'));
+        Storage::disk('public')->put('archivos/items/especificaciones/item-2.pdf', $this->fakePdf('Especificación 2'));
+
+        $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'ITEM UNO',
+            'especificacion' => 'archivos/items/especificaciones/item-1.pdf',
+        ]);
+        $this->createItemRecord([
+            'id_item' => 2,
+            'item' => 'ITEM DOS',
+            'especificacion' => 'archivos/items/especificaciones/item-2.pdf',
+        ]);
+        $this->createProjectItemRecord(['id_item' => 2, 'prioridad' => 2]);
+        $this->createProjectItemRecord(['id_item' => 1, 'prioridad' => 1, 'id_proyecto_item' => 2]);
+
+        $response = $this->get('/api/v1/projects/1/specifications/pdf');
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertHeader('content-disposition', 'inline; filename="especificaciones_proyecto.pdf"');
+
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_project_specifications_pdf_returns_validation_error_when_file_is_missing(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        Storage::fake('public');
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'ITEM SIN ESPECIFICACIÓN',
+            'especificacion' => 'archivos/items/especificaciones/no-existe.pdf',
+        ]);
+        $this->createProjectItemRecord(['id_item' => 1, 'prioridad' => 1]);
+
+        $this->getJson('/api/v1/projects/1/specifications/pdf')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('specifications');
     }
 
     public function test_budget_by_group_pdf_is_valid_when_project_has_no_items(): void
@@ -726,7 +791,7 @@ class ProjectApiTest extends TestCase
         $this->assertSame([10, 20], array_column($rows, 'prioridad'));
     }
 
-    public function test_project_input_breakdown_pdf_uses_only_active_inputs_like_legacy(): void
+    public function test_project_input_breakdown_pdf_keeps_project_snapshot_when_input_is_inactive(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
         $this->createUnitMeasure();
@@ -743,7 +808,7 @@ class ProjectApiTest extends TestCase
         $rows = app(\App\Modules\Projects\Services\ProjectInputBreakdownPdfService::class)
             ->rows(\App\Models\Project::findOrFail(1), 1);
 
-        $this->assertSame(['Material Activo'], array_column($rows, 'descripcion'));
+        $this->assertSame(['Material Activo', 'Material Inactivo'], array_column($rows, 'descripcion'));
     }
 
     public function test_can_generate_consolidated_project_inputs_report_pdf(): void
@@ -814,7 +879,7 @@ class ProjectApiTest extends TestCase
         ]);
     }
 
-    public function test_consolidated_project_inputs_report_excludes_inactive_records(): void
+    public function test_consolidated_project_inputs_report_uses_project_snapshot_and_excludes_inactive_project_rows(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
         $this->createUnitMeasure();
@@ -837,8 +902,9 @@ class ProjectApiTest extends TestCase
         $rows = app(\App\Modules\Projects\Services\ProjectInputsReportPdfService::class)
             ->rows(\App\Models\Project::findOrFail(1));
 
-        $this->assertSame(['Material Activo'], array_column($rows, 'descripcion'));
+        $this->assertSame(['Insumo Inactivo', 'Material Activo'], array_column($rows, 'descripcion'));
         $this->assertSame(2.0, $rows[0]['cantidad']);
+        $this->assertSame(2.0, $rows[1]['cantidad']);
     }
 
     public function test_consolidated_project_inputs_report_pdf_is_valid_when_project_has_no_inputs(): void
@@ -864,6 +930,8 @@ class ProjectApiTest extends TestCase
         $this->getJson('/api/v1/projects')->assertForbidden();
         $this->getJson('/api/v1/projects/1/history')->assertForbidden();
         $this->get('/api/v1/projects/1/inputs-report/pdf')->assertForbidden();
+        $this->get('/api/v1/projects/1/unit-prices/pdf?format=PCA')->assertForbidden();
+        $this->get('/api/v1/projects/1/specifications/pdf')->assertForbidden();
         $this->get('/api/v1/projects/1/budget-recalculation/pdf?fecha=2026-04-30')->assertForbidden();
         $this->postJson('/api/v1/projects', [
             'nombre_proyecto' => 'nuevo proyecto',
@@ -1027,5 +1095,16 @@ class ProjectApiTest extends TestCase
             'fecha' => now()->toDateString(),
             'subalcaldia' => null,
         ]);
+    }
+
+    private function fakePdf(string $text): string
+    {
+        $pdf = new \TCPDF();
+        $pdf->SetPrintHeader(false);
+        $pdf->SetPrintFooter(false);
+        $pdf->AddPage();
+        $pdf->Write(0, $text);
+
+        return $pdf->Output('', 'S');
     }
 }

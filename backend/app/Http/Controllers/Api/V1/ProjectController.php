@@ -29,11 +29,15 @@ use App\Modules\Projects\Services\ProjectInputsGroupedReportPdfService;
 use App\Modules\Projects\Services\ProjectInputsReportPdfService;
 use App\Modules\Projects\Services\ProjectGeneralBudgetPdfService;
 use App\Modules\Projects\Services\ProjectHistoryService;
+use App\Modules\Projects\Services\ProjectItemInputSnapshotService;
 use App\Modules\Projects\Services\ProjectItemService;
 use App\Modules\Projects\Services\ProjectListService;
 use App\Modules\Projects\Services\ProjectPermissionService;
+use App\Modules\Projects\Services\ProjectSpecificationsPdfMergeService;
+use App\Modules\Projects\Services\ProjectUnitPricesPdfService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 class ProjectController extends Controller
 {
@@ -50,8 +54,11 @@ class ProjectController extends Controller
         private readonly ProjectInputBreakdownPdfService $projectInputBreakdownPdfService,
         private readonly ProjectInputsReportPdfService $projectInputsReportPdfService,
         private readonly ProjectInputsGroupedReportPdfService $projectInputsGroupedReportPdfService,
+        private readonly ProjectUnitPricesPdfService $projectUnitPricesPdfService,
+        private readonly ProjectSpecificationsPdfMergeService $projectSpecificationsPdfMergeService,
         private readonly ProjectPermissionService $projectPermissionService,
         private readonly ProjectHistoryService $projectHistoryService,
+        private readonly ProjectItemInputSnapshotService $snapshotService,
         private readonly AuditService $auditService,
     ) {}
 
@@ -177,6 +184,27 @@ class ProjectController extends Controller
             'data' => [
                 'items' => $this->projectItemService->listProjectItems($project, $format),
             ],
+        ]);
+    }
+
+    public function reportWarnings(Request $request, Project $project): JsonResponse
+    {
+        if ($response = $this->denyIfMissingAnyPermission($request->user(), [
+            'can_view_budget_by_group',
+            'can_recalculate_budget',
+            'can_view_incidence_summary',
+            'can_view_general_budget',
+            'can_view_input_breakdown',
+            'can_view_inputs_report',
+            'can_view_unit_prices',
+        ], 'No tiene permisos para consultar advertencias de reportes del proyecto.')) {
+            return $response;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Advertencias del proyecto obtenidas correctamente.',
+            'data' => $this->snapshotService->warnings($project),
         ]);
     }
 
@@ -464,6 +492,30 @@ class ProjectController extends Controller
                 'items' => $this->projectBudgetService->unitPrices($project, $request->validated('format')),
             ],
         ]);
+    }
+
+    public function unitPricesPdf(ProjectFormatRequest $request, Project $project): Response|JsonResponse
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_unit_prices', 'No tiene permisos para consultar precios unitarios del proyecto.')) {
+            return $response;
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Análisis de precios unitarios del proyecto', [
+            'format' => $request->validated('format'),
+        ]);
+
+        return $this->projectUnitPricesPdfService->stream($project, $request->validated('format'));
+    }
+
+    public function specificationsPdf(Request $request, Project $project): Response|JsonResponse
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view', 'No tiene permisos para ver especificaciones del proyecto.')) {
+            return $response;
+        }
+
+        $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Especificaciones técnicas del proyecto');
+
+        return $this->projectSpecificationsPdfMergeService->stream($project);
     }
 
     private function serializeProject(Project $project, bool $full = false): array

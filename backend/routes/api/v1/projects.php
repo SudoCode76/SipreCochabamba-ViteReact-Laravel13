@@ -21,6 +21,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::post('/project-templates/{template}/create-project', [ProjectTemplateController::class, 'createProject']);
     Route::post('/projects/{project}/template', [ProjectTemplateController::class, 'store']);
     Route::get('/projects/{project}/history', [ProjectHistoryController::class, 'history']);
+    Route::get('/projects/{project}/report-warnings', [ProjectReportController::class, 'reportWarnings']);
     Route::get('/projects/{project}', [ProjectCatalogController::class, 'show']);
     Route::put('/projects/{project}', [ProjectCatalogController::class, 'update']);
     Route::post('/projects/{project}/items/sync', [ProjectItemsController::class, 'syncItems']);
@@ -45,6 +46,8 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/projects/{project}/grouped-inputs-report/xlsx', [ProjectReportController::class, 'groupedInputsReportXlsx']);
     Route::post('/projects/{project}/breakdown-calculation', [ProjectBudgetController::class, 'breakdownCalculation']);
     Route::get('/projects/{project}/unit-prices', [ProjectBudgetController::class, 'unitPrices']);
+    Route::get('/projects/{project}/unit-prices/pdf', [ProjectReportController::class, 'unitPricesPdf']);
+    Route::get('/projects/{project}/specifications/pdf', [ProjectReportController::class, 'specificationsPdf']);
     Route::get('/search/items', [SearchController::class, 'items']);
     Route::get('/users/{user}/display-name', [UserController::class, 'displayName']);
 });

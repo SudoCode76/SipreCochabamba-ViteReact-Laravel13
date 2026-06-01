@@ -1,10 +1,11 @@
 import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronsUpDown, Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronsUpDown, Loader2, Plus, Save, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { openPdfViewer } from "@/lib/utils/pdf";
 import { modulesService } from "@/modules/modules/services/modules.service";
 import { projectService } from "../services/project.service";
 
@@ -95,6 +96,12 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
     enabled: Boolean(projectId),
   });
 
+  const { data: warningData } = useQuery({
+    queryKey: ["project-report-warnings", projectId],
+    queryFn: () => projectService.reportWarnings(projectId),
+    enabled: Boolean(projectId),
+  });
+
   const { data: modulesData } = useQuery({
     queryKey: ["project-modules"],
     queryFn: modulesService.activeForProjects,
@@ -136,6 +143,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
       const updatedProject = response?.data?.project;
 
       queryClient.invalidateQueries({ queryKey: ["project-items", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["project-report-warnings", projectId] });
       setRows([]);
       setRowsDirty(false);
       queryClient.setQueryData(["project", projectId], (current) => {
@@ -191,6 +199,8 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   const effectiveModuleId = draft.moduleId || (generalModule ? String(generalModule.id_modulo) : "");
   const selectedModule = moduleOptions.find((module) => Number(module.id_modulo) === Number(effectiveModuleId)) ?? generalModule;
   const effectiveRows = rowsDirty ? rows : queryRows;
+  const reportWarningsSummary = warningData?.data?.summary;
+  const hasSavedRows = queryRows.length > 0;
   const effectivePrice = draft.precio || (selectedDetail?.precio != null ? String(selectedDetail.precio) : "");
 
   const total = useMemo(
@@ -288,6 +298,39 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
     window.open(row.especificacion_url, "_blank", "noopener,noreferrer");
   };
 
+  const runWithReportWarning = (action) => {
+    if (!reportWarningsSummary?.has_warnings) {
+      action();
+      return;
+    }
+
+    const confirmed = window.confirm("Este proyecto tiene items o insumos desactivados. El reporte se generara con los datos registrados del proyecto. ¿Desea continuar?");
+
+    if (confirmed) {
+      action();
+    }
+  };
+
+  const handlePrintUnitPrices = () => {
+    setError(null);
+    runWithReportWarning(() => {
+      openPdfViewer(projectService.unitPricesPdfUrl(projectId, format), {
+        chrome: false,
+        errorMessage: "No se pudo generar el PDF de precios unitarios.",
+      });
+    });
+  };
+
+  const handlePrintSpecifications = () => {
+    setError(null);
+    runWithReportWarning(() => {
+      openPdfViewer(projectService.specificationsPdfUrl(projectId), {
+        title: "Especificaciones del proyecto",
+        errorMessage: "No se pudo generar el PDF de especificaciones del proyecto.",
+      });
+    });
+  };
+
   const handleOrder = () => {
     setRows([...effectiveRows].sort((a, b) => {
       const left = a.prioridad ?? Number.MAX_SAFE_INTEGER;
@@ -337,6 +380,20 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
       {error && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
+        </div>
+      )}
+
+      {reportWarningsSummary?.has_warnings && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <div>
+              <p className="font-semibold">Este proyecto tiene elementos desactivados.</p>
+              <p>
+                Hay {reportWarningsSummary.items_count} item(s) y {reportWarningsSummary.inputs_count} insumo(s) que ya no estan activos. Los reportes usaran los datos registrados del proyecto.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -483,16 +540,21 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Button type="button" variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700" disabled>
+          <Button type="button" variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700" onClick={handlePrintUnitPrices} disabled={!hasSavedRows}>
             Imprimir Precios Unitarios
           </Button>
           <Button type="button" variant="outline" className="rounded-full border-slate-300 bg-slate-100 text-slate-700" onClick={handleOrder}>
             Ordenar
           </Button>
-          <Button type="button" variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700" disabled>
+          <Button type="button" variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700" onClick={handlePrintSpecifications} disabled={!hasSavedRows}>
             Imprimir Todas Las Especificaciones
           </Button>
         </div>
+        {rowsDirty && (
+          <p className="text-sm font-medium text-amber-700">
+            Guarda los ítems antes de imprimir para incluir los cambios.
+          </p>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border/70 bg-white shadow-sm">
@@ -536,13 +598,29 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
                   {group.rows.map((row, index) => {
                     const partial = Number(row.cantidad || 0) * Number(row.precio || 0);
                     const rowKey = row.id_proyecto_item ?? row.client_row_id;
+                    const inputWarnings = row.warnings?.inputs ?? [];
+                    const rowHasWarnings = Boolean(row.has_warnings);
 
                     return (
-                      <tr key={rowKey} className="border-t border-border/60">
+                      <tr key={rowKey} className={`border-t border-border/60 ${rowHasWarnings ? "bg-rose-50" : ""}`}>
                         <td className="px-3 py-3">{row.prioridad ?? index + 1}</td>
                         <td className="px-3 py-3">{row.grupo?.nombre_grupo ?? "-"}</td>
                         <td className="px-3 py-3">{row.subgrupo?.descripcion ?? "-"}</td>
-                        <td className="px-3 py-3">{row.item}</td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1">
+                            <span className={rowHasWarnings ? "font-semibold text-rose-700" : ""}>{row.item}</span>
+                            {row.warnings?.item && (
+                              <span className="inline-flex w-fit items-center rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
+                                Item {row.warnings.item.status_label}
+                              </span>
+                            )}
+                            {inputWarnings.length > 0 && (
+                              <span className="text-xs font-medium text-rose-700">
+                                {inputWarnings.length} insumo(s) desactivado(s) o eliminado(s)
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-3 py-3">{row.unidad?.abreviatura ?? row.unidad?.nombre_unidad_medida ?? "-"}</td>
                         <td className="px-3 py-3 text-right">{formatNumber(row.cantidad)}</td>
                         <td className="px-3 py-3 text-right">{formatNumber(row.precio, 2)}</td>

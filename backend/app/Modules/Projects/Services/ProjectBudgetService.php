@@ -14,10 +14,13 @@ class ProjectBudgetService
     public function __construct(
         private readonly ProjectItemIncidencePriceService $incidencePriceService,
         private readonly ItemPriceAnalysisService $priceAnalysisService,
+        private readonly ProjectItemInputSnapshotService $snapshotService,
     ) {}
 
     public function budgetByGroup(Project $project): array
     {
+        $this->snapshotService->ensureForProject($project);
+
         $rows = $this->activeProjectItems($project)
             ->sortBy([
                 fn (ProjectItem $item) => $item->item?->groupCatalog?->nombre_grupo,
@@ -30,10 +33,12 @@ class ProjectBudgetService
 
     public function budgetByGroupPdfData(Project $project): array
     {
+        $this->snapshotService->ensureForProject($project);
+
         $rows = $this->activeProjectItemsForLegacyBudgetPdf($project);
 
         $items = $rows->map(function (ProjectItem $row): array {
-            $acc = $this->currentAccumulators($row->id_proyecto, $row->id_item);
+            $acc = $this->currentAccumulators($row);
 
             return [
                 'id_proyecto' => $row->id_proyecto,
@@ -67,6 +72,8 @@ class ProjectBudgetService
 
     public function budgetRecalculation(Project $project, CarbonInterface $date): array
     {
+        $this->snapshotService->ensureForProject($project);
+
         $rows = $this->activeProjectItemsForLegacyBudgetPdf($project);
 
         return $this->buildHistoricalBudgetRows($rows, $date);
@@ -181,6 +188,28 @@ class ProjectBudgetService
         })->values()->all();
     }
 
+    public function unitPricesForLegacyProjectPdf(Project $project, string $format): array
+    {
+        $items = ProjectItem::query()
+            ->with('item')
+            ->where('id_proyecto', $project->id_proyecto)
+            ->where('estado', 'AC')
+            ->whereNotNull('id_item')
+            ->whereHas('item')
+            ->orderBy('prioridad')
+            ->orderBy('id_item')
+            ->get();
+
+        return $items->map(function (ProjectItem $projectItem) use ($format): array {
+            return [
+                'id_proyecto_item' => $projectItem->id_proyecto_item,
+                'prioridad' => $projectItem->prioridad,
+                'cantidad' => round((float) $projectItem->cantidad, 4),
+                'analysis' => $this->priceAnalysisService->buildLegacyProjectCurrent($projectItem->item, $this->formatToMode($format)),
+            ];
+        })->values()->all();
+    }
+
     private function activeProjectItems(Project $project): Collection
     {
         return ProjectItem::query()
@@ -212,7 +241,7 @@ class ProjectBudgetService
     private function buildCurrentBudgetRows(Collection $rows): array
     {
         $items = $rows->map(function (ProjectItem $row): array {
-            $acc = $this->currentAccumulators($row->id_proyecto, $row->id_item);
+            $acc = $this->currentAccumulators($row);
 
             return [
                 'id_proyecto' => $row->id_proyecto,
@@ -242,7 +271,7 @@ class ProjectBudgetService
     private function buildHistoricalBudgetRows(Collection $rows, CarbonInterface $date): array
     {
         $items = $rows->map(function (ProjectItem $row) use ($date): array {
-            $acc = $this->historicalAccumulators($row->id_proyecto, $row->id_item, $date);
+            $acc = $this->historicalAccumulators($row, $date);
 
             return [
                 'id_proyecto' => $row->id_proyecto,
@@ -270,65 +299,52 @@ class ProjectBudgetService
         ];
     }
 
-    private function currentAccumulators(int $projectId, int $itemId): array
+    private function currentAccumulators(ProjectItem $projectItem): array
     {
         return [
-            'materiales' => $this->currentAccumulatorByType($projectId, $itemId, 1),
-            'mano_obra' => $this->currentAccumulatorByType($projectId, $itemId, 2),
-            'herramientas' => $this->currentAccumulatorByType($projectId, $itemId, 3),
+            'materiales' => $this->currentAccumulatorByType($projectItem, 1),
+            'mano_obra' => $this->currentAccumulatorByType($projectItem, 2),
+            'herramientas' => $this->currentAccumulatorByType($projectItem, 3),
         ];
     }
 
-    private function currentAccumulatorByType(int $projectId, int $itemId, int $type): float
+    private function currentAccumulatorByType(ProjectItem $projectItem, int $type): float
     {
-        $rows = DB::table('item_insumo')
-            ->join('item', 'item.id_item', '=', 'item_insumo.id_item')
-            ->join('insumo', 'insumo.id_insumo', '=', 'item_insumo.id_insumo')
-            ->join('tipo_insumo', 'tipo_insumo.id_tipo', '=', 'insumo.tipo')
-            ->join('proyecto_item', 'proyecto_item.id_item', '=', 'item.id_item')
-            ->join('proyecto', 'proyecto.id_proyecto', '=', 'proyecto_item.id_proyecto')
-            ->where('item_insumo.estado', 'AC')
-            ->where('proyecto_item.estado', 'AC')
-            ->where('proyecto_item.id_proyecto', $projectId)
-            ->where('proyecto_item.id_item', $itemId)
-            ->where('insumo.tipo', $type)
-            ->orderBy('insumo.tipo')
-            ->select(['item_insumo.cantidad', 'insumo.precio'])
+        $rows = DB::table('proyecto_item_insumo_snapshot')
+            ->where('id_proyecto_item', $projectItem->id_proyecto_item)
+            ->where('estado', 'AC')
+            ->where('tipo', $type)
+            ->select(['cantidad', 'precio_unitario'])
             ->get();
 
-        return round($rows->sum(fn ($row): float => round((float) $row->cantidad, 4) * round((float) $row->precio, 2)), 4);
+        return round($rows->sum(fn ($row): float => round((float) $row->cantidad, 4) * round((float) $row->precio_unitario, 2)), 4);
     }
 
-    private function historicalAccumulators(int $projectId, int $itemId, CarbonInterface $date): array
+    private function historicalAccumulators(ProjectItem $projectItem, CarbonInterface $date): array
     {
         return [
-            'materiales' => $this->historicalAccumulatorByType($projectId, $itemId, 1, $date),
-            'mano_obra' => $this->historicalAccumulatorByType($projectId, $itemId, 2, $date),
-            'herramientas' => $this->historicalAccumulatorByType($projectId, $itemId, 3, $date),
+            'materiales' => $this->historicalAccumulatorByType($projectItem, 1, $date),
+            'mano_obra' => $this->historicalAccumulatorByType($projectItem, 2, $date),
+            'herramientas' => $this->historicalAccumulatorByType($projectItem, 3, $date),
         ];
     }
 
-    private function historicalAccumulatorByType(int $projectId, int $itemId, int $type, CarbonInterface $date): float
+    private function historicalAccumulatorByType(ProjectItem $projectItem, int $type, CarbonInterface $date): float
     {
-        $rows = DB::table('item_insumo')
-            ->join('item', 'item.id_item', '=', 'item_insumo.id_item')
-            ->join('log_insumo', 'log_insumo.id_insumo', '=', 'item_insumo.id_insumo')
+        $rows = DB::table('proyecto_item_insumo_snapshot')
+            ->join('log_insumo', 'log_insumo.id_insumo', '=', 'proyecto_item_insumo_snapshot.id_insumo')
             ->join('tipo_insumo', 'tipo_insumo.id_tipo', '=', 'log_insumo.tipo')
-            ->join('proyecto_item', 'proyecto_item.id_item', '=', 'item_insumo.id_item')
-            ->join('proyecto', 'proyecto.id_proyecto', '=', 'proyecto_item.id_proyecto')
             ->where('log_insumo.fecha', '<=', $date->toDateString())
             ->where('log_insumo.tipo', $type)
-            ->where('proyecto_item.estado', 'AC')
-            ->where('item_insumo.estado', 'AC')
-            ->where('proyecto_item.id_item', $itemId)
-            ->where('proyecto_item.id_proyecto', $projectId)
+            ->where('proyecto_item_insumo_snapshot.estado', 'AC')
+            ->where('proyecto_item_insumo_snapshot.id_proyecto_item', $projectItem->id_proyecto_item)
             ->orderBy('log_insumo.tipo')
             ->orderBy('log_insumo.id_insumo')
             ->orderByDesc('id_log')
-            ->orderBy('item_insumo.id_item_insumo')
+            ->orderBy('proyecto_item_insumo_snapshot.id_snapshot')
             ->select([
-                'item_insumo.id_insumo',
-                'item_insumo.cantidad',
+                'proyecto_item_insumo_snapshot.id_insumo',
+                'proyecto_item_insumo_snapshot.cantidad',
                 'log_insumo.precio',
                 'log_insumo.id_log',
             ])

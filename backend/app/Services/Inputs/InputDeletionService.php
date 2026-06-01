@@ -163,11 +163,6 @@ class InputDeletionService
                 ]);
             }
 
-            ItemInput::query()
-                ->where('id_insumo', $input->id_insumo)
-                ->where('estado', 'AC')
-                ->update(['estado' => 'DC']);
-
             $input->update([
                 'estado' => 'DP',
             ]);
@@ -189,7 +184,7 @@ class InputDeletionService
             $this->registerAudit(
                 $user,
                 $ip,
-                'Autorizacion aprobada: se elimino el insumo '.$input->descripcion.' y se retiro de los items afectados'
+                'Autorizacion aprobada: se elimino el insumo '.$input->descripcion.' del catalogo; los proyectos existentes conservan sus datos registrados'
             );
 
             return $input->refresh();

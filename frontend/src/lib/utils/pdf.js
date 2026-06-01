@@ -14,10 +14,11 @@ export function buildApiUrl(path, params = {}) {
 }
 
 export function openUrlInNewTab(url) {
-  const openedWindow = window.open(url, "_blank");
+  const openedWindow = window.open("about:blank", "_blank");
 
   if (openedWindow) {
     openedWindow.opener = null;
+    openedWindow.location.href = url;
   }
 
   if (!openedWindow) {
@@ -38,6 +39,10 @@ export function openPdfViewer(url, options = {}) {
 
   if (options.errorMessage) {
     viewerUrl.searchParams.set("message", options.errorMessage);
+  }
+
+  if (options.chrome === false) {
+    viewerUrl.searchParams.set("chrome", "0");
   }
 
   return openUrlInNewTab(viewerUrl.toString());

@@ -86,6 +86,7 @@ class AppServiceProvider extends ServiceProvider
             'ProjectInputBreakdownPdfService',
             'ProjectInputsReportPdfService',
             'ProjectItemIncidencePriceService',
+            'ProjectItemInputSnapshotService',
             'ProjectItemService',
             'ProjectLegacyUnitPriceService',
             'ProjectListService',

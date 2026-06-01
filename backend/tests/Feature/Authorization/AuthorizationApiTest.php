@@ -159,7 +159,7 @@ class AuthorizationApiTest extends TestCase
         ]);
     }
 
-    public function test_approving_input_authorization_deletes_input_and_removes_it_from_item_compositions(): void
+    public function test_approving_input_authorization_deletes_input_without_removing_item_compositions(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
 
@@ -201,7 +201,7 @@ class AuthorizationApiTest extends TestCase
         $this->assertDatabaseHas('item_insumo', [
             'id_item_insumo' => 1,
             'id_insumo' => 1,
-            'estado' => 'DC',
+            'estado' => 'AC',
         ]);
         $this->assertDatabaseHas('item_insumo', [
             'id_item_insumo' => 2,
@@ -226,7 +226,7 @@ class AuthorizationApiTest extends TestCase
 
         $this->getJson("/api/v1/authorizations/{$authorization->id_autorizacion}/impact")
             ->assertOk()
-            ->assertJsonPath('data.summary.items_count', 0)
+            ->assertJsonPath('data.summary.items_count', 1)
             ->assertJsonPath('data.summary.pending_projects_count', 0);
     }
 

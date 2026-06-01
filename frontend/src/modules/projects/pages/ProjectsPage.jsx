@@ -2,7 +2,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, ClipboardList, X, Loader2, History, Copy, FileDown } from "lucide-react";
+import { AlertTriangle, Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, ClipboardList, X, Loader2, History, Copy, FileDown } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -266,6 +266,7 @@ export default function ProjectsPage() {
   const [templateStatus, setTemplateStatus] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [exportChoice, setExportChoice] = useState(null);
+  const [reportWarning, setReportWarning] = useState(null);
   const deferredSearch = useDeferredValue(search.trim());
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
@@ -477,11 +478,13 @@ export default function ProjectsPage() {
     setRecalculatePending(true);
 
     try {
-      openPdfViewer(projectService.budgetRecalculationPdfUrl(recalculateProject.id_proyecto, recalculateDate), {
-        title: "Presupuesto recalculado del proyecto",
-        errorMessage: "No se pudo generar el presupuesto recalculado del proyecto.",
+      await runWithReportWarning(recalculateProject.id_proyecto, () => {
+        openPdfViewer(projectService.budgetRecalculationPdfUrl(recalculateProject.id_proyecto, recalculateDate), {
+          title: "Presupuesto recalculado del proyecto",
+          errorMessage: "No se pudo generar el presupuesto recalculado del proyecto.",
+        });
+        closeRecalculate();
       });
-      closeRecalculate();
     } catch (pdfError) {
       const fieldErrors = pdfError?.response?.data?.errors;
       const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
@@ -494,14 +497,53 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleRecalculateXlsx = () => {
+  const handleRecalculateXlsx = async () => {
     if (!recalculateProject?.id_proyecto || !recalculateDate) return;
-    downloadUrl(projectService.budgetRecalculationXlsxUrl(recalculateProject.id_proyecto, recalculateDate));
-    closeRecalculate();
+    await runWithReportWarning(recalculateProject.id_proyecto, () => {
+      downloadUrl(projectService.budgetRecalculationXlsxUrl(recalculateProject.id_proyecto, recalculateDate));
+      closeRecalculate();
+    });
   };
 
   const closeExportChoice = () => {
     setExportChoice(null);
+  };
+
+  const warningSummaryHasWarnings = (warnings) => Boolean(warnings?.summary?.has_warnings);
+
+  const runWithReportWarning = async (projectId, action) => {
+    if (!projectId) {
+      action();
+      return;
+    }
+
+    try {
+      const response = await projectService.reportWarnings(projectId);
+      const warnings = response?.data;
+
+      if (warningSummaryHasWarnings(warnings)) {
+        setReportWarning({
+          warnings,
+          onConfirm: action,
+        });
+        return;
+      }
+    } catch {
+      setReportWarning({
+        warnings: null,
+        onConfirm: action,
+        loadError: true,
+      });
+      return;
+    }
+
+    action();
+  };
+
+  const confirmReportWarning = () => {
+    const action = reportWarning?.onConfirm;
+    setReportWarning(null);
+    action?.();
   };
 
   const openBudgetByGroupExport = (project) => {
@@ -510,6 +552,7 @@ export default function ProjectsPage() {
     setExportChoice({
       title: "Presupuesto por rubros",
       description: project.nombre_proyecto,
+      projectId: project.id_proyecto,
       pdfUrl: projectService.budgetByGroupPdfUrl(project.id_proyecto),
       xlsxUrl: projectService.budgetByGroupXlsxUrl(project.id_proyecto),
       errorMessage: "No se pudo generar el presupuesto por rubros.",
@@ -522,6 +565,7 @@ export default function ProjectsPage() {
     setExportChoice({
       title: "Reporte de insumos del proyecto",
       description: project.nombre_proyecto,
+      projectId: project.id_proyecto,
       pdfUrl: projectService.inputsReportPdfUrl(project.id_proyecto),
       xlsxUrl: projectService.inputsReportXlsxUrl(project.id_proyecto),
       errorMessage: "No se pudo generar el reporte de insumos del proyecto.",
@@ -534,21 +578,24 @@ export default function ProjectsPage() {
     setExportChoice({
       title: "Proyecto agrupado por insumos",
       description: project.nombre_proyecto,
+      projectId: project.id_proyecto,
       pdfUrl: projectService.groupedInputsReportPdfUrl(project.id_proyecto),
       xlsxUrl: projectService.groupedInputsReportXlsxUrl(project.id_proyecto),
       errorMessage: "No se pudo generar el reporte de proyecto agrupado por insumos.",
     });
   };
 
-  const handleExportChoicePdf = () => {
+  const handleExportChoicePdf = async () => {
     if (!exportChoice?.pdfUrl) return;
 
     try {
-      openPdfViewer(exportChoice.pdfUrl, {
-        title: exportChoice.title,
-        errorMessage: exportChoice.errorMessage,
+      await runWithReportWarning(exportChoice.projectId, () => {
+        openPdfViewer(exportChoice.pdfUrl, {
+          title: exportChoice.title,
+          errorMessage: exportChoice.errorMessage,
+        });
+        closeExportChoice();
       });
-      closeExportChoice();
     } catch (pdfError) {
       setFeedback({
         type: "error",
@@ -557,10 +604,12 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleExportChoiceXlsx = () => {
+  const handleExportChoiceXlsx = async () => {
     if (!exportChoice?.xlsxUrl) return;
-    downloadUrl(exportChoice.xlsxUrl);
-    closeExportChoice();
+    await runWithReportWarning(exportChoice.projectId, () => {
+      downloadUrl(exportChoice.xlsxUrl);
+      closeExportChoice();
+    });
   };
 
   const openIncidenceSummary = (project) => {
@@ -587,11 +636,13 @@ export default function ProjectsPage() {
     setIncidenceStatus(null);
 
     try {
-      openPdfViewer(projectService.incidenceSummaryPdfUrl(incidenceProject.id_proyecto, incidenceFormat), {
-        title: "Resumen por incidencia",
-        errorMessage: "No se pudo generar el resumen por incidencia.",
+      await runWithReportWarning(incidenceProject.id_proyecto, () => {
+        openPdfViewer(projectService.incidenceSummaryPdfUrl(incidenceProject.id_proyecto, incidenceFormat), {
+          title: "Resumen por incidencia",
+          errorMessage: "No se pudo generar el resumen por incidencia.",
+        });
+        closeIncidenceSummary();
       });
-      closeIncidenceSummary();
     } catch (pdfError) {
       setIncidenceStatus({
         type: "error",
@@ -600,10 +651,12 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleIncidenceSummaryXlsx = () => {
+  const handleIncidenceSummaryXlsx = async () => {
     if (!incidenceProject?.id_proyecto) return;
-    downloadUrl(projectService.incidenceSummaryXlsxUrl(incidenceProject.id_proyecto, incidenceFormat));
-    closeIncidenceSummary();
+    await runWithReportWarning(incidenceProject.id_proyecto, () => {
+      downloadUrl(projectService.incidenceSummaryXlsxUrl(incidenceProject.id_proyecto, incidenceFormat));
+      closeIncidenceSummary();
+    });
   };
 
   const openGeneralBudget = (project) => {
@@ -630,11 +683,13 @@ export default function ProjectsPage() {
     setGeneralBudgetStatus(null);
 
     try {
-      openPdfViewer(projectService.generalBudgetPdfUrl(generalBudgetProject.id_proyecto, generalBudgetFormat), {
-        title: "Presupuesto general",
-        errorMessage: "No se pudo generar el presupuesto general.",
+      await runWithReportWarning(generalBudgetProject.id_proyecto, () => {
+        openPdfViewer(projectService.generalBudgetPdfUrl(generalBudgetProject.id_proyecto, generalBudgetFormat), {
+          title: "Presupuesto general",
+          errorMessage: "No se pudo generar el presupuesto general.",
+        });
+        closeGeneralBudget();
       });
-      closeGeneralBudget();
     } catch (pdfError) {
       setGeneralBudgetStatus({
         type: "error",
@@ -643,10 +698,12 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleGeneralBudgetXlsx = () => {
+  const handleGeneralBudgetXlsx = async () => {
     if (!generalBudgetProject?.id_proyecto) return;
-    downloadUrl(projectService.generalBudgetXlsxUrl(generalBudgetProject.id_proyecto, generalBudgetFormat));
-    closeGeneralBudget();
+    await runWithReportWarning(generalBudgetProject.id_proyecto, () => {
+      downloadUrl(projectService.generalBudgetXlsxUrl(generalBudgetProject.id_proyecto, generalBudgetFormat));
+      closeGeneralBudget();
+    });
   };
 
   const openInputBreakdown = (project) => {
@@ -673,11 +730,13 @@ export default function ProjectsPage() {
     setInputBreakdownStatus(null);
 
     try {
-      openPdfViewer(projectService.inputBreakdownPdfUrl(inputBreakdownProject.id_proyecto, inputBreakdownType), {
-        title: "Desglose de insumos del proyecto",
-        errorMessage: "No se pudo generar el desglose de insumos del proyecto.",
+      await runWithReportWarning(inputBreakdownProject.id_proyecto, () => {
+        openPdfViewer(projectService.inputBreakdownPdfUrl(inputBreakdownProject.id_proyecto, inputBreakdownType), {
+          title: "Desglose de insumos del proyecto",
+          errorMessage: "No se pudo generar el desglose de insumos del proyecto.",
+        });
+        closeInputBreakdown();
       });
-      closeInputBreakdown();
     } catch (pdfError) {
       setInputBreakdownStatus({
         type: "error",
@@ -686,10 +745,12 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleInputBreakdownXlsx = () => {
+  const handleInputBreakdownXlsx = async () => {
     if (!inputBreakdownProject?.id_proyecto) return;
-    downloadUrl(projectService.inputBreakdownXlsxUrl(inputBreakdownProject.id_proyecto, inputBreakdownType));
-    closeInputBreakdown();
+    await runWithReportWarning(inputBreakdownProject.id_proyecto, () => {
+      downloadUrl(projectService.inputBreakdownXlsxUrl(inputBreakdownProject.id_proyecto, inputBreakdownType));
+      closeInputBreakdown();
+    });
   };
 
   const formatProjectNameLines = (value) => {
@@ -1032,6 +1093,64 @@ export default function ProjectsPage() {
                 <FileDown className="h-4 w-4" />
                 Exportar XLSX
               </Button>
+            </CardContent>
+          </Card>
+        </div>,
+        document.body,
+      )}
+
+      {reportWarning && createPortal(
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-[1px]">
+          <Card className="w-full max-w-xl border border-rose-200 bg-white/95 shadow-[0_24px_90px_rgba(15,23,42,0.16)]">
+            <CardHeader className="border-b border-rose-100 bg-rose-50">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex gap-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-rose-600 text-white">
+                    <AlertTriangle className="size-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl tracking-[-0.03em]">Advertencia antes de generar</CardTitle>
+                    <CardDescription>El proyecto contiene elementos que ya no estan activos.</CardDescription>
+                  </div>
+                </div>
+
+                <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={() => setReportWarning(null)}>
+                  <X />
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-4 p-5">
+              {reportWarning.loadError ? (
+                <p className="text-sm text-rose-800">
+                  No se pudieron cargar las advertencias del proyecto. Puedes cancelar o generar el reporte de todos modos.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-700">
+                    Este proyecto usa {reportWarning.warnings?.summary?.items_count ?? 0} item(s) y {reportWarning.warnings?.summary?.inputs_count ?? 0} insumo(s) desactivados o eliminados. El reporte se generara con los datos registrados del proyecto.
+                  </p>
+                  <div className="max-h-52 space-y-3 overflow-y-auto rounded-2xl border border-rose-100 bg-rose-50/60 p-3 text-sm">
+                    {(reportWarning.warnings?.items ?? []).slice(0, 5).map((item) => (
+                      <div key={`item-warning-${item.id_proyecto_item}`} className="font-medium text-rose-800">
+                        Item: {item.name} ({item.status_label})
+                      </div>
+                    ))}
+                    {(reportWarning.warnings?.inputs ?? []).slice(0, 8).map((input) => (
+                      <div key={`input-warning-${input.id_snapshot}`} className="text-rose-800">
+                        Insumo: {input.description} ({input.status_label})
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-end gap-3">
+                <Button type="button" variant="outline" onClick={() => setReportWarning(null)}>Cancelar</Button>
+                <Button type="button" className="bg-rose-600 text-white hover:bg-rose-500" onClick={confirmReportWarning}>
+                  Generar de todos modos
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>,

@@ -23,6 +23,11 @@ class ItemPriceAnalysisService
         return $this->build($item, false, null, $mode);
     }
 
+    public function buildLegacyProjectCurrent(Item $item, string $mode = 'fndr'): array
+    {
+        return $this->build($item, false, null, $mode, true);
+    }
+
     public function buildRecalculated(Item $item, CarbonInterface $date, string $mode = 'fndr'): array
     {
         return $this->build($item, true, $date, $mode);
@@ -33,7 +38,7 @@ class ItemPriceAnalysisService
         return $this->buildCurrent($item, $mode)['totals']['total_price'];
     }
 
-    private function build(Item $item, bool $useHistoricalLogs, ?CarbonInterface $date, string $mode): array
+    private function build(Item $item, bool $useHistoricalLogs, ?CarbonInterface $date, string $mode, bool $forceCurrentInputs = false): array
     {
         $item->loadMissing(['groupCatalog', 'subgroupCatalog', 'unitMeasure']);
 
@@ -49,7 +54,7 @@ class ItemPriceAnalysisService
 
         $components = $useHistoricalLogs
             ? $this->loadHistoricalComponents($item, $date)
-            : $this->loadCurrentComponents($item, strtolower($mode));
+            : ($forceCurrentInputs ? $this->loadGeneralCurrentComponents($item) : $this->loadCurrentComponents($item, strtolower($mode)));
 
         $materials = $this->mapComponents($components->where('type_id', 1)->values());
         $labor = $this->mapComponents($components->where('type_id', 2)->values());
