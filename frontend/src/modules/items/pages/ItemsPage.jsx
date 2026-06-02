@@ -382,14 +382,6 @@ export default function ItemsPage() {
     enabled: filesOpen && Boolean(filesItem?.id_item),
   });
 
-  const recalculateMutation = useMutation({
-    mutationFn: itemsService.recalculatePrice,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["items"] });
-      closeRecalculate();
-    },
-  });
-
   const items = data?.data?.items ?? [];
   const context = contextData?.data ?? {};
   const groups = context.groups ?? [];
@@ -1085,13 +1077,26 @@ export default function ItemsPage() {
     event.preventDefault();
     if (!recalculateItem?.id_item || !recalculateDate) return;
 
+    setReportFeedback(null);
+    setReportLoadingItemId(recalculateItem.id_item);
+
     try {
-      await recalculateMutation.mutateAsync({
+      openPdfViewer(itemsService.priceRecalculationPdfUrl({
         itemId: recalculateItem.id_item,
         fecha: recalculateDate,
+        mode: "general",
+      }), {
+        title: "Recalcular precio item",
+        errorMessage: "No se pudo generar el recálculo de precio del item.",
       });
+      closeRecalculate();
     } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudo recalcular el precio del item.");
+      setReportFeedback({
+        type: "error",
+        message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo abrir el recálculo de precio del item.",
+      });
+    } finally {
+      setReportLoadingItemId(null);
     }
   };
 
@@ -2119,16 +2124,16 @@ export default function ItemsPage() {
                   </div>
 
                   <div className="flex justify-end gap-3">
-                    <Button type="button" variant="outline" onClick={handleRecalculateXlsx} disabled={recalculateMutation.isPending || !recalculateDate}>
+                    <Button type="button" variant="outline" className="h-12 min-w-36 rounded-full" onClick={handleRecalculateXlsx} disabled={reportLoadingItemId === recalculateItem?.id_item || !recalculateDate}>
                       Exportar XLSX
                     </Button>
-                    <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={recalculateMutation.isPending}>
-                      {recalculateMutation.isPending ? (
+                    <Button type="submit" className="h-12 min-w-36 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={reportLoadingItemId === recalculateItem?.id_item || !recalculateDate}>
+                      {reportLoadingItemId === recalculateItem?.id_item ? (
                         <>
                           <Loader2 className="mr-2 size-4 animate-spin" />
-                          Recalculando...
+                          Generando...
                         </>
-                      ) : "Recalcular"}
+                      ) : "Recalcular PDF"}
                     </Button>
                   </div>
                 </form>
@@ -2178,10 +2183,10 @@ export default function ItemsPage() {
                   </div>
 
                   <div className="flex justify-end gap-3">
-                    <Button type="button" variant="outline" onClick={handleBreakdownXlsx} disabled={!breakdownDate || !breakdownType}>
+                    <Button type="button" variant="outline" className="h-12 w-44 rounded-full" onClick={handleBreakdownXlsx} disabled={!breakdownDate || !breakdownType}>
                       Exportar XLSX
                     </Button>
-                    <Button type="submit" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
+                    <Button type="submit" className="h-12 w-44 rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
                       Recalcular Desgloses
                     </Button>
                   </div>
