@@ -16,8 +16,8 @@ export default function NewProjectPage() {
   const [formData, setFormData] = useState({
     nombre_proyecto: "",
     ubicacion: "",
-    latitud: "",
-    longitud: "",
+    latitud: "-17.389500",
+    longitud: "-66.156800",
     distrito: "",
     zona: "",
     otb: "",
@@ -222,7 +222,7 @@ export default function NewProjectPage() {
                   id="latitud"
                   value={formData.latitud}
                   onChange={(e) => handleChange("latitud", e.target.value)}
-                  placeholder="Coordenada Y UTM"
+                  placeholder="-17.389500"
                 />
               </div>
               <div className="space-y-2">
@@ -231,7 +231,7 @@ export default function NewProjectPage() {
                   id="longitud"
                   value={formData.longitud}
                   onChange={(e) => handleChange("longitud", e.target.value)}
-                  placeholder="Coordenada X UTM"
+                  placeholder="-66.156800"
                 />
               </div>
               <div className="space-y-2">

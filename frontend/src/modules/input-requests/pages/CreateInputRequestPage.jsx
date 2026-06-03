@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Loader2, ArrowLeft, MapPin, Upload } from "lucide-react";
@@ -11,6 +11,7 @@ import { authService } from "@/modules/auth/services/auth.service";
 import apiClient from "@/lib/api/client";
 
 const MAX_QUOTE_FILE_SIZE = 10 * 1024 * 1024;
+const ProjectLocationMap = lazy(() => import("@/modules/projects/components/ProjectLocationMap"));
 
 function getCurrentUserId(profile) {
   return profile?.data?.user?.id
@@ -30,8 +31,8 @@ export default function CreateInputRequestPage() {
     precio: "",
     id_unidad_medida: "",
     id_tipo: "",
-    latitud: "",
-    longitud: "",
+    latitud: "-17.389500",
+    longitud: "-66.156800",
     ubicacion: "",
     justificacion: "",
     distrito: "",
@@ -177,9 +178,16 @@ export default function CreateInputRequestPage() {
                 <MapPin className="h-4 w-4" />
                 Ubicación en el Mapa
               </Label>
-              <div className="h-48 rounded-xl border border-border/80 bg-muted/30 flex items-center justify-center">
-                <p className="text-muted-foreground text-sm">Mapa interactivo - Seleccione la ubicación</p>
-              </div>
+              <Suspense
+                fallback={(
+                  <div className="flex h-[360px] items-center justify-center rounded-xl border border-border/80 bg-muted/30 text-sm text-muted-foreground">
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Cargando mapa
+                  </div>
+                )}
+              >
+                <ProjectLocationMap value={formData} onChange={(changes) => setFormData((current) => ({ ...current, ...changes }))} />
+              </Suspense>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -189,7 +197,7 @@ export default function CreateInputRequestPage() {
                   id="latitud"
                   value={formData.latitud}
                   onChange={(e) => handleChange("latitud", e.target.value)}
-                  placeholder="Coordenada Y"
+                  placeholder="-17.389500"
                 />
               </div>
               <div className="space-y-2">
@@ -198,7 +206,7 @@ export default function CreateInputRequestPage() {
                   id="longitud"
                   value={formData.longitud}
                   onChange={(e) => handleChange("longitud", e.target.value)}
-                  placeholder="Coordenada X"
+                  placeholder="-66.156800"
                 />
               </div>
             </div>
