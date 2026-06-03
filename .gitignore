@@ -11,6 +11,7 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.production
+!.env.docker.example
 
 # Logs
 *.log
