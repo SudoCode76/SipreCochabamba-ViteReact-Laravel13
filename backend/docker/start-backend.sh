@@ -29,7 +29,9 @@ if [ ! -f vendor/bin/phpunit ]; then
   composer install --no-interaction --prefer-dist
 fi
 
-php artisan migrate --force --path=database/migrations/2026_04_24_173439_create_personal_access_tokens_table.php
+if [ "${RUN_STARTUP_MIGRATIONS:-false}" = "true" ]; then
+  php artisan migrate --force --path=database/migrations/2026_04_24_173439_create_personal_access_tokens_table.php
+fi
 
 php artisan config:clear
 php artisan route:clear

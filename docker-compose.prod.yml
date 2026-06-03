@@ -3,6 +3,10 @@ services:
     build:
       context: ./frontend
       target: production
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_STORAGE_BASE_URL: ${VITE_STORAGE_BASE_URL:-}
+        VITE_GIS_BASE_URL: ${VITE_GIS_BASE_URL:-}
     container_name: sipre-frontend-prod
     restart: unless-stopped
     depends_on:

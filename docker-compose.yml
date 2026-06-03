@@ -1,51 +1,13 @@
 name: siprecochabamba-new
 
 services:
-  db:
-    build:
-      context: ./.docker/postgres
-      dockerfile: Dockerfile
-    container_name: sipre-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: sipre
-      POSTGRES_USER: sipre
-      POSTGRES_PASSWORD: sipre
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./sipre-202604201330_pg_backup.dmp:/docker-entrypoint-initdb.d/sipre-202604201330_pg_backup.dmp:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   backend:
     build:
       context: ./backend
     container_name: sipre-backend
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      APP_NAME: SipreCochabamba
-      APP_ENV: local
-      APP_DEBUG: "true"
-      APP_URL: http://localhost:8000
-      DB_CONNECTION: pgsql
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_DATABASE: sipre
-      DB_USERNAME: sipre
-      DB_PASSWORD: sipre
-      DB_SSLMODE: prefer
-      FRONTEND_URL: http://localhost:5173
-      SESSION_DRIVER: file
-      CACHE_STORE: file
-      QUEUE_CONNECTION: sync
+    env_file:
+      - ./.env.docker
     ports:
       - "8000:8000"
     volumes:
@@ -61,6 +23,8 @@ services:
     depends_on:
       backend:
         condition: service_started
+    env_file:
+      - ./.env.docker
     environment:
       CHOKIDAR_USEPOLLING: "true"
     ports:
@@ -71,5 +35,4 @@ services:
 
 volumes:
   backend_vendor:
-  postgres_data:
   frontend_node_modules:
