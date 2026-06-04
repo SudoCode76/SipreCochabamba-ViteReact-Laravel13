@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: gamc-backend-dev
+    container_name: sipregamc-dev
     working_dir: /var/www
     restart: unless-stopped
 
@@ -21,7 +21,7 @@ services:
       - "9000"
 
     networks:
-      - tramites-network
+      - sipregamc-network
 
   nginx:
     image: nginx:alpine
@@ -40,7 +40,7 @@ services:
       - backend
 
     networks:
-      - tramites-network
+      - sipregamc-network
 
   frontend:
     build:
@@ -61,10 +61,10 @@ services:
     command: npm run dev -- --host 0.0.0.0 --port 5173
 
     networks:
-      - tramites-network
+      - sipregamc-network
 
 networks:
-  tramites-network:
+  sipregamc-network:
     driver: bridge
 
 volumes:
