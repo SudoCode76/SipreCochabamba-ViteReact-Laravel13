@@ -14,12 +14,30 @@ pipeline {
     }
 
     stages {
-
+        stage('Clean Workspace') {
+            steps {
+                deleteDir()
+            }
+        }
         stage('Checkout') {
             steps {
                 git branch: env.GIT_BRANCH,
                     credentialsId: env.GIT_CREDENTIALS,
                     url: env.GIT_URL
+            }
+        }
+        stage('Debug Git') {
+            steps {
+                sh '''
+                    echo "BRANCH:"
+                    git branch --show-current
+
+                    echo "COMMIT:"
+                    git rev-parse HEAD
+
+                    echo "LAST COMMIT:"
+                    git log -1 --oneline
+                '''
             }
         }
 
