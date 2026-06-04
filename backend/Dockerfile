@@ -1,42 +1,42 @@
-FROM php:8.4-cli-bookworm AS vendor
+FROM php:8.4-fpm-alpine
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends git unzip libzip-dev libpng-dev libjpeg-dev libfreetype6-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install zip gd \
-    && rm -rf /var/lib/apt/lists/*
+ENV TZ=America/La_Paz \
+    PHP_TZ=America/La_Paz \
+    COMPOSER_ALLOW_SUPERUSER=1
 
-COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+RUN apk add --no-cache \
+    bash curl git unzip zip \
+    postgresql-dev libpq \
+    freetype-dev libjpeg-turbo-dev libpng-dev libwebp-dev \
+    oniguruma-dev libzip-dev libxml2-dev icu-dev tzdata
 
-WORKDIR /app
+RUN docker-php-ext-configure gd \
+    --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install \
+    pdo pdo_pgsql pgsql gd mbstring bcmath pcntl zip exif intl soap
 
-COPY . .
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-RUN composer install \
-    --no-interaction \
-    --prefer-dist \
-    --optimize-autoloader
+WORKDIR /var/www
 
-FROM php:8.4-cli-bookworm
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends git unzip libpq-dev libzip-dev libicu-dev libpng-dev libjpeg-dev libfreetype6-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo_pgsql pgsql intl zip gd \
-    && printf "upload_max_filesize=10M\npost_max_size=35M\n" > /usr/local/etc/php/conf.d/uploads.ini \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
-
-WORKDIR /var/www/html
-
-COPY --from=vendor /app /var/www/html
-COPY docker/start-backend.sh /usr/local/bin/start-backend
-
-RUN chmod +x /usr/local/bin/start-backend \
-    && mkdir -p /var/www/html/storage/framework/views /var/www/html/storage/framework/cache/data /var/www/html/storage/framework/sessions /var/www/html/bootstrap/cache \
-    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-
-EXPOSE 8000
-
-CMD ["sh", "/usr/local/bin/start-backend"]
+EXPOSE 9000
+CMD sh -c "\
+  mkdir -p bootstrap/cache \
+           storage/framework/cache \
+           storage/framework/sessions \
+           storage/framework/views && \
+  chown -R www-data:www-data storage bootstrap/cache && \
+  php-fpm \
+"
+# Laravel storage y cache
+RUN mkdir -p /var/www/storage \
+    /var/www/storage/app \
+    /var/www/storage/app/public \
+    /var/www/storage/framework \
+    /var/www/storage/framework/cache \
+    /var/www/storage/framework/sessions \
+    /var/www/storage/framework/views \
+    /var/www/storage/logs \
+    /var/www/bootstrap/cache \
+ && chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache \
+ && chmod -R 775 /var/www/storage /var/www/bootstrap/cache

@@ -1,0 +1,138 @@
+pipeline {
+    agent { label 'server_104.64' }
+
+    options {
+        skipDefaultCheckout(true)
+        timestamps()
+    }
+
+    environment {
+        DOCKER_COMPOSE_FILE = 'docker-compose-dev.yml'
+        GIT_URL = 'https://github.com/alcaldiacochabamba/sipregamc.cochabamba.bo.git'
+        GIT_CREDENTIALS = 'github-https'
+        GIT_BRANCH = 'dev'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: env.GIT_BRANCH,
+                    credentialsId: env.GIT_CREDENTIALS,
+                    url: env.GIT_URL
+            }
+        }
+
+        stage('Prepare env files') {
+            steps {
+                sh '''
+                  cp backend/.env.dev backend/.env || true
+                  cp frontend/.env.dev frontend/.env || true
+                '''
+            }
+        }
+
+        stage('Stop running containers') {
+            steps {
+                sh '''
+                  docker compose -f ${DOCKER_COMPOSE_FILE} down --remove-orphans
+                '''
+            }
+        }
+
+        stage('Build & Start containers') {
+            steps {
+                sh '''
+                  docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build
+                '''
+            }
+        }
+
+        stage('Install backend dependencies') {
+            steps {
+                sh '''
+                  docker compose exec backend sh -c '
+                    if [ ! -f vendor/autoload.php ]; then
+                        composer install --no-interaction --prefer-dist --no-progress
+                    fi
+                  '
+                '''
+            }
+        }
+
+        stage('Prepare Laravel storage') {
+            steps {
+                sh '''
+                  docker compose exec backend sh -c '
+                    mkdir -p storage/framework/{cache,sessions,views}
+                    mkdir -p bootstrap/cache
+                  '
+                '''
+            }
+        }
+
+        stage('Fix runtime permissions') {
+            steps {
+                sh '''
+                  docker compose exec backend sh -c '
+                    chmod -R 775 storage bootstrap/cache
+                    find storage -type f -exec chmod 664 {} \\;
+                    find storage -type d -exec chmod 775 {} \\;
+                  '
+                '''
+            }
+        }
+
+        stage('Ensure storage symlink') {
+            steps {
+                sh '''
+                  docker compose exec backend sh -c '
+                    if [ ! -L public/storage ]; then
+                        php artisan storage:link
+                    fi
+                  '
+                '''
+            }
+        }
+
+        stage('Clear Laravel caches') {
+            steps {
+                sh '''
+                  docker compose exec backend sh -c '
+                    php artisan optimize:clear || true
+                  '
+                '''
+            }
+        }
+
+        stage('Debug frontend') {
+            steps {
+                sh '''
+                    docker compose ps
+                    docker compose logs frontend --tail=300
+                '''
+            }
+        }
+
+        stage('Install frontend dependencies') {
+            steps {
+                sh '''
+                  docker compose exec frontend sh -c '
+                    if [ ! -d node_modules ]; then
+                        npm install --no-audit --no-fund
+                    fi
+                  '
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ DEV levantado correctamente (backend + frontend)'
+        }
+        failure {
+            echo '❌ Falló el pipeline DEV'
+        }
+    }
+}

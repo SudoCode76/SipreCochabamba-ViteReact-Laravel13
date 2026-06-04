@@ -1,0 +1,75 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gamc-backend-dev
+    working_dir: /var/www
+    restart: unless-stopped
+
+    volumes:
+      - ./backend:/var/www:cached
+      - backend_vendor:/var/www/vendor
+      - backend_storage:/var/www/storage
+      - backend_cache:/var/www/bootstrap/cache
+      - composer_cache:/tmp/composer
+
+    env_file:
+      - ./backend/.env.dev
+
+    expose:
+      - "9000"
+
+    networks:
+      - tramites-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: gamc-nginx-dev
+    restart: unless-stopped
+
+    ports:
+      - "8011:80"
+
+    volumes:
+      - ./backend:/var/www
+      - backend_storage:/var/www/storage
+      - ./backend/nginx.conf:/etc/nginx/conf.d/default.conf
+
+    depends_on:
+      - backend
+
+    networks:
+      - tramites-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+
+    container_name: gamc-frontend-dev
+    restart: unless-stopped
+
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+
+    ports:
+      - "8010:5173"
+
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+
+    networks:
+      - tramites-network
+
+networks:
+  tramites-network:
+    driver: bridge
+
+volumes:
+  backend_vendor:
+  backend_storage:
+  backend_cache:
+  frontend_node_modules:
+  composer_cache:
