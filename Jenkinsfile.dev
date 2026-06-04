@@ -63,7 +63,7 @@ pipeline {
         stage('Prepare Laravel storage') {
             steps {
                 sh '''
-                  docker compose -f ${DOCKER_COMPOSE_FILE}exec backend sh -c '
+                  docker compose -f ${DOCKER_COMPOSE_FILE} exec backend sh -c '
                     mkdir -p storage/framework/{cache,sessions,views}
                     mkdir -p bootstrap/cache
                   '
@@ -86,7 +86,7 @@ pipeline {
         stage('Ensure storage symlink') {
             steps {
                 sh '''
-                  docker compose exec backend sh -c '
+                  docker compose -f ${DOCKER_COMPOSE_FILE} exec backend sh -c '
                     if [ ! -L public/storage ]; then
                         php artisan storage:link
                     fi
