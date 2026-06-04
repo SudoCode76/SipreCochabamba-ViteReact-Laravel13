@@ -53,7 +53,7 @@ pipeline {
         stage('Stop running containers') {
             steps {
                 sh '''
-                  docker compose -f ${DOCKER_COMPOSE_FILE} down --remove-orphans
+                  docker compose -f ${DOCKER_COMPOSE_FILE} down -v --remove-orphans
                 '''
             }
         }
