@@ -51,7 +51,7 @@ pipeline {
         stage('Install backend dependencies') {
             steps {
                 sh '''
-                  docker compose exec backend sh -c '
+                  docker compose -f ${DOCKER_COMPOSE_FILE} exec backend sh -c '
                     if [ ! -f vendor/autoload.php ]; then
                         composer install --no-interaction --prefer-dist --no-progress
                     fi
@@ -63,7 +63,7 @@ pipeline {
         stage('Prepare Laravel storage') {
             steps {
                 sh '''
-                  docker compose exec backend sh -c '
+                  docker compose -f ${DOCKER_COMPOSE_FILE}exec backend sh -c '
                     mkdir -p storage/framework/{cache,sessions,views}
                     mkdir -p bootstrap/cache
                   '
@@ -74,7 +74,7 @@ pipeline {
         stage('Fix runtime permissions') {
             steps {
                 sh '''
-                  docker compose exec backend sh -c '
+                  docker compose -f ${DOCKER_COMPOSE_FILE} exec backend sh -c '
                     chmod -R 775 storage bootstrap/cache
                     find storage -type f -exec chmod 664 {} \\;
                     find storage -type d -exec chmod 775 {} \\;
@@ -98,7 +98,7 @@ pipeline {
         stage('Clear Laravel caches') {
             steps {
                 sh '''
-                  docker compose exec backend sh -c '
+                  docker compose -f ${DOCKER_COMPOSE_FILE} exec backend sh -c '
                     php artisan optimize:clear || true
                   '
                 '''
@@ -108,8 +108,8 @@ pipeline {
         stage('Debug frontend') {
             steps {
                 sh '''
-                    docker compose ps
-                    docker compose logs frontend --tail=300
+                    docker compose -f ${DOCKER_COMPOSE_FILE} ps
+                    docker compose -f ${DOCKER_COMPOSE_FILE} logs frontend --tail=300
                 '''
             }
         }
@@ -117,7 +117,7 @@ pipeline {
         stage('Install frontend dependencies') {
             steps {
                 sh '''
-                  docker compose exec frontend sh -c '
+                  docker compose -f ${DOCKER_COMPOSE_FILE} exec frontend sh -c '
                     if [ ! -d node_modules ]; then
                         npm install --no-audit --no-fund
                     fi
