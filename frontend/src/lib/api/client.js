@@ -4,6 +4,7 @@ import axios from "axios";
 const defaultApiBaseUrl = import.meta.env.DEV ? "https://sipregamcapidev.cochabamba.bo/api" : "/api";
 
 export const apiBaseUrl = import.meta.env.VITE_API_URL || defaultApiBaseUrl;
+console.log("API Base URL:", apiBaseUrl);
 export const apiOrigin = (() => {
   try {
     return new URL(apiBaseUrl, window.location.origin).origin;
