@@ -25,7 +25,7 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: gamc-nginx-dev
+    container_name: sipregamc-nginx-dev
     restart: unless-stopped
 
     ports:
@@ -48,7 +48,7 @@ services:
       dockerfile: Dockerfile
       target: dev
 
-    container_name: gamc-frontend-dev
+    container_name: sipregamc-frontend-dev
     restart: unless-stopped
 
     volumes:

@@ -5,7 +5,13 @@ pipeline {
         skipDefaultCheckout(true)
         timestamps()
     }
-
+    parameters {
+        booleanParam(
+            name: 'FULL_REBUILD',
+            defaultValue: false,
+            description: 'Eliminar cache Docker, imágenes y recrear completamente frontend/backend'
+        )
+    }
     environment {
         DOCKER_COMPOSE_FILE = 'docker-compose-dev.yml'
         GIT_URL = 'https://github.com/alcaldiacochabamba/sipregamc.cochabamba.bo.git'
@@ -14,11 +20,7 @@ pipeline {
     }
 
     stages {
-        stage('Clean Workspace') {
-            steps {
-                deleteDir()
-            }
-        }
+        
         stage('Checkout') {
             steps {
                 git branch: env.GIT_BRANCH,
@@ -46,6 +48,31 @@ pipeline {
                 sh '''
                   cp backend/.env.dev backend/.env || true
                   cp frontend/.env.dev frontend/.env || true
+                '''
+            }
+        }
+
+        // =====================================================
+        // FULL CLEAN
+        // =====================================================
+        stage('Full clean docker') {
+
+            when {
+                expression { params.FULL_REBUILD }
+            }
+
+            steps {
+
+                sh '''
+                  echo "🧹 FULL REBUILD ACTIVADO"
+
+                  docker compose -f ${DOCKER_COMPOSE_FILE} down -v --remove-orphans || true
+
+                  docker rm -f sipregamc-dev sipregamc-frontend-dev || true
+
+                  docker system prune -af --volumes || true
+
+                  docker builder prune -af || true
                 '''
             }
         }

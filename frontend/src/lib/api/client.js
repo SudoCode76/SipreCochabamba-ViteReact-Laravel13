@@ -1,7 +1,7 @@
 
 import axios from "axios";
 
-const defaultApiBaseUrl = import.meta.env.DEV ? "http://localhost:8000/api" : "/api";
+const defaultApiBaseUrl = import.meta.env.DEV ? "https://sipregamcapidev.cochabamba.bo/api" : "/api";
 
 export const apiBaseUrl = import.meta.env.VITE_API_URL || defaultApiBaseUrl;
 export const apiOrigin = (() => {
