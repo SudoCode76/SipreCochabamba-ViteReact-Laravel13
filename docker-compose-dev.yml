@@ -46,19 +46,14 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: dev
+      target: production
 
     container_name: sipregamc-frontend-dev
+
     restart: unless-stopped
 
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
-
     ports:
-      - "8010:5173"
-
-    command: npm run dev -- --host 0.0.0.0 --port 5173
+      - "8010:80"
 
     networks:
       - sipregamc-network
@@ -71,5 +66,4 @@ volumes:
   backend_vendor:
   backend_storage:
   backend_cache:
-  frontend_node_modules:
   composer_cache:

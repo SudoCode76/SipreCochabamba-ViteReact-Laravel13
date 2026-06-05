@@ -47,7 +47,7 @@ pipeline {
             steps {
                 sh '''
                   cp backend/.env.dev backend/.env || true
-                  cp frontend/.env.dev frontend/.env || true
+                //   cp frontend/.env.dev frontend/.env || true
                 '''
             }
         }
@@ -159,17 +159,17 @@ pipeline {
             }
         }
 
-        stage('Install frontend dependencies') {
-            steps {
-                sh '''
-                  docker compose -f ${DOCKER_COMPOSE_FILE} exec frontend sh -c '
-                    if [ ! -d node_modules ]; then
-                        npm install --no-audit --no-fund
-                    fi
-                  '
-                '''
-            }
-        }
+        // stage('Install frontend dependencies') {
+        //     steps {
+        //         sh '''
+        //           docker compose -f ${DOCKER_COMPOSE_FILE} exec frontend sh -c '
+        //             if [ ! -d node_modules ]; then
+        //                 npm install --no-audit --no-fund
+        //             fi
+        //           '
+        //         '''
+        //     }
+        // }
     }
 
     post {
