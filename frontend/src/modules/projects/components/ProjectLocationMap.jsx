@@ -1,42 +1,35 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import "ol/ol.css";
-
-import Feature from "ol/Feature.js";
-import Map from "ol/Map.js";
-import View from "ol/View.js";
-import Point from "ol/geom/Point.js";
-import Modify from "ol/interaction/Modify.js";
-import TileLayer from "ol/layer/Tile.js";
-import VectorLayer from "ol/layer/Vector.js";
-import OSM from "ol/source/OSM.js";
-import VectorSource from "ol/source/Vector.js";
-import { Circle, Fill, Stroke, Style } from "ol/style.js";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import "proj4leaflet";
 
 import { Button } from "@/components/ui/button";
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
-const COCHABAMBA_LON_LAT = [-66.1568, -17.3895];
-const DEFAULT_ZOOM = 13;
-const WEB_MERCATOR_HALF_WORLD = 20037508.34;
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
 
-function lonLatToWebMercator([longitud, latitud]) {
-  const x = (longitud * WEB_MERCATOR_HALF_WORLD) / 180;
-  let y = Math.log(Math.tan(((90 + latitud) * Math.PI) / 360)) / (Math.PI / 180);
-  y = (y * WEB_MERCATOR_HALF_WORLD) / 180;
+const COCHABAMBA_CENTER = [-17.416128493780963, -66.16543579646086];
+const DEFAULT_ZOOM = 12;
+const MIN_ZOOM = 8;
+const MAX_ZOOM = 12;
+const CRS_CODE = "EPSG:32719";
+const CRS_DEF = "+proj=utm +zone=19 +south +datum=WGS84 +units=m +no_defs";
+const CRS_RESOLUTIONS = [1600, 800, 400, 200, 100, 50, 25, 10, 5, 2.5, 1, 0.5, 0.25, 0.125, 0.0625];
+const MUNICIPAL_WMS = {
+  imagenes: "https://busquedasgamc.cochabamba.bo/web/index.php?r=services/get-imagenes",
+  calles: "https://busquedasgamc.cochabamba.bo/web/index.php?r=services/get-nombre-calles",
+  catastro: "https://busquedasgamc.cochabamba.bo/web/index.php?r=services/get-info-catastro",
+  featureInfo: "https://busquedasgamc.cochabamba.bo/web/index.php?r=services/get-feature-info-url-calles",
+};
 
-  return [x, y];
-}
-
-function webMercatorToLonLat([x, y]) {
-  const longitud = (x / WEB_MERCATOR_HALF_WORLD) * 180;
-  let latitud = (y / WEB_MERCATOR_HALF_WORLD) * 180;
-  latitud = (180 / Math.PI) * (2 * Math.atan(Math.exp((latitud * Math.PI) / 180)) - Math.PI / 2);
-
-  return [longitud, latitud];
-}
-
-const COCHABAMBA_CENTER = lonLatToWebMercator(COCHABAMBA_LON_LAT);
-
-function parseCoordinate(value) {
+function parseLatLng(value) {
   const latitud = Number(value?.latitud);
   const longitud = Number(value?.longitud);
 
@@ -44,177 +37,241 @@ function parseCoordinate(value) {
     return null;
   }
 
-  return lonLatToWebMercator([longitud, latitud]);
+  return L.latLng(latitud, longitud);
 }
 
-function formatLonLat(coordinate) {
-  if (!coordinate) {
+function formatLatLng(latlng) {
+  if (!latlng) {
     return "-";
   }
 
-  const [longitud, latitud] = webMercatorToLonLat(coordinate);
-  return `${latitud.toFixed(6)}, ${longitud.toFixed(6)}`;
+  return `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
 }
 
-function scaleFromResolution(resolution) {
-  if (!Number.isFinite(resolution) || resolution <= 0) {
-    return "-";
+function getFeatureInfoUrl(map, crs, layerUrl, latlng, params) {
+  const point = map.latLngToContainerPoint(latlng, map.getZoom());
+  const size = map.getSize();
+  const bounds = map.getBounds();
+  const sw = crs.projection._proj.forward([bounds.getSouthWest().lng, bounds.getSouthWest().lat]);
+  const ne = crs.projection._proj.forward([bounds.getNorthEast().lng, bounds.getNorthEast().lat]);
+
+  const defaultParams = {
+    request: "GetFeatureInfo",
+    service: "WMS",
+    srs: CRS_CODE,
+    styles: "",
+    version: "1.1.1",
+    format: "image/png",
+    bbox: [sw.join(","), ne.join(",")].join(","),
+    height: size.y,
+    width: size.x,
+    layers: 0,
+    query_layers: 0,
+  };
+
+  const requestParams = L.Util.extend(defaultParams, params || {});
+  requestParams[requestParams.version === "1.3.0" ? "i" : "x"] = point.x;
+  requestParams[requestParams.version === "1.3.0" ? "j" : "y"] = point.y;
+
+  return layerUrl + L.Util.getParamString(requestParams, layerUrl, true);
+}
+
+function readTerritorialResponse(data) {
+  if (!data || data.status !== true || !data.response) {
+    return null;
   }
 
-  return `1:${Math.round(resolution * 96 * 39.37).toLocaleString("es-BO")}`;
+  return {
+    zona: data.response.zona_tributari || "",
+    distrito: data.response.distrito || "",
+    subdistrito: data.response.subdistrito || "",
+    otb: data.response.otb || data.response.OTB || data.response.nombre_otb || "",
+  };
 }
 
 export default function ProjectLocationMap({ value, onChange }) {
   const mapElementRef = useRef(null);
   const mapRef = useRef(null);
-  const markerFeatureRef = useRef(null);
-  const vectorSourceRef = useRef(null);
-  const modifyInteractionRef = useRef(null);
-  const initialValueRef = useRef(value);
+  const markerRef = useRef(null);
+  const crsRef = useRef(null);
   const latestOnChangeRef = useRef(onChange);
+  const initialValueRef = useRef(value);
   const [mouseLocation, setMouseLocation] = useState("-");
   const [scale, setScale] = useState("-");
+  const [territorialWarning, setTerritorialWarning] = useState("");
 
   useEffect(() => {
     latestOnChangeRef.current = onChange;
   }, [onChange]);
 
-  const updateLocation = useCallback((coordinate) => {
-    const [longitud, latitud] = webMercatorToLonLat(coordinate);
-
+  const clearTerritorialData = useCallback((message) => {
+    setTerritorialWarning(message);
     latestOnChangeRef.current?.({
-      latitud: latitud.toFixed(6),
-      longitud: longitud.toFixed(6),
+      distrito: "",
+      zona: "",
+      subdistrito: "",
+      otb: "",
     });
   }, []);
 
-  const createOrMoveMarker = useCallback((coordinate, shouldUpdateFields = true) => {
+  const fetchTerritorialData = useCallback(async (latlng) => {
     const map = mapRef.current;
-    const vectorSource = vectorSourceRef.current;
+    const crs = crsRef.current;
 
-    if (!map || !vectorSource) {
+    if (!map || !crs) {
       return;
     }
 
-    if (!markerFeatureRef.current) {
-      const markerFeature = new Feature({
-        geometry: new Point(coordinate),
-      });
+    const url = getFeatureInfoUrl(
+      map,
+      crs,
+      MUNICIPAL_WMS.featureInfo,
+      latlng,
+      {
+        INFO_FORMAT: "application/json",
+        FEATURE_COUNT: 50,
+      },
+    );
 
-      markerFeature.set("posicion_marcador", "posicion_marcador");
-      markerFeatureRef.current = markerFeature;
-      vectorSource.clear();
-      vectorSource.addFeature(markerFeature);
-
-      if (modifyInteractionRef.current) {
-        map.removeInteraction(modifyInteractionRef.current);
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      const modifyInteraction = new Modify({ source: vectorSource });
-      modifyInteraction.on("modifyend", (event) => {
-        const feature = event.features.item(0);
-        const nextCoordinate = feature?.getGeometry()?.getCoordinates();
+      const data = await response.json();
+      const territorialData = readTerritorialResponse(data);
 
-        if (nextCoordinate) {
-          updateLocation(nextCoordinate);
-        }
+      if (!territorialData) {
+        clearTerritorialData("Seleccione una ubicación válida dentro del municipio.");
+        return;
+      }
+
+      setTerritorialWarning("");
+      latestOnChangeRef.current?.(territorialData);
+    } catch (error) {
+      console.warn("No se pudieron obtener los datos territoriales del punto seleccionado.", {
+        url,
+        error,
       });
+      clearTerritorialData("Seleccione una ubicación válida dentro del municipio.");
+    }
+  }, [clearTerritorialData]);
 
-      map.addInteraction(modifyInteraction);
-      modifyInteractionRef.current = modifyInteraction;
-    } else {
-      markerFeatureRef.current.getGeometry().setCoordinates(coordinate);
+  const updateLocation = useCallback((latlng) => {
+    latestOnChangeRef.current?.({
+      latitud: latlng.lat.toFixed(6),
+      longitud: latlng.lng.toFixed(6),
+    });
+
+    fetchTerritorialData(latlng);
+  }, [fetchTerritorialData]);
+
+  const createOrMoveMarker = useCallback((latlng, shouldUpdateFields = true) => {
+    const map = mapRef.current;
+
+    if (!map) {
+      return;
     }
 
+    if (markerRef.current) {
+      markerRef.current.setLatLng(latlng);
+    } else {
+      markerRef.current = L.marker(latlng, { draggable: true }).addTo(map);
+      markerRef.current.bindPopup("<b>Ubicación Seleccionada</b>");
+      markerRef.current.on("dragend", (event) => {
+        updateLocation(event.target.getLatLng());
+      });
+    }
+
+    markerRef.current.openPopup();
+
     if (shouldUpdateFields) {
-      updateLocation(coordinate);
+      updateLocation(latlng);
     }
   }, [updateLocation]);
 
   useEffect(() => {
-    if (!mapElementRef.current) {
+    if (!mapElementRef.current || !L?.Proj?.CRS) {
+      setTerritorialWarning("No se pudieron cargar las librerías del mapa.");
       return undefined;
     }
 
-    const vectorSource = new VectorSource();
-    vectorSourceRef.current = vectorSource;
-
-    const markerLayer = new VectorLayer({
-      source: vectorSource,
-      style: new Style({
-        image: new Circle({
-          radius: 8,
-          fill: new Fill({ color: "#059669" }),
-          stroke: new Stroke({ color: "#ffffff", width: 3 }),
-        }),
-      }),
+    const crs = new L.Proj.CRS(CRS_CODE, CRS_DEF, {
+      resolutions: CRS_RESOLUTIONS,
     });
+    crsRef.current = crs;
 
-    const view = new View({
-      projection: "EPSG:3857",
-      center: COCHABAMBA_CENTER,
-      zoom: DEFAULT_ZOOM,
-    });
-
-    const map = new Map({
-      target: mapElementRef.current,
+    const map = new L.Map(mapElementRef.current, {
+      crs,
+      continuousWorld: true,
+      worldCopyJump: false,
+      minZoom: MIN_ZOOM,
+      maxZoom: MAX_ZOOM,
       layers: [
-        new TileLayer({
-          source: new OSM(),
+        L.tileLayer.wms(MUNICIPAL_WMS.imagenes, {
+          layers: "0",
+          format: "image/png",
+          opacity: 0.9,
+          version: "1.1.1",
         }),
-        markerLayer,
       ],
-      view,
     });
+
+    L.tileLayer.wms(MUNICIPAL_WMS.calles, {
+      layers: "0",
+      format: "image/png",
+      continuousWorld: true,
+      transparent: true,
+      opacity: 1,
+      version: "1.1.1",
+    }).addTo(map);
+
+    L.tileLayer.wms(MUNICIPAL_WMS.catastro, {
+      layers: "0",
+      format: "image/png",
+      version: "1.1.1",
+      transparent: true,
+    }).addTo(map);
 
     mapRef.current = map;
+    const initialLatLng = parseLatLng(initialValueRef.current) || L.latLng(COCHABAMBA_CENTER);
+    map.setView(initialLatLng, DEFAULT_ZOOM);
+    createOrMoveMarker(initialLatLng, !parseLatLng(initialValueRef.current));
 
-    const initialCoordinate = parseCoordinate(initialValueRef.current) || COCHABAMBA_CENTER;
-    view.setCenter(initialCoordinate);
-    view.setZoom(DEFAULT_ZOOM);
-    createOrMoveMarker(initialCoordinate, !parseCoordinate(initialValueRef.current));
+    const updateScale = () => {
+      const resolution = CRS_RESOLUTIONS[map.getZoom()];
+      setScale(Number.isFinite(resolution) ? `1:${Math.round(resolution * 96 * 39.37).toLocaleString("es-BO")}` : "-");
+    };
 
-    requestAnimationFrame(() => {
-      map.updateSize();
-      view.setCenter(initialCoordinate);
-      view.setZoom(DEFAULT_ZOOM);
-    });
+    updateScale();
+    map.on("zoomend", updateScale);
+    map.on("mousemove", (event) => setMouseLocation(formatLatLng(event.latlng)));
+    map.on("click", (event) => createOrMoveMarker(event.latlng, true));
 
-    const updateResolution = () => setScale(scaleFromResolution(view.getResolution()));
-    updateResolution();
-    view.on("change:resolution", updateResolution);
-
-    map.on("pointermove", (event) => {
-      setMouseLocation(formatLonLat(event.coordinate));
-    });
-
-    map.on("singleclick", (event) => {
-      createOrMoveMarker(event.coordinate, true);
-    });
+    requestAnimationFrame(() => map.invalidateSize());
 
     return () => {
-      view.un("change:resolution", updateResolution);
-      map.setTarget(undefined);
+      map.remove();
       mapRef.current = null;
-      vectorSourceRef.current = null;
-      markerFeatureRef.current = null;
-      modifyInteractionRef.current = null;
+      markerRef.current = null;
+      crsRef.current = null;
     };
   }, [createOrMoveMarker]);
 
   useEffect(() => {
-    const currentCoordinate = parseCoordinate(value);
-    const markerCoordinate = markerFeatureRef.current?.getGeometry()?.getCoordinates();
+    const currentLatLng = parseLatLng(value);
+    const markerLatLng = markerRef.current?.getLatLng();
 
-    if (!currentCoordinate || !markerCoordinate) {
+    if (!currentLatLng || !markerLatLng) {
       return;
     }
 
     if (
-      Math.abs(currentCoordinate[0] - markerCoordinate[0]) > 0.01
-      || Math.abs(currentCoordinate[1] - markerCoordinate[1]) > 0.01
+      Math.abs(currentLatLng.lat - markerLatLng.lat) > 0.000001
+      || Math.abs(currentLatLng.lng - markerLatLng.lng) > 0.000001
     ) {
-      createOrMoveMarker(currentCoordinate, false);
+      createOrMoveMarker(currentLatLng, false);
     }
   }, [createOrMoveMarker, value]);
 
@@ -224,12 +281,9 @@ export default function ProjectLocationMap({ value, onChange }) {
       return;
     }
 
-    createOrMoveMarker(COCHABAMBA_CENTER, true);
-    map.getView().animate({
-      center: COCHABAMBA_CENTER,
-      zoom: DEFAULT_ZOOM,
-      duration: 250,
-    });
+    const center = L.latLng(COCHABAMBA_CENTER);
+    createOrMoveMarker(center, true);
+    map.setView(center, DEFAULT_ZOOM);
   };
 
   return (
@@ -237,7 +291,7 @@ export default function ProjectLocationMap({ value, onChange }) {
       <div className="relative overflow-hidden rounded-xl border border-border/80 bg-muted/30">
         <div ref={mapElementRef} id="map" className="h-[360px] w-full" />
 
-        <div id="wrapper" className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div id="wrapper" className="pointer-events-none absolute bottom-3 left-3 right-3 z-[450] flex flex-wrap items-center justify-between gap-2 text-xs">
           <span id="location" className="rounded-full bg-background/95 px-3 py-1.5 text-muted-foreground shadow-sm">
             {mouseLocation}
           </span>
@@ -255,6 +309,12 @@ export default function ProjectLocationMap({ value, onChange }) {
           Centrar en Cochabamba
         </Button>
       </div>
+
+      {territorialWarning && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {territorialWarning}
+        </p>
+      )}
     </div>
   );
 }

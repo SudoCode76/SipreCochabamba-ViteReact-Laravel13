@@ -20,6 +20,7 @@ export default function NewProjectPage() {
     longitud: "-66.156800",
     distrito: "",
     zona: "",
+    subdistrito: "",
     otb: "",
     fecha: new Date().toISOString().split("T")[0],
     responsable: "",
@@ -78,6 +79,7 @@ export default function NewProjectPage() {
       longitud: template.longitud || "",
       distrito: template.distrito || "",
       zona: template.zona || "",
+      subdistrito: template.subdistrito || "",
       otb: template.otb || "",
       responsable: template.responsable || "",
       solicitante: template.solicitante ? String(template.solicitante) : "",
@@ -99,6 +101,7 @@ export default function NewProjectPage() {
         longitud: formData.longitud?.trim() || null,
         observaciones: formData.observaciones?.trim() || null,
       };
+      delete payload.subdistrito;
 
       if (creationMode === "template") {
         if (!selectedTemplateId) {
@@ -245,7 +248,7 @@ export default function NewProjectPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="zona">Zona</Label>
                 <Input
@@ -253,6 +256,16 @@ export default function NewProjectPage() {
                   value={formData.zona}
                   onChange={(e) => handleChange("zona", e.target.value)}
                   placeholder="Zona"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subdistrito">Sub Distrito</Label>
+                <Input
+                  id="subdistrito"
+                  value={formData.subdistrito}
+                  onChange={(e) => handleChange("subdistrito", e.target.value)}
+                  placeholder="Sub Distrito"
+                  readOnly
                 />
               </div>
               <div className="space-y-2">

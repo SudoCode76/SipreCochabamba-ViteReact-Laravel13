@@ -37,6 +37,7 @@ export default function CreateInputRequestPage() {
     justificacion: "",
     distrito: "",
     zona: "",
+    subdistrito: "",
     otb: "",
   });
   const [error, setError] = useState(null);
@@ -106,6 +107,7 @@ export default function CreateInputRequestPage() {
         longitud: formData.longitud,
         distrito: formData.distrito,
         zona: formData.zona,
+        subdistrito: formData.subdistrito,
         otb: formData.otb,
         ubicacion: formData.ubicacion,
         justificacion: formData.justificacion,
@@ -211,7 +213,7 @@ export default function CreateInputRequestPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="distrito">Distrito</Label>
                 <Input
@@ -228,6 +230,16 @@ export default function CreateInputRequestPage() {
                   value={formData.zona}
                   onChange={(e) => handleChange("zona", e.target.value)}
                   placeholder="Zona"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subdistrito">Sub Distrito</Label>
+                <Input
+                  id="subdistrito"
+                  value={formData.subdistrito}
+                  onChange={(e) => handleChange("subdistrito", e.target.value)}
+                  placeholder="Sub Distrito"
+                  readOnly
                 />
               </div>
               <div className="space-y-2">
