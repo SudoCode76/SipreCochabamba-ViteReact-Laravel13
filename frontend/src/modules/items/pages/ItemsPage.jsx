@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown, Eye } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -16,7 +17,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { dismissItemsMaintenanceAlert, isItemsMaintenanceAlertDismissed } from "@/lib/items-maintenance-alert";
 import { downloadUrl, openPdfViewer } from "@/lib/utils/pdf";
+import { useAuth } from "@/modules/auth/hooks/useAuth";
 import { itemsService } from "@/modules/dashboard/services/items.service";
 import {
   DropdownMenu,
@@ -43,8 +46,14 @@ const collectValidationMessages = (error, fallback) => {
 
 export default function ItemsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [maintenanceAlertDismissed, setMaintenanceAlertDismissed] = useState(
+    () => isItemsMaintenanceAlertDismissed(user),
+  );
   const [perPage, setPerPage] = useState(10);
   const [order, setOrder] = useState("legacy");
+  const freshness = searchParams.get("freshness") === "outdated" ? "outdated" : "";
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightMissingSpecifications, setHighlightMissingSpecifications] = useState(false);
@@ -251,9 +260,16 @@ export default function ItemsPage() {
   };
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["items", { page, perPage, search, order }],
-    queryFn: () => itemsService.list({ page, perPage, search, order }),
+    queryKey: ["items", { page, perPage, search, order, freshness }],
+    queryFn: () => itemsService.list({ page, perPage, search, order, freshness }),
     placeholderData: (previousData) => previousData,
+  });
+
+  const { data: maintenanceData } = useQuery({
+    queryKey: ["items-maintenance-summary"],
+    queryFn: itemsService.maintenanceSummary,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: contextData, isLoading: contextLoading } = useQuery({
@@ -278,6 +294,16 @@ export default function ItemsPage() {
       queryClient.invalidateQueries({ queryKey: ["items"] });
       closeCreate();
     },
+  });
+
+  const invalidateFreshnessQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["items"] });
+    queryClient.invalidateQueries({ queryKey: ["items-maintenance-summary"] });
+  };
+
+  const reviewMutation = useMutation({
+    mutationFn: itemsService.review,
+    onSuccess: invalidateFreshnessQueries,
   });
 
   const updateMutation = useMutation({
@@ -310,7 +336,7 @@ export default function ItemsPage() {
     mutationFn: itemsService.syncMaterials,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["item-materials", materialsItem?.id_item] });
-      queryClient.invalidateQueries({ queryKey: ["items"] });
+      invalidateFreshnessQueries();
       closeMaterials();
     },
   });
@@ -337,7 +363,7 @@ export default function ItemsPage() {
     mutationFn: itemsService.syncLabor,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["item-labor", laborItem?.id_item] });
-      queryClient.invalidateQueries({ queryKey: ["items"] });
+      invalidateFreshnessQueries();
       closeLabor();
     },
   });
@@ -364,7 +390,7 @@ export default function ItemsPage() {
     mutationFn: itemsService.syncMachinery,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["item-machinery", machineryItem?.id_item] });
-      queryClient.invalidateQueries({ queryKey: ["items"] });
+      invalidateFreshnessQueries();
       closeMachinery();
     },
   });
@@ -390,6 +416,8 @@ export default function ItemsPage() {
   const statuses = context.statuses ?? [];
   const unitMeasures = context.unit_measures ?? [];
   const permissions = context.permissions ?? {};
+  const outdatedCount = maintenanceData?.data?.outdated_count ?? 0;
+  const canReviewItems = Boolean(permissions.can_edit || permissions.can_recalculate);
   const createSubgroups = createGroupId ? (subgroupsByGroup[createGroupId] ?? []) : [];
   const editSubgroups = editGroupId ? (subgroupsByGroup[editGroupId] ?? []) : [];
   const normalizedUnitSearch = unitSearch.trim().toLowerCase();
@@ -441,6 +469,35 @@ export default function ItemsPage() {
   const handleOrderChange = (event) => {
     setOrder(event.target.value);
     setPage(1);
+  };
+
+  const handleFreshnessChange = (event) => {
+    const value = event.target.value;
+    setPage(1);
+
+    const nextParams = new URLSearchParams(searchParams);
+    if (value) {
+      nextParams.set("freshness", value);
+    } else {
+      nextParams.delete("freshness");
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const handleReviewItem = async (item) => {
+    try {
+      await reviewMutation.mutateAsync(item.id_item);
+    } catch (mutationError) {
+      setReportFeedback({
+        type: "error",
+        message: mutationError?.response?.data?.message || mutationError?.message || "No se pudo confirmar la revisión del ítem.",
+      });
+    }
+  };
+
+  const handleDismissMaintenanceAlert = () => {
+    dismissItemsMaintenanceAlert(user);
+    setMaintenanceAlertDismissed(true);
   };
 
   const closeExportChoice = () => setExportChoice(null);
@@ -1234,6 +1291,35 @@ export default function ItemsPage() {
         </CardHeader>
 
         <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
+          {outdatedCount > 0 && !maintenanceAlertDismissed && (
+            <Alert className="rounded-2xl border-amber-300 bg-amber-50 text-amber-950">
+              <AlertTriangle className="size-4" />
+              <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  {outdatedCount} ítem{outdatedCount === 1 ? "" : "s"} habilitado{outdatedCount === 1 ? "" : "s"} requiere{outdatedCount === 1 ? "" : "n"} revisión por superar 90 días.
+                </span>
+                <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+                  {freshness !== "outdated" && (
+                    <Button type="button" variant="outline" size="sm" className="rounded-full border-amber-400 bg-white" onClick={() => handleFreshnessChange({ target: { value: "outdated" } })}>
+                      Ver pendientes
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-9 rounded-full border border-amber-200 bg-amber-100/70 text-amber-800 hover:bg-amber-200/80 hover:text-amber-950"
+                    onClick={handleDismissMaintenanceAlert}
+                    title="Cerrar aviso"
+                    aria-label="Cerrar aviso de ítems pendientes"
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {reportFeedback && (
             <Alert variant="destructive" className="rounded-2xl">
               <AlertDescription>{reportFeedback.message}</AlertDescription>
@@ -1256,6 +1342,23 @@ export default function ItemsPage() {
                     <option value={25}>25</option>
                     <option value={50}>50</option>
                     <option value={100}>100</option>
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Revisión
+                </span>
+                <div className="relative">
+                  <select
+                    className="h-12 min-w-48 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20"
+                    value={freshness}
+                    onChange={handleFreshnessChange}
+                  >
+                    <option value="">Todos</option>
+                    <option value="outdated">Requieren actualización</option>
                   </select>
                   <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
                 </div>
@@ -1342,6 +1445,7 @@ export default function ItemsPage() {
                       <th className="px-5 py-4 font-semibold text-foreground">Precio</th>
                       <th className="px-5 py-4 font-semibold text-foreground">Unidad</th>
                       <th className="px-5 py-4 font-semibold text-foreground">Estado</th>
+                      <th className="px-5 py-4 font-semibold text-foreground">Última revisión</th>
                       <th className="px-5 py-4 font-semibold text-foreground text-center">Opciones</th>
                     </tr>
                   </thead>
@@ -1355,7 +1459,7 @@ export default function ItemsPage() {
                       ].filter(Boolean).join(" ");
 
                       return (
-                        <tr key={item.id_item} className={rowClassName}>
+                        <tr key={item.id_item} className={`${index < items.length - 1 ? "border-b border-border/60" : ""} ${item.is_outdated ? "bg-amber-50/60" : ""}`}>
                         <td className="px-5 py-4 align-top text-foreground">
                           {index + 1}
                         </td>
@@ -1380,6 +1484,20 @@ export default function ItemsPage() {
                           </Badge>
                         </td>
                         <td className="px-5 py-4 align-top">
+                          <div className="flex min-w-36 flex-col gap-1.5">
+                            <span className={item.is_outdated ? "font-medium text-amber-800" : "text-muted-foreground"}>
+                              {item.fecha_item
+                                ? new Intl.DateTimeFormat("es-BO", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${item.fecha_item}T00:00:00Z`))
+                                : "Sin fecha de revisión"}
+                            </span>
+                            {item.is_outdated && (
+                              <Badge className="w-fit rounded-full bg-amber-600 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-white">
+                                Requiere revisión
+                              </Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 align-top">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -1396,6 +1514,19 @@ export default function ItemsPage() {
                               </DropdownMenuItem>
                               {isItemEnabled && (
                                 <>
+                                  {item.is_outdated && canReviewItems && (
+                                    <>
+                                      <DropdownMenuItem
+                                        className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer"
+                                        onClick={() => handleReviewItem(item)}
+                                        disabled={reviewMutation.isPending}
+                                      >
+                                        {reviewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+                                        <span>Marcar como revisado</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator className="my-1 bg-border/50" />
+                                    </>
+                                  )}
                                   <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openMaterials(item)}>
                                     <Package2 className="h-4 w-4 text-muted-foreground" />
                                     <span>Materiales</span>
@@ -1461,7 +1592,7 @@ export default function ItemsPage() {
                     })}
                     {items.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                        <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">
                           No se encontraron items para los filtros seleccionados.
                         </td>
                       </tr>

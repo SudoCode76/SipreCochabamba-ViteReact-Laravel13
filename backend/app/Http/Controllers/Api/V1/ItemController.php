@@ -23,6 +23,7 @@ use App\Modules\Items\Services\Analysis\ListAnalysisItemsService;
 use App\Modules\Items\Services\HistoricalBreakdownPdfService;
 use App\Modules\Items\Services\ItemBudgetXlsxService;
 use App\Modules\Items\Services\ItemCompositionService;
+use App\Modules\Items\Services\ItemFreshnessService;
 use App\Modules\Items\Services\LaborBreakdownPdfService;
 use App\Modules\Items\Services\LegacyUnitPriceAnalysisPdfService;
 use App\Modules\Items\Services\LegacyUnitPriceAnalysisService;
@@ -46,6 +47,7 @@ class ItemController extends Controller
         private readonly ItemPriceAnalysisService $itemPriceAnalysisService,
         private readonly ItemAnalysisPermissionService $itemAnalysisPermissionService,
         private readonly ItemCompositionService $itemCompositionService,
+        private readonly ItemFreshnessService $itemFreshnessService,
         private readonly LegacyUnitPriceAnalysisService $legacyUnitPriceAnalysisService,
         private readonly LegacyUnitPriceAnalysisPdfService $legacyUnitPriceAnalysisPdfService,
         private readonly MaterialBreakdownPdfService $materialBreakdownPdfService,
@@ -198,6 +200,51 @@ class ItemController extends Controller
                     'current_page' => $items->currentPage(),
                     'per_page' => $items->perPage(),
                     'total' => $items->total(),
+                ],
+            ],
+        ]);
+    }
+
+    public function maintenanceSummary(Request $request): JsonResponse
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_view']) {
+            return $this->forbiddenResponse('No tiene permisos para consultar las alertas de items.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Resumen de mantenimiento de items obtenido correctamente.',
+            'data' => [
+                'outdated_count' => $this->itemFreshnessService->outdatedCount(),
+                'threshold_days' => ItemFreshnessService::OUTDATED_AFTER_DAYS,
+            ],
+        ]);
+    }
+
+    public function review(Item $item, Request $request): JsonResponse
+    {
+        $permissions = $this->itemAnalysisPermissionService->resolve($request->user(), 'general');
+
+        if (! $permissions['can_edit'] && ! $permissions['can_recalculate']) {
+            return $this->forbiddenResponse('No tiene permisos para confirmar la revision del item.');
+        }
+
+        if (strtoupper((string) $item->estado) !== 'AC') {
+            return $this->validationFailureResponse('Solo se pueden revisar items habilitados.');
+        }
+
+        $item = $this->itemFreshnessService->markReviewed($item);
+        $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se confirmo la revision del item '.$item->item);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Revision del item confirmada correctamente.',
+            'data' => [
+                'item' => [
+                    'id_item' => $item->id_item,
+                    ...$this->itemFreshnessService->describe($item),
                 ],
             ],
         ]);
@@ -649,6 +696,7 @@ class ItemController extends Controller
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }
+        $this->itemFreshnessService->markReviewed($item);
         $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se recalculo el analisis '.$mode.' del item '.$item->item);
 
         return response()->json([

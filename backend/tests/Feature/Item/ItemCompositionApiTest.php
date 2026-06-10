@@ -3,6 +3,8 @@
 namespace Tests\Feature\Item;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\InteractsWithLegacyAuth;
 use Tests\Concerns\InteractsWithLegacyInputs;
@@ -62,7 +64,7 @@ class ItemCompositionApiTest extends TestCase
         $this->createInput(['id_insumo' => 2, 'descripcion' => 'Labor 1', 'tipo' => 2, 'precio' => 5]);
         $this->createInputType(['id_tipo' => 3, 'descripcion' => 'HERRAMIENTA', 'estado' => 'AC']);
         $this->createInput(['id_insumo' => 3, 'descripcion' => 'Tool 1', 'tipo' => 3, 'precio' => 4]);
-        $this->createItemRecord();
+        $this->createItemRecord(['fecha_item' => '2025-01-01']);
 
         $this->postJson('/api/v1/items/1/materials', [
             'id_insumo' => 1,
@@ -72,6 +74,11 @@ class ItemCompositionApiTest extends TestCase
             ->assertJsonPath('data.item_input.parcial', 20)
             ->assertJsonPath('data.totals.block', 20)
             ->assertJsonPath('data.totals.global', 20);
+
+        $this->assertSame(
+            Carbon::today()->toDateString(),
+            Carbon::parse(DB::table('item')->where('id_item', 1)->value('fecha_item'))->toDateString(),
+        );
 
         $this->postJson('/api/v1/items/1/labor', [
             'id_insumo' => 2,

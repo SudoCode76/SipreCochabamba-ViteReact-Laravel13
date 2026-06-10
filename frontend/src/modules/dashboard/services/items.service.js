@@ -2,13 +2,14 @@ import apiClient from "@/lib/api/client";
 import { buildApiUrl } from "@/lib/utils/pdf";
 
 export const itemsService = {
-  list: async ({ page = 1, perPage = 10, search = "", order = "legacy" } = {}) => {
+  list: async ({ page = 1, perPage = 10, search = "", order = "legacy", freshness = "" } = {}) => {
     const response = await apiClient.get("/v1/items", {
       params: {
         page,
         per_page: perPage,
         order,
         ...(search ? { search } : {}),
+        ...(freshness ? { freshness } : {}),
       },
     });
     return response.data;
@@ -16,6 +17,16 @@ export const itemsService = {
 
   context: async () => {
     const response = await apiClient.get("/v1/items/context");
+    return response.data;
+  },
+
+  maintenanceSummary: async () => {
+    const response = await apiClient.get("/v1/items/maintenance-summary");
+    return response.data;
+  },
+
+  review: async (itemId) => {
+    const response = await apiClient.post(`/v1/items/${itemId}/review`);
     return response.data;
   },
 

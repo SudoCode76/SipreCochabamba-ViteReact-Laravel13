@@ -3,6 +3,7 @@
 namespace App\Modules\Items\Services\Analysis;
 
 use App\Models\Item;
+use App\Modules\Items\Services\ItemFreshnessService;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Str;
 
@@ -11,6 +12,7 @@ class ListAnalysisItemsService
     public function __construct(
         private readonly ItemPriceAnalysisService $priceAnalysisService,
         private readonly ItemAnalysisListPriceService $itemAnalysisListPriceService,
+        private readonly ItemFreshnessService $itemFreshnessService,
     ) {}
 
     public function execute(array $filters, string $mode = 'fndr'): LengthAwarePaginator
@@ -74,11 +76,16 @@ class ListAnalysisItemsService
             $query->where('item.estado', strtoupper((string) $filters['status']));
         }
 
+        if (($filters['freshness'] ?? null) === 'outdated') {
+            $this->itemFreshnessService->applyOutdatedFilter($query);
+        }
+
         $items = $query->select('item.*')->paginate((int) ($filters['per_page'] ?? 15))->withQueryString();
 
         $items->setCollection(
             $items->getCollection()->map(function (Item $item) use ($mode): array {
                 $calculatedPrice = $this->calculatedPrice($item, $mode);
+                $freshness = $this->itemFreshnessService->describe($item);
 
                 return [
                     'id_item' => $item->id_item,
@@ -88,6 +95,7 @@ class ListAnalysisItemsService
                     'status' => $item->estado,
                     'specification' => $item->especificacion,
                     'sheet' => $item->ficha,
+                    ...$freshness,
                     'group' => $item->groupCatalog ? [
                         'id' => $item->groupCatalog->id_grupo,
                         'name' => $item->groupCatalog->nombre_grupo,

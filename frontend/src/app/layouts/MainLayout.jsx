@@ -1,12 +1,14 @@
-import { ArrowRight, ChevronDown, Loader2, LogOut, ShieldCheck, User } from "lucide-react";
+import { ArrowRight, Bell, ChevronDown, Loader2, LogOut, ShieldCheck, User } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { navigationSections } from "@/app/navigation";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/modules/auth/hooks/useAuth";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { canAccessNavigationItem } from "@/lib/auth/permissions";
+import { canAccessNavigationItem, hasPermission } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
+import { itemsService } from "@/modules/dashboard/services/items.service";
 
 function isSectionActive(section, pathname) {
   if (section.path) {
@@ -19,6 +21,15 @@ function isSectionActive(section, pathname) {
 export default function MainLayout() {
   const location = useLocation();
   const { user, logout, isLoggingOut } = useAuth();
+  const canViewItemAlerts = hasPermission(user, "ITEMS", ["INDEX", "ITEMS"]);
+  const { data: itemMaintenanceData, isFetching: itemMaintenanceFetching } = useQuery({
+    queryKey: ["items-maintenance-summary"],
+    queryFn: itemsService.maintenanceSummary,
+    enabled: canViewItemAlerts,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
+  const outdatedItemsCount = itemMaintenanceData?.data?.outdated_count ?? 0;
   const visibleNavigationSections = navigationSections
     .map((section) => {
       if (!section.children) {
@@ -129,6 +140,46 @@ export default function MainLayout() {
           </nav>
 
           <div className="flex items-center gap-3">
+            {canViewItemAlerts && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative size-10 rounded-full border border-border/70 bg-background/80 hover:bg-muted"
+                    title="Alertas de actualización de ítems"
+                  >
+                    {itemMaintenanceFetching ? <Loader2 className="size-5 animate-spin" /> : <Bell className="size-5" />}
+                    {outdatedItemsCount > 0 && (
+                      <span className="absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">
+                        {outdatedItemsCount > 99 ? "99+" : outdatedItemsCount}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-72 rounded-2xl border-border/70 bg-background/95 p-2 shadow-xl backdrop-blur-xl">
+                  <DropdownMenuLabel className="px-3 py-2">
+                    <p className="text-sm font-semibold text-foreground">Mantenimiento de ítems</p>
+                    <p className="mt-1 text-xs font-normal text-muted-foreground">
+                      {outdatedItemsCount > 0
+                        ? `${outdatedItemsCount} ítem${outdatedItemsCount === 1 ? "" : "s"} requiere${outdatedItemsCount === 1 ? "" : "n"} revisión.`
+                        : "No hay ítems pendientes de revisión."}
+                    </p>
+                  </DropdownMenuLabel>
+                  {outdatedItemsCount > 0 && (
+                    <>
+                      <DropdownMenuSeparator className="bg-border/70" />
+                      <DropdownMenuItem asChild className="rounded-xl px-3 py-2 cursor-pointer">
+                        <Link to="/items?freshness=outdated">
+                          <Bell className="mr-2 size-4" />
+                          Ver ítems pendientes
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="size-10 rounded-full border border-border/70 bg-background/80 hover:bg-muted">

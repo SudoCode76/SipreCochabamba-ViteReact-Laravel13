@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/items/context', [ItemCatalogController::class, 'context']);
+    Route::get('/items/maintenance-summary', [ItemCatalogController::class, 'maintenanceSummary']);
     Route::get('/items', [ItemCatalogController::class, 'index']);
     Route::get('/items/fndr/context', [ItemCatalogController::class, 'fndrContext']);
     Route::get('/items/fndr', [ItemCatalogController::class, 'fndrIndex']);
@@ -24,6 +25,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/items/{item}', [ItemCatalogController::class, 'show']);
     Route::put('/items/{item}', [ItemCatalogController::class, 'update']);
     Route::post('/items/{item}/files', [ItemCatalogController::class, 'updateFiles']);
+    Route::post('/items/{item}/review', [ItemCatalogController::class, 'review']);
     Route::get('/items/{item}/composition/context', [ItemCompositionController::class, 'compositionContext']);
     Route::get('/items/{item}/composition', [ItemCompositionController::class, 'composition']);
     Route::get('/items/{item}/materials', [ItemCompositionController::class, 'materials']);

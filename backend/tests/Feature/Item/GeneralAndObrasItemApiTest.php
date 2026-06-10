@@ -530,6 +530,77 @@ class GeneralAndObrasItemApiTest extends TestCase
             ->assertJsonPath('data.totals.total_price', 31);
     }
 
+    public function test_item_maintenance_summary_filter_and_review_follow_ninety_day_rule(): void
+    {
+        Carbon::setTestNow('2026-06-10 10:00:00');
+
+        try {
+            Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX', 'EDITAR_ITEM']));
+
+            $this->createUnitMeasure();
+            $this->createGroup();
+            $this->createSubgroup();
+            $this->seedGeneralPercentages();
+
+            $this->createItemRecord([
+                'id_item' => 1,
+                'item' => 'VENCIDO',
+                'fecha_item' => now()->subDays(91)->toDateString(),
+            ]);
+            $this->createItemRecord([
+                'id_item' => 2,
+                'item' => 'DIA NOVENTA',
+                'fecha_item' => now()->subDays(90)->toDateString(),
+            ]);
+            $this->createItemRecord([
+                'id_item' => 3,
+                'item' => 'SIN FECHA',
+                'fecha_item' => null,
+            ]);
+            $this->createItemRecord([
+                'id_item' => 4,
+                'item' => 'INACTIVO ANTIGUO',
+                'estado' => 'DC',
+                'fecha_item' => now()->subDays(200)->toDateString(),
+            ]);
+
+            $this->getJson('/api/v1/items/maintenance-summary')
+                ->assertOk()
+                ->assertJsonPath('data.outdated_count', 2)
+                ->assertJsonPath('data.threshold_days', 90);
+
+            $this->getJson('/api/v1/items?freshness=outdated&per_page=10')
+                ->assertOk()
+                ->assertJsonCount(2, 'data.items')
+                ->assertJsonPath('data.items.0.is_outdated', true)
+                ->assertJsonPath('data.items.1.is_outdated', true);
+
+            $this->postJson('/api/v1/items/1/review')
+                ->assertOk()
+                ->assertJsonPath('data.item.fecha_item', '2026-06-10')
+                ->assertJsonPath('data.item.days_without_update', 0)
+                ->assertJsonPath('data.item.is_outdated', false);
+
+            $this->getJson('/api/v1/items/maintenance-summary')
+                ->assertOk()
+                ->assertJsonPath('data.outdated_count', 1);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_item_review_requires_edit_or_recalculation_permission(): void
+    {
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createItemRecord(['fecha_item' => now()->subDays(91)->toDateString()]);
+
+        $this->postJson('/api/v1/items/1/review')->assertForbidden();
+    }
+
     private function createGeneralUserWithPermissions(array $functionNames): User
     {
         $this->createLegacyAuthUser();

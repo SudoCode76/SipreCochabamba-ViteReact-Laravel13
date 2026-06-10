@@ -13,6 +13,7 @@ class ItemCompositionService
 {
     public function __construct(
         private readonly ItemActionResolver $itemActionResolver,
+        private readonly ItemFreshnessService $itemFreshnessService,
     ) {}
 
     public function context(Item $item, array $permissions): array
@@ -109,6 +110,8 @@ class ItemCompositionService
                     'tipo' => $type,
                 ]);
 
+                $this->itemFreshnessService->markReviewed($item);
+
                 return $this->serializeItemInput($itemInput->refresh()->load('input.unitMeasure'));
             }
 
@@ -122,6 +125,8 @@ class ItemCompositionService
                 'tipo' => $type,
             ]);
 
+            $this->itemFreshnessService->markReviewed($item);
+
             return $this->serializeItemInput($created->load('input.unitMeasure'));
         });
     }
@@ -134,6 +139,7 @@ class ItemCompositionService
         $itemInput->update([
             'cantidad' => $quantity,
         ]);
+        $this->itemFreshnessService->markReviewed($item);
 
         return $this->serializeItemInput($itemInput->refresh()->load('input.unitMeasure'));
     }
@@ -146,6 +152,7 @@ class ItemCompositionService
         $itemInput->update([
             'estado' => 'DC',
         ]);
+        $this->itemFreshnessService->markReviewed($item);
     }
 
     public function syncType(Item $item, int $type, array $rows, array $deletedInputIds, User $user): array
@@ -209,6 +216,7 @@ class ItemCompositionService
         if ($type === 1) {
             $item->forceFill(['precio' => $blockTotal])->save();
         }
+        $this->itemFreshnessService->markReviewed($item);
 
         return [
             'items' => $items,
