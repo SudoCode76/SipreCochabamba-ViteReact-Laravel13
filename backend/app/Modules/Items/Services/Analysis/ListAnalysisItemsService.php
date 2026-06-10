@@ -23,7 +23,13 @@ class ListAnalysisItemsService
 
         $order = strtolower((string) ($filters['order'] ?? 'legacy'));
 
-        if ($order === 'recent') {
+        if ($order === 'missing_specifications') {
+            $query->orderByRaw("CASE WHEN item.especificacion IS NULL OR TRIM(item.especificacion) = '' THEN 0 ELSE 1 END")
+                ->orderBy('groupCatalog.nombre_grupo')
+                ->orderBy('subgroupCatalog.descripcion')
+                ->orderBy('item.item')
+                ->orderBy('item.id_item');
+        } elseif ($order === 'recent') {
             $query->orderByDesc('item.fecha_item')
                 ->orderByDesc('item.id_item');
         } elseif ($order === 'oldest') {

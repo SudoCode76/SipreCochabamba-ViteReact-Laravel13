@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown, Eye } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +47,7 @@ export default function ItemsPage() {
   const [order, setOrder] = useState("legacy");
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [highlightMissingSpecifications, setHighlightMissingSpecifications] = useState(false);
   const [page, setPage] = useState(1);
   const [reportLoadingItemId, setReportLoadingItemId] = useState(null);
   const [reportFeedback, setReportFeedback] = useState(null);
@@ -1271,6 +1272,7 @@ export default function ItemsPage() {
                     onChange={handleOrderChange}
                   >
                     <option value="legacy">Predeterminado</option>
+                    <option value="missing_specifications">Sin especificaciones</option>
                     <option value="recent">Recientes</option>
                     <option value="oldest">Antiguos</option>
                   </select>
@@ -1279,18 +1281,36 @@ export default function ItemsPage() {
               </div>
             </div>
 
-            <form className="flex w-full max-w-sm flex-col gap-2" onSubmit={handleSearchSubmit}>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Buscar
-              </span>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar item"
-                  className="h-12 rounded-2xl border-border/80 bg-background/90 pl-11"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                />
+            <form className="flex w-full max-w-sm gap-2" onSubmit={handleSearchSubmit}>
+              <div className="flex flex-col gap-2">
+                <span className="invisible text-[11px] font-semibold uppercase tracking-[0.22em]" aria-hidden="true">
+                  Buscar
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={`h-12 w-12 rounded-2xl border-border/80 p-0 ${highlightMissingSpecifications ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800" : "bg-background/90 text-muted-foreground"}`}
+                  onClick={() => setHighlightMissingSpecifications((current) => !current)}
+                  title="Marcar items sin especificaciones"
+                  aria-pressed={highlightMissingSpecifications}
+                  aria-label="Marcar items sin especificaciones"
+                >
+                  <Eye className="size-4" />
+                </Button>
+              </div>
+              <div className="flex flex-1 flex-col gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Buscar
+                </span>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar item"
+                    className="h-12 rounded-2xl border-border/80 bg-background/90 pl-11"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                  />
+                </div>
               </div>
             </form>
           </div>
@@ -1328,9 +1348,14 @@ export default function ItemsPage() {
                   <tbody>
                     {items.map((item, index) => {
                       const isItemEnabled = String(item.status ?? item.estado ?? "").trim().toUpperCase() === "AC";
+                      const isMissingSpecification = !item.specification || String(item.specification).trim() === "";
+                      const rowClassName = [
+                        index < items.length - 1 ? "border-b border-border/60" : "",
+                        highlightMissingSpecifications && isMissingSpecification ? "border-l-4 border-l-rose-500 bg-rose-50/90 [&>td]:!text-rose-950" : "",
+                      ].filter(Boolean).join(" ");
 
                       return (
-                        <tr key={item.id_item} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
+                        <tr key={item.id_item} className={rowClassName}>
                         <td className="px-5 py-4 align-top text-foreground">
                           {index + 1}
                         </td>
