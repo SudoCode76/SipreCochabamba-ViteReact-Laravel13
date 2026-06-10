@@ -14,6 +14,11 @@ export const projectService = {
     return response.data;
   },
 
+  mapProjects: async () => {
+    const response = await apiClient.get("/v1/projects/map");
+    return response.data;
+  },
+
   create: async (payload) => {
     const response = await apiClient.post("/v1/projects", payload);
     return response.data;

@@ -32,6 +32,7 @@ use App\Modules\Projects\Services\ProjectHistoryService;
 use App\Modules\Projects\Services\ProjectItemInputSnapshotService;
 use App\Modules\Projects\Services\ProjectItemService;
 use App\Modules\Projects\Services\ProjectListService;
+use App\Modules\Projects\Services\ProjectMapService;
 use App\Modules\Projects\Services\ProjectPermissionService;
 use App\Modules\Projects\Services\ProjectSpecificationsPdfMergeService;
 use App\Modules\Projects\Services\ProjectUnitPricesPdfService;
@@ -44,6 +45,7 @@ class ProjectController extends Controller
     public function __construct(
         private readonly ProjectContextService $projectContextService,
         private readonly ProjectListService $projectListService,
+        private readonly ProjectMapService $projectMapService,
         private readonly ProjectCrudService $projectCrudService,
         private readonly ProjectItemService $projectItemService,
         private readonly ProjectBudgetService $projectBudgetService,
@@ -94,6 +96,19 @@ class ProjectController extends Controller
                     'total' => $projects->total(),
                 ],
             ],
+        ]);
+    }
+
+    public function map(Request $request): JsonResponse
+    {
+        if ($response = $this->denyIfMissingAnyPermission($request->user(), ['can_create', 'can_view'], 'No tiene permisos para consultar proyectos en el mapa.')) {
+            return $response;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Proyectos del mapa obtenidos correctamente.',
+            'data' => $this->projectMapService->execute(),
         ]);
     }
 

@@ -442,6 +442,7 @@ class GeneralAndObrasItemApiTest extends TestCase
         ]);
 
         $response->assertOk()
+            ->assertJsonPath('data.item.specification', 'archivos/especificaciones/especificacion_1.pdf')
             ->assertJsonPath('data.item.sheet', 'archivos/items/fichas/ficha-anterior.pdf');
 
         $this->assertDatabaseHas('item', [
@@ -467,7 +468,9 @@ class GeneralAndObrasItemApiTest extends TestCase
             'sheet_file' => UploadedFile::fake()->create('ficha.pdf', 100, 'application/pdf'),
         ]);
 
-        $response->assertOk();
+        $response->assertOk()
+            ->assertJsonPath('data.item.specification', 'archivos/especificaciones/especificacion_1.pdf')
+            ->assertJsonPath('data.item.sheet', 'archivos/fichas_tecnicas/ficha_1.pdf');
         Storage::disk('public')->assertExists($response->json('data.item.specification'));
         Storage::disk('public')->assertExists($response->json('data.item.sheet'));
 

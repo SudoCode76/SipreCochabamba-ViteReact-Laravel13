@@ -2,9 +2,9 @@
 
 namespace App\Http\Resources\Input;
 
+use App\Services\Files\PublicFileService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 
 class InputQuoteResource extends JsonResource
 {
@@ -59,13 +59,12 @@ class InputQuoteResource extends JsonResource
 
     private function filePayload(?string $path, string $baseLabel): array
     {
-        $available = is_string($path)
-            && trim($path) !== ''
-            && Storage::disk('public')->exists($path);
+        $files = app(PublicFileService::class);
+        $available = $files->exists($path);
 
         return [
             'available' => $available,
-            'url' => $available ? Storage::disk('public')->url($path) : null,
+            'url' => $available ? $files->url($path) : null,
             'label' => $path
                 ? $baseLabel.' '.($this->estado === 'AC' ? 'vigente' : 'anterior')
                 : null,

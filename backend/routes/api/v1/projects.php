@@ -14,6 +14,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/projects/context', [ProjectCatalogController::class, 'context']);
     Route::get('/projects/create-context', [ProjectCatalogController::class, 'context']);
     Route::get('/projects', [ProjectCatalogController::class, 'index']);
+    Route::get('/projects/map', [ProjectCatalogController::class, 'map']);
     Route::post('/projects', [ProjectCatalogController::class, 'store']);
     Route::get('/project-templates', [ProjectTemplateController::class, 'index']);
     Route::get('/project-templates/{template}', [ProjectTemplateController::class, 'show']);

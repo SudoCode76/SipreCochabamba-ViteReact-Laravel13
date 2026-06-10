@@ -205,6 +205,70 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.meta.total', 0);
     }
 
+    public function test_map_returns_active_non_template_projects_with_valid_coordinate_systems(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createProjectRecord([
+            'id_proyecto' => 1,
+            'nombre_proyecto' => 'PROYECTO UTM',
+            'latitud' => '8076262.01',
+            'longitud' => '806397.88',
+        ]);
+        $this->createProjectRecord([
+            'id_proyecto' => 2,
+            'nombre_proyecto' => 'PROYECTO GEOGRAFICO',
+            'latitud' => '-17.416128',
+            'longitud' => '-66.165436',
+        ]);
+        $this->createProjectRecord([
+            'id_proyecto' => 3,
+            'nombre_proyecto' => 'PROYECTO INACTIVO',
+            'estado' => 'DC',
+            'latitud' => '-17.416128',
+            'longitud' => '-66.165436',
+        ]);
+        $this->createProjectRecord([
+            'id_proyecto' => 4,
+            'nombre_proyecto' => 'PLANILLA',
+            'es_plantilla' => true,
+            'latitud' => '-17.416128',
+            'longitud' => '-66.165436',
+        ]);
+        $this->createProjectRecord([
+            'id_proyecto' => 5,
+            'nombre_proyecto' => 'COORDENADAS INVALIDAS',
+            'latitud' => 'sin-coordenada',
+            'longitud' => '0',
+        ]);
+
+        $this->getJson('/api/v1/projects/map')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id', 1)
+            ->assertJsonPath('data.items.0.coordinate_system', 'utm_32719')
+            ->assertJsonPath('data.items.1.id', 2)
+            ->assertJsonPath('data.items.1.coordinate_system', 'geographic')
+            ->assertJsonPath('data.meta.total', 2)
+            ->assertJsonPath('data.meta.skipped', 1)
+            ->assertJsonMissing(['name' => 'PROYECTO INACTIVO'])
+            ->assertJsonMissing(['name' => 'PLANILLA']);
+    }
+
+    public function test_non_admin_with_create_or_view_permission_can_access_project_map(): void
+    {
+        $this->createLegacyAuthUser();
+        $this->createProjectRecord([
+            'latitud' => '-17.416128',
+            'longitud' => '-66.165436',
+        ]);
+
+        Sanctum::actingAs($this->createProjectUserWithPermissions(['REGISTRAR_PROYECTO']));
+
+        $this->getJson('/api/v1/projects/map')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1);
+    }
+
     public function test_cannot_create_duplicate_project_name_even_with_different_case(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
@@ -928,6 +992,7 @@ class ProjectApiTest extends TestCase
 
         $this->getJson('/api/v1/projects/context')->assertForbidden();
         $this->getJson('/api/v1/projects')->assertForbidden();
+        $this->getJson('/api/v1/projects/map')->assertForbidden();
         $this->getJson('/api/v1/projects/1/history')->assertForbidden();
         $this->get('/api/v1/projects/1/inputs-report/pdf')->assertForbidden();
         $this->get('/api/v1/projects/1/unit-prices/pdf?format=PCA')->assertForbidden();

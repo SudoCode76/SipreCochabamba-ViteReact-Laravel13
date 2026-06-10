@@ -160,6 +160,9 @@ class InputRequestApiTest extends TestCase
         $this->assertDatabaseHas('cotizaciones', [
             'id_solicitud' => $requestId,
             'condicion' => 'VALIDO',
+            'archivo' => 'archivos/cotizaciones/cotizacion_valida_valido.pdf',
+            'archivo1' => 'archivos/cotizaciones/cotizacion_propuesto1_prop1.pdf',
+            'archivo2' => 'archivos/cotizaciones/cotizacion_propuesto2_prop2.pdf',
         ]);
 
         $this->getJson('/api/v1/input-requests/'.$requestId)

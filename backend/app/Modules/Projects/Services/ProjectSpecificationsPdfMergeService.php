@@ -4,14 +4,18 @@ namespace App\Modules\Projects\Services;
 
 use App\Models\Project;
 use App\Models\ProjectItem;
+use App\Services\Files\PublicFileService;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use setasign\Fpdi\Tcpdf\Fpdi;
 use Throwable;
 
 class ProjectSpecificationsPdfMergeService
 {
+    public function __construct(
+        private readonly PublicFileService $publicFileService,
+    ) {}
+
     public function stream(Project $project): Response
     {
         $projectItems = ProjectItem::query()
@@ -76,27 +80,7 @@ class ProjectSpecificationsPdfMergeService
 
     private function resolveSpecificationPath(?string $value): ?string
     {
-        $rawPath = trim((string) $value);
-
-        if ($rawPath === '') {
-            return null;
-        }
-
-        if (is_file($rawPath) && is_readable($rawPath)) {
-            return $rawPath;
-        }
-
-        $path = preg_replace('#^https?://[^/]+/(storage|public)/#', '', $rawPath);
-        $path = preg_replace('#^/?(storage|public)/#', '', (string) $path);
-        $path = ltrim(str_replace('\\', '/', (string) $path), '/');
-
-        if ($path === '' || ! Storage::disk('public')->exists($path)) {
-            return null;
-        }
-
-        $absolutePath = Storage::disk('public')->path($path);
-
-        return is_readable($absolutePath) ? $absolutePath : null;
+        return $this->publicFileService->absolutePath($value);
     }
 
     private function missingMessage(string $itemName): string

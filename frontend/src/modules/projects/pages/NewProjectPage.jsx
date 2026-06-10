@@ -214,7 +214,11 @@ export default function NewProjectPage() {
                   </div>
                 )}
               >
-                <ProjectLocationMap value={formData} onChange={(changes) => setFormData((current) => ({ ...current, ...changes }))} />
+                <ProjectLocationMap
+                  value={formData}
+                  onChange={(changes) => setFormData((current) => ({ ...current, ...changes }))}
+                  showProjects
+                />
               </Suspense>
             </div>
 

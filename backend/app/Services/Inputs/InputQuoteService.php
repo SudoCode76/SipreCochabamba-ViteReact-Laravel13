@@ -5,10 +5,15 @@ namespace App\Services\Inputs;
 use App\Http\Requests\Input\StoreInputQuoteRequest;
 use App\Models\Input;
 use App\Models\InputQuote;
+use App\Services\Files\PublicFileService;
 use Illuminate\Http\UploadedFile;
 
 class InputQuoteService
 {
+    public function __construct(
+        private readonly PublicFileService $publicFileService,
+    ) {}
+
     public function create(Input $input, StoreInputQuoteRequest $request): InputQuote
     {
         return $input->quotes()->create([
@@ -71,7 +76,7 @@ class InputQuoteService
     private function resolveFilePath(?UploadedFile $uploadedFile, mixed $fallbackPath, string $prefix): ?string
     {
         if ($uploadedFile instanceof UploadedFile) {
-            return $uploadedFile->store('cotizaciones/'.$prefix, 'public');
+            return $this->publicFileService->storeQuote($uploadedFile, $prefix);
         }
 
         return is_string($fallbackPath) && trim($fallbackPath) !== ''

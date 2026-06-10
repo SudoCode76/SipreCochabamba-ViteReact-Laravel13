@@ -7,8 +7,8 @@ use App\Models\Project;
 use App\Models\ProjectItem;
 use App\Models\User;
 use App\Modules\Parameters\Services\ModuleService;
+use App\Services\Files\PublicFileService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ProjectItemService
@@ -20,6 +20,7 @@ class ProjectItemService
         private readonly ProjectHistoryService $projectHistoryService,
         private readonly ModuleService $moduleService,
         private readonly ProjectItemInputSnapshotService $snapshotService,
+        private readonly PublicFileService $publicFileService,
     ) {}
 
     public function sync(Project $project, array $items, User $user, ?string $ip = null): Project
@@ -264,10 +265,6 @@ class ProjectItemService
             return $path;
         }
 
-        if (! Storage::disk('public')->exists($path)) {
-            return null;
-        }
-
-        return url(Storage::disk('public')->url($path));
+        return $this->publicFileService->url($path);
     }
 }

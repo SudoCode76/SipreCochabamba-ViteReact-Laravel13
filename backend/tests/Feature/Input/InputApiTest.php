@@ -489,6 +489,9 @@ class InputApiTest extends TestCase
             ->assertJsonPath('data.quote.id_log_insumo', 1)
             ->assertJsonPath('data.quote.id_solicitud', 8)
             ->assertJsonPath('data.quote.archivo_available', true)
+            ->assertJsonPath('data.quote.archivo', 'archivos/cotizaciones/cotizacion_valida_quote.pdf')
+            ->assertJsonPath('data.quote.archivo1', 'archivos/cotizaciones/cotizacion_propuesto1_quote_a.pdf')
+            ->assertJsonPath('data.quote.archivo2', 'archivos/cotizaciones/cotizacion_propuesto2_quote_b.pdf')
             ->assertJsonPath('data.quote.archivo_label', 'Propuesta oficial vigente')
             ->assertJsonPath('data.quote.archivo1_label', 'Propuesta alternativa 1 vigente')
             ->assertJsonPath('data.quote.archivo2_label', 'Propuesta alternativa 2 vigente');

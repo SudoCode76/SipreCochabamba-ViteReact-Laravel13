@@ -29,12 +29,12 @@ use App\Modules\Items\Services\LegacyUnitPriceAnalysisService;
 use App\Modules\Items\Services\MachineryBreakdownPdfService;
 use App\Modules\Items\Services\MaterialBreakdownPdfService;
 use App\Services\AuditService;
+use App\Services\Files\PublicFileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Request as HttpRequest;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 class ItemController extends Controller
@@ -54,6 +54,7 @@ class ItemController extends Controller
         private readonly HistoricalBreakdownPdfService $historicalBreakdownPdfService,
         private readonly ItemBudgetXlsxService $itemBudgetXlsxService,
         private readonly AuditService $auditService,
+        private readonly PublicFileService $publicFileService,
     ) {}
 
     public function fndrContext(Request $request): JsonResponse
@@ -380,13 +381,19 @@ class ItemController extends Controller
         }
 
         if ($request->hasFile('specification_file')) {
-            $item->especificacion = $request->file('specification_file')->store('archivos/items/especificaciones', 'public');
+            $item->especificacion = $this->publicFileService->storeItemSpecification(
+                $request->file('specification_file'),
+                (int) $item->id_item,
+            );
         } elseif ($request->filled('specification')) {
             $item->especificacion = trim((string) $request->input('specification'));
         }
 
         if ($request->hasFile('sheet_file')) {
-            $item->ficha = $request->file('sheet_file')->store('archivos/items/fichas', 'public');
+            $item->ficha = $this->publicFileService->storeItemTechnicalSheet(
+                $request->file('sheet_file'),
+                (int) $item->id_item,
+            );
         } elseif ($request->filled('sheet')) {
             $item->ficha = trim((string) $request->input('sheet'));
         }
@@ -405,9 +412,9 @@ class ItemController extends Controller
                     'price' => $item->precio,
                     'status' => $item->estado,
                     'specification' => $item->especificacion,
-                    'specification_url' => $item->especificacion ? Storage::disk('public')->url($item->especificacion) : null,
+                    'specification_url' => $this->publicFileService->url($item->especificacion),
                     'sheet' => $item->ficha,
-                    'sheet_url' => $item->ficha ? Storage::disk('public')->url($item->ficha) : null,
+                    'sheet_url' => $this->publicFileService->url($item->ficha),
                     'group' => $item->groupCatalog ? [
                         'id' => $item->groupCatalog->id_grupo,
                         'name' => $item->groupCatalog->nombre_grupo,
@@ -540,11 +547,17 @@ class ItemController extends Controller
         }
 
         if ($request->hasFile('specification_file')) {
-            $item->especificacion = $request->file('specification_file')->store('archivos/items/especificaciones', 'public');
+            $item->especificacion = $this->publicFileService->storeItemSpecification(
+                $request->file('specification_file'),
+                (int) $item->id_item,
+            );
         }
 
         if ($request->hasFile('sheet_file')) {
-            $item->ficha = $request->file('sheet_file')->store('archivos/items/fichas', 'public');
+            $item->ficha = $this->publicFileService->storeItemTechnicalSheet(
+                $request->file('sheet_file'),
+                (int) $item->id_item,
+            );
         }
 
         $item->save();
@@ -1169,9 +1182,9 @@ class ItemController extends Controller
             'id_item' => $item->id_item,
             'name' => $item->item,
             'specification' => $item->especificacion,
-            'specification_url' => $item->especificacion ? Storage::disk('public')->url($item->especificacion) : null,
+            'specification_url' => $this->publicFileService->url($item->especificacion),
             'sheet' => $item->ficha,
-            'sheet_url' => $item->ficha ? Storage::disk('public')->url($item->ficha) : null,
+            'sheet_url' => $this->publicFileService->url($item->ficha),
         ];
     }
 }

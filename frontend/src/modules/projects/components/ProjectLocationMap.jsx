@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
+import proj4 from "proj4";
 import "proj4leaflet";
 
 import { Button } from "@/components/ui/button";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
+import { projectService } from "../services/project.service";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -19,7 +25,9 @@ const COCHABAMBA_CENTER = [-17.416128493780963, -66.16543579646086];
 const DEFAULT_ZOOM = 12;
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 12;
+const NEARBY_RADIUS_METERS = 500;
 const CRS_CODE = "EPSG:32719";
+const GEOGRAPHIC_CRS = "EPSG:4326";
 const CRS_DEF = "+proj=utm +zone=19 +south +datum=WGS84 +units=m +no_defs";
 const CRS_RESOLUTIONS = [1600, 800, 400, 200, 100, 50, 25, 10, 5, 2.5, 1, 0.5, 0.25, 0.125, 0.0625];
 const MUNICIPAL_WMS = {
@@ -28,6 +36,13 @@ const MUNICIPAL_WMS = {
   catastro: "https://busquedasgamc.cochabamba.bo/web/index.php?r=services/get-info-catastro",
   featureInfo: "https://busquedasgamc.cochabamba.bo/web/index.php?r=services/get-feature-info-url-calles",
 };
+const APPROVAL_LABELS = {
+  AP: "APROBADO",
+  PD: "PENDIENTE",
+  RV: "REVISADO",
+};
+
+proj4.defs(CRS_CODE, CRS_DEF);
 
 function parseLatLng(value) {
   const latitud = Number(value?.latitud);
@@ -56,22 +71,22 @@ function getFeatureInfoUrl(map, crs, layerUrl, latlng, params) {
   const ne = crs.projection._proj.forward([bounds.getNorthEast().lng, bounds.getNorthEast().lat]);
 
   const defaultParams = {
-    request: "GetFeatureInfo",
-    service: "WMS",
-    srs: CRS_CODE,
-    styles: "",
-    version: "1.1.1",
-    format: "image/png",
-    bbox: [sw.join(","), ne.join(",")].join(","),
-    height: size.y,
-    width: size.x,
-    layers: 0,
-    query_layers: 0,
+    REQUEST: "GetFeatureInfo",
+    SERVICE: "WMS",
+    SRS: CRS_CODE,
+    STYLES: "",
+    VERSION: "1.1.1",
+    FORMAT: "image/png",
+    BBOX: [sw.join(","), ne.join(",")].join(","),
+    HEIGHT: size.y,
+    WIDTH: size.x,
+    LAYERS: 0,
+    QUERY_LAYERS: 0,
   };
 
   const requestParams = L.Util.extend(defaultParams, params || {});
-  requestParams[requestParams.version === "1.3.0" ? "i" : "x"] = point.x;
-  requestParams[requestParams.version === "1.3.0" ? "j" : "y"] = point.y;
+  requestParams[requestParams.VERSION === "1.3.0" ? "I" : "X"] = Math.round(point.x);
+  requestParams[requestParams.VERSION === "1.3.0" ? "J" : "Y"] = Math.round(point.y);
 
   return layerUrl + L.Util.getParamString(requestParams, layerUrl, true);
 }
@@ -89,16 +104,123 @@ function readTerritorialResponse(data) {
   };
 }
 
-export default function ProjectLocationMap({ value, onChange }) {
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function normalizeProject(project) {
+  const latitude = Number(project.latitude);
+  const longitude = Number(project.longitude);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  if (project.coordinate_system === "geographic") {
+    return {
+      ...project,
+      lat: latitude,
+      lng: longitude,
+    };
+  }
+
+  if (project.coordinate_system === "utm_32719") {
+    const [lng, lat] = proj4(CRS_CODE, GEOGRAPHIC_CRS, [longitude, latitude]);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return null;
+    }
+
+    return {
+      ...project,
+      lat,
+      lng,
+    };
+  }
+
+  return null;
+}
+
+function projectPopup(project, distance) {
+  const territorial = [
+    project.district ? `Distrito ${escapeHtml(project.district)}` : "",
+    project.zone ? `Zona ${escapeHtml(project.zone)}` : "",
+    project.otb ? `OTB ${escapeHtml(project.otb)}` : "",
+  ].filter(Boolean).join(" · ");
+
+  return `
+    <div style="min-width:220px;max-width:300px">
+      <strong>${escapeHtml(project.name)}</strong>
+      <div style="margin-top:6px;color:#475569">${escapeHtml(project.location || "Sin ubicación registrada")}</div>
+      ${territorial ? `<div style="margin-top:4px;color:#475569">${territorial}</div>` : ""}
+      <div style="margin-top:6px"><strong>Condición:</strong> ${escapeHtml(APPROVAL_LABELS[project.approval_status] || project.approval_status || "-")}</div>
+      ${Number.isFinite(distance) ? `<div style="margin-top:4px"><strong>Distancia:</strong> ${Math.round(distance).toLocaleString("es-BO")} m</div>` : ""}
+    </div>
+  `;
+}
+
+function projectIcon(isNearby) {
+  const color = isNearby ? "#dc2626" : "#2563eb";
+
+  return L.divIcon({
+    className: "",
+    html: `<span style="display:block;width:18px;height:18px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 8px rgba(15,23,42,.4)"></span>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    popupAnchor: [0, -12],
+  });
+}
+
+export default function ProjectLocationMap({ value, onChange, showProjects = false }) {
   const mapElementRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const crsRef = useRef(null);
+  const projectsLayerRef = useRef(null);
+  const radiusCircleRef = useRef(null);
   const latestOnChangeRef = useRef(onChange);
   const initialValueRef = useRef(value);
   const [mouseLocation, setMouseLocation] = useState("-");
   const [scale, setScale] = useState("-");
   const [territorialWarning, setTerritorialWarning] = useState("");
+  const [projectsMode, setProjectsMode] = useState("hidden");
+  const [selectedLocation, setSelectedLocation] = useState(() => parseLatLng(value) || L.latLng(COCHABAMBA_CENTER));
+
+  const {
+    data: mapProjectsData,
+    isFetching: projectsLoading,
+    isError: projectsError,
+  } = useQuery({
+    queryKey: ["projects-map"],
+    queryFn: projectService.mapProjects,
+    enabled: showProjects && projectsMode !== "hidden",
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const normalizedProjects = useMemo(
+    () => (mapProjectsData?.data?.items ?? []).map(normalizeProject).filter(Boolean),
+    [mapProjectsData],
+  );
+
+  const nearbyProjects = useMemo(() => {
+    if (!selectedLocation) {
+      return [];
+    }
+
+    return normalizedProjects
+      .map((project) => ({
+        ...project,
+        distance: selectedLocation.distanceTo(L.latLng(project.lat, project.lng)),
+      }))
+      .filter((project) => project.distance <= NEARBY_RADIUS_METERS)
+      .sort((left, right) => left.distance - right.distance);
+  }, [normalizedProjects, selectedLocation]);
 
   useEffect(() => {
     latestOnChangeRef.current = onChange;
@@ -159,6 +281,7 @@ export default function ProjectLocationMap({ value, onChange }) {
   }, [clearTerritorialData]);
 
   const updateLocation = useCallback((latlng) => {
+    setSelectedLocation(latlng);
     latestOnChangeRef.current?.({
       latitud: latlng.lat.toFixed(6),
       longitud: latlng.lng.toFixed(6),
@@ -236,6 +359,7 @@ export default function ProjectLocationMap({ value, onChange }) {
 
     mapRef.current = map;
     const initialLatLng = parseLatLng(initialValueRef.current) || L.latLng(COCHABAMBA_CENTER);
+    setSelectedLocation(initialLatLng);
     map.setView(initialLatLng, DEFAULT_ZOOM);
     createOrMoveMarker(initialLatLng, !parseLatLng(initialValueRef.current));
 
@@ -256,8 +380,84 @@ export default function ProjectLocationMap({ value, onChange }) {
       mapRef.current = null;
       markerRef.current = null;
       crsRef.current = null;
+      projectsLayerRef.current = null;
+      radiusCircleRef.current = null;
     };
   }, [createOrMoveMarker]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (!map || !showProjects) {
+      return;
+    }
+
+    if (projectsLayerRef.current) {
+      map.removeLayer(projectsLayerRef.current);
+      projectsLayerRef.current = null;
+    }
+
+    if (radiusCircleRef.current) {
+      map.removeLayer(radiusCircleRef.current);
+      radiusCircleRef.current = null;
+    }
+
+    if (projectsMode === "hidden" || projectsLoading || projectsError) {
+      return;
+    }
+
+    const projects = projectsMode === "nearby" ? nearbyProjects : normalizedProjects;
+    const cluster = L.markerClusterGroup({
+      chunkedLoading: true,
+      chunkInterval: 100,
+      chunkDelay: 30,
+      maxClusterRadius: 45,
+      showCoverageOnHover: false,
+    });
+
+    for (const project of projects) {
+      const distance = Number.isFinite(project.distance)
+        ? project.distance
+        : selectedLocation?.distanceTo(L.latLng(project.lat, project.lng));
+      const isNearby = Number.isFinite(distance) && distance <= NEARBY_RADIUS_METERS;
+      const marker = L.marker([project.lat, project.lng], {
+        icon: projectIcon(isNearby),
+        keyboard: true,
+        title: project.name,
+      });
+      marker.bindPopup(projectPopup(project, projectsMode === "nearby" ? distance : null));
+      cluster.addLayer(marker);
+    }
+
+    cluster.addTo(map);
+    projectsLayerRef.current = cluster;
+
+    if (projectsMode === "nearby" && selectedLocation) {
+      radiusCircleRef.current = L.circle(selectedLocation, {
+        radius: NEARBY_RADIUS_METERS,
+        color: "#dc2626",
+        weight: 2,
+        fillColor: "#ef4444",
+        fillOpacity: 0.08,
+        interactive: false,
+      }).addTo(map);
+    }
+
+    return () => {
+      if (projectsLayerRef.current === cluster) {
+        map.removeLayer(cluster);
+        projectsLayerRef.current = null;
+      }
+    };
+  }, [
+    nearbyProjects,
+    normalizedProjects,
+    projectsError,
+    projectsLoading,
+    projectsMode,
+    selectedLocation,
+    showProjects,
+  ]);
 
   useEffect(() => {
     const currentLatLng = parseLatLng(value);
@@ -309,6 +509,51 @@ export default function ProjectLocationMap({ value, onChange }) {
           Centrar en Cochabamba
         </Button>
       </div>
+
+      {showProjects && (
+        <div className="space-y-2 rounded-xl border border-border/70 bg-muted/20 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="inline-flex overflow-hidden rounded-lg border border-border/80 bg-background">
+              {[
+                ["hidden", "Ocultar proyectos"],
+                ["nearby", "Cercanos (500 m)"],
+                ["all", "Todos los proyectos"],
+              ].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setProjectsMode(mode)}
+                  className={`min-h-9 border-r border-border/70 px-3 text-sm last:border-r-0 ${
+                    projectsMode === mode
+                      ? "bg-sky-600 text-white"
+                      : "bg-background text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {projectsMode !== "hidden" && !projectsLoading && !projectsError && (
+              <span className="text-sm text-muted-foreground">
+                {projectsMode === "nearby"
+                  ? `${nearbyProjects.length} proyecto(s) a menos de 500 m`
+                  : `${normalizedProjects.length} proyecto(s) georreferenciado(s)`}
+              </span>
+            )}
+          </div>
+
+          {projectsLoading && (
+            <p className="text-sm text-muted-foreground">Cargando proyectos del mapa...</p>
+          )}
+          {projectsError && (
+            <p className="text-sm text-red-600">No se pudieron cargar los proyectos del mapa.</p>
+          )}
+          {projectsMode === "nearby" && !projectsLoading && !projectsError && nearbyProjects.length === 0 && (
+            <p className="text-sm text-muted-foreground">No se encontraron proyectos a menos de 500 metros.</p>
+          )}
+        </div>
+      )}
 
       {territorialWarning && (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
