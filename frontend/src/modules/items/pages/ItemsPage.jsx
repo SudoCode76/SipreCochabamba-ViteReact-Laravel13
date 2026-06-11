@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Eye, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 
@@ -1455,11 +1455,12 @@ export default function ItemsPage() {
                       const isMissingSpecification = !item.specification || String(item.specification).trim() === "";
                       const rowClassName = [
                         index < items.length - 1 ? "border-b border-border/60" : "",
+                        item.is_outdated && !(highlightMissingSpecifications && isMissingSpecification) ? "bg-amber-50/60" : "",
                         highlightMissingSpecifications && isMissingSpecification ? "border-l-4 border-l-rose-500 bg-rose-50/90 [&>td]:!text-rose-950" : "",
                       ].filter(Boolean).join(" ");
 
                       return (
-                        <tr key={item.id_item} className={`${index < items.length - 1 ? "border-b border-border/60" : ""} ${item.is_outdated ? "bg-amber-50/60" : ""}`}>
+                        <tr key={item.id_item} className={rowClassName}>
                         <td className="px-5 py-4 align-top text-foreground">
                           {index + 1}
                         </td>
