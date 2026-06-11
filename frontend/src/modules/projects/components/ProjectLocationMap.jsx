@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
+import { getProjectApprovalLabel } from "../lib/project-status";
 import { projectService } from "../services/project.service";
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -36,12 +37,6 @@ const MUNICIPAL_WMS = {
   catastro: "https://busquedasgamc.cochabamba.bo/web/index.php?r=services/get-info-catastro",
   featureInfo: "https://busquedasgamc.cochabamba.bo/web/index.php?r=services/get-feature-info-url-calles",
 };
-const APPROVAL_LABELS = {
-  AP: "APROBADO",
-  PD: "PENDIENTE",
-  RV: "REVISADO",
-};
-
 proj4.defs(CRS_CODE, CRS_DEF);
 
 function parseLatLng(value) {
@@ -158,7 +153,7 @@ function projectPopup(project, distance) {
       <strong>${escapeHtml(project.name)}</strong>
       <div style="margin-top:6px;color:#475569">${escapeHtml(project.location || "Sin ubicación registrada")}</div>
       ${territorial ? `<div style="margin-top:4px;color:#475569">${territorial}</div>` : ""}
-      <div style="margin-top:6px"><strong>Condición:</strong> ${escapeHtml(APPROVAL_LABELS[project.approval_status] || project.approval_status || "-")}</div>
+      <div style="margin-top:6px"><strong>Condición:</strong> ${escapeHtml(getProjectApprovalLabel(project.approval_status))}</div>
       ${Number.isFinite(distance) ? `<div style="margin-top:4px"><strong>Distancia:</strong> ${Math.round(distance).toLocaleString("es-BO")} m</div>` : ""}
     </div>
   `;

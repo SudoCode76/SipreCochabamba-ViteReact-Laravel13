@@ -1025,7 +1025,7 @@ export default function ProjectsPage() {
                         </td>
                         <td className="whitespace-nowrap px-2 py-3 align-top">
                           <Badge className={`rounded-full px-2 py-1 text-[10px] uppercase tracking-[0.08em] ${approvalClass[project.aprobado] || "bg-slate-500 text-white"}`}>
-                            {project.aprobado === "PD" ? "PENDIENTE" : project.aprobado === "RV" ? "REVISADO" : "APROBADO"}
+                            {getProjectApprovalLabel(project.aprobado)}
                           </Badge>
                         </td>
                         <td className="px-2 py-3 align-top text-muted-foreground">

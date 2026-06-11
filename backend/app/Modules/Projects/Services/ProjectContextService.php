@@ -38,14 +38,14 @@ class ProjectContextService
                 ['code' => 'DC', 'label' => 'INACTIVO'],
             ],
             'conditions' => [
-                ['code' => 'PD', 'label' => 'PENDIENTE'],
-                ['code' => 'RV', 'label' => 'REVISADO'],
-                ['code' => 'AP', 'label' => 'APROBADO'],
+                ['code' => 'PD', 'label' => 'DESARROLLO'],
+                ['code' => 'RV', 'label' => 'FINALIZADO'],
+                ['code' => 'AP', 'label' => 'ACTUALIZADO'],
             ],
             'approval_statuses' => [
-                ['code' => 'PD', 'label' => 'PENDIENTE'],
-                ['code' => 'RV', 'label' => 'REVISADO'],
-                ['code' => 'AP', 'label' => 'APROBADO'],
+                ['code' => 'PD', 'label' => 'DESARROLLO'],
+                ['code' => 'RV', 'label' => 'FINALIZADO'],
+                ['code' => 'AP', 'label' => 'ACTUALIZADO'],
             ],
             'permissions' => $this->permissionService->resolve($user),
             'metadata' => [
