@@ -54,6 +54,7 @@ export default function ItemsPage() {
   const [perPage, setPerPage] = useState(10);
   const [order, setOrder] = useState("legacy");
   const freshness = searchParams.get("freshness") === "outdated" ? "outdated" : "";
+  const view = freshness === "outdated" ? "outdated" : order;
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightMissingSpecifications, setHighlightMissingSpecifications] = useState(false);
@@ -466,19 +467,16 @@ export default function ItemsPage() {
     setPage(1);
   };
 
-  const handleOrderChange = (event) => {
-    setOrder(event.target.value);
-    setPage(1);
-  };
-
-  const handleFreshnessChange = (event) => {
+  const handleViewChange = (event) => {
     const value = event.target.value;
     setPage(1);
 
     const nextParams = new URLSearchParams(searchParams);
-    if (value) {
-      nextParams.set("freshness", value);
+    if (value === "outdated") {
+      setOrder("legacy");
+      nextParams.set("freshness", "outdated");
     } else {
+      setOrder(value);
       nextParams.delete("freshness");
     }
     setSearchParams(nextParams, { replace: true });
@@ -1300,7 +1298,7 @@ export default function ItemsPage() {
                 </span>
                 <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
                   {freshness !== "outdated" && (
-                    <Button type="button" variant="outline" size="sm" className="rounded-full border-amber-400 bg-white" onClick={() => handleFreshnessChange({ target: { value: "outdated" } })}>
+                    <Button type="button" variant="outline" size="sm" className="rounded-full border-amber-400 bg-white" onClick={() => handleViewChange({ target: { value: "outdated" } })}>
                       Ver pendientes
                     </Button>
                   )}
@@ -1327,14 +1325,14 @@ export default function ItemsPage() {
           )}
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="flex items-end gap-3">
-              <div className="flex flex-col gap-2">
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end lg:w-auto">
+              <div className="flex w-full flex-col gap-2 sm:w-auto">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   Mostrar
                 </span>
                 <div className="relative">
                   <select
-                    className="h-12 min-w-32 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20"
+                    className="h-12 w-full min-w-32 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20 sm:w-auto"
                     value={perPage}
                     onChange={handlePerPageChange}
                   >
@@ -1347,34 +1345,18 @@ export default function ItemsPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className="flex w-full flex-col gap-2 sm:w-auto">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  Revisión
+                  Vista
                 </span>
                 <div className="relative">
                   <select
-                    className="h-12 min-w-48 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20"
-                    value={freshness}
-                    onChange={handleFreshnessChange}
-                  >
-                    <option value="">Todos</option>
-                    <option value="outdated">Requieren actualización</option>
-                  </select>
-                  <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  Orden
-                </span>
-                <div className="relative">
-                  <select
-                    className="h-12 min-w-36 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20"
-                    value={order}
-                    onChange={handleOrderChange}
+                    className="h-12 w-full min-w-56 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20 sm:w-auto"
+                    value={view}
+                    onChange={handleViewChange}
                   >
                     <option value="legacy">Predeterminado</option>
+                    <option value="outdated">Requieren actualización</option>
                     <option value="missing_specifications">Sin especificaciones</option>
                     <option value="recent">Recientes</option>
                     <option value="oldest">Antiguos</option>
