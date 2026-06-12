@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -254,6 +254,7 @@ const renderHistoryMetadata = (entry) => {
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
+  const editFormRef = useRef(null);
   const [perPage, setPerPage] = useState(15);
   const [order, setOrder] = useState("legacy");
   const [search, setSearch] = useState("");
@@ -416,6 +417,15 @@ export default function ProjectsPage() {
   const closeEdit = () => {
     setEditOpen(false);
     setEditProject(null);
+  };
+
+  const requestCloseEdit = () => {
+    if (editFormRef.current?.requestExit) {
+      editFormRef.current.requestExit();
+      return;
+    }
+
+    closeEdit();
   };
 
   const openItems = (project) => {
@@ -1004,7 +1014,6 @@ export default function ProjectsPage() {
                             <span className="rounded-full border border-border/80 bg-muted/40 px-2 py-0.5 font-semibold">
                               V{project.version_number || 1}
                             </span>
-                            {(project.version_count || 1) > 1 && <span>{project.version_count} versiones</span>}
                           </div>
                         </td>
                         <td className="px-2 py-3 align-top text-muted-foreground">
@@ -1504,7 +1513,7 @@ export default function ProjectsPage() {
                     </CardDescription>
                   </div>
 
-                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={closeEdit}>
+                  <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={requestCloseEdit}>
                     <X />
                   </Button>
                 </div>
@@ -1513,6 +1522,7 @@ export default function ProjectsPage() {
               <CardContent className="p-5 sm:p-6">
                 {editProject && (
                   <ProjectEditForm
+                    ref={editFormRef}
                     projectId={editProject.id_proyecto}
                     onCancel={closeEdit}
                     onSuccess={closeEdit}

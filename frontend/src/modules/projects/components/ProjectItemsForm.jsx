@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { forwardRef, Fragment, useImperativeHandle, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ChevronsUpDown, GitCompare, History, Loader2, Plus, Save, Trash2, X } from "lucide-react";
@@ -134,7 +134,7 @@ function buildRow(detail, draft, module) {
   };
 }
 
-export default function ProjectItemsForm({ projectId, projectName, onCancel, onSuccess }) {
+const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, projectName, onCancel, onSuccess }, ref) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [format, setFormat] = useState("PCA");
@@ -148,6 +148,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   const [compareTargetId, setCompareTargetId] = useState("");
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [error, setError] = useState(null);
+  const [finalizingVersion, setFinalizingVersion] = useState(false);
 
   const { data: projectData } = useQuery({
     queryKey: ["project", projectId],
@@ -300,6 +301,13 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   const effectivePrice = draft.precio || (selectedDetail?.precio != null ? String(selectedDetail.precio) : "");
   const canCompareVersions = versions.length > 1;
   const currentVersionOption = versions.find((version) => Number(version.id_proyecto) === Number(projectId)) ?? currentProject;
+  const hasPreviousVersion = versions.length > 1 && Number(currentProject?.version_number || 1) > 1;
+  const shouldAskBeforeLeavingUpdatedVersion = Boolean(
+    currentProject?.aprobado === "AP"
+      && currentProject?.is_current_version
+      && !currentProject?.is_frozen
+      && hasPreviousVersion,
+  );
   const comparison = comparisonData?.data;
   const comparisonRows = (comparison?.items ?? []).filter((item) => showUnchanged || item.change_type !== "unchanged");
 
@@ -464,6 +472,87 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
     setCompareTargetId(previousVersion ? String(previousVersion.id_proyecto) : "");
     setCompareOpen(true);
   };
+
+  const handleFinalizeUpdatedVersion = async ({ skipDirtyConfirmation = false, afterFinalize } = {}) => {
+    if (rowsDirty && !skipDirtyConfirmation) {
+      const confirmed = window.confirm("Hay cambios temporales sin guardar. Finalizar congelará la versión con los datos ya guardados. ¿Deseas continuar?");
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setError(null);
+    setFinalizingVersion(true);
+
+    try {
+      const response = await projectService.finalizeVersion(projectId);
+
+      queryClient.setQueryData(["project", projectId], response);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["project-versions", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["project-items", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["project-report-warnings", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["projects"] }),
+      ]);
+      setRows([]);
+      setRowsDirty(false);
+      if (afterFinalize) {
+        afterFinalize();
+      } else {
+        onSuccess?.();
+      }
+      return true;
+    } catch (mutationError) {
+      const fieldErrors = mutationError.response?.data?.errors;
+      const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
+      setError(firstFieldError || mutationError.response?.data?.message || "No se pudo finalizar la versión.");
+      return false;
+    } finally {
+      setFinalizingVersion(false);
+    }
+  };
+
+  const handleCancel = async ({ proceed } = {}) => {
+    if (rowsDirty) {
+      const confirmed = window.confirm("Hay cambios sin guardar. Si sales se perderán los cambios temporales de esta pantalla. ¿Deseas continuar?");
+
+      if (!confirmed) {
+        return false;
+      }
+    }
+
+    if (!shouldAskBeforeLeavingUpdatedVersion) {
+      proceed?.();
+      if (!proceed) {
+        onCancel?.();
+      }
+      return true;
+    }
+
+    const shouldFinalize = window.confirm(
+      "Esta versión está ACTUALIZADA y seguirá tomando precios, composiciones y porcentajes actuales mientras no se finalice.\n\nAceptar: finalizar y congelar esta versión ahora.\nCancelar: salir sin finalizar.",
+    );
+
+    if (!shouldFinalize) {
+      proceed?.();
+      if (!proceed) {
+        onCancel?.();
+      }
+      return true;
+    }
+
+    return handleFinalizeUpdatedVersion({
+      skipDirtyConfirmation: true,
+      afterFinalize: proceed ?? onSuccess,
+    });
+  };
+
+  useImperativeHandle(ref, () => ({
+    requestExit: handleCancel,
+    shouldWarnBeforeUnload: () => rowsDirty || shouldAskBeforeLeavingUpdatedVersion,
+  }));
 
   const handleOrder = () => {
     if (isReadOnly) {
@@ -1006,7 +1095,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
       </div>
 
       <div className="flex justify-center gap-3">
-        <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={onCancel}>
+        <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={handleCancel} disabled={finalizingVersion}>
           Cancelar
         </Button>
         {!isReadOnly && (
@@ -1027,4 +1116,6 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
       </div>
     </form>
   );
-}
+});
+
+export default ProjectItemsForm;

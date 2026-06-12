@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { History, Loader2, Lock, MapPin, RefreshCw, Save } from "lucide-react";
 
@@ -80,13 +80,14 @@ function ensureSelectedOption(options, value, label) {
   ];
 }
 
-export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
+const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCancel, onSuccess }, ref) {
   const queryClient = useQueryClient();
   const [selectedProjectId, setSelectedProjectId] = useState(projectId);
   const [draftFormData, setFormData] = useState(null);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [versioning, setVersioning] = useState(false);
+  const [finalizingVersion, setFinalizingVersion] = useState(false);
 
   const { data: contextData, isLoading: contextLoading } = useQuery({
     queryKey: ["project-context"],
@@ -108,6 +109,13 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
   const project = projectData?.data?.project;
   const versions = versionsData?.data?.items ?? [];
   const isReadOnly = Boolean(project && (!project.is_current_version || project.is_frozen));
+  const hasPreviousVersion = versions.length > 1 && Number(project?.version_number || 1) > 1;
+  const shouldAskBeforeLeavingUpdatedVersion = Boolean(
+    project?.aprobado === "AP"
+      && project?.is_current_version
+      && !project?.is_frozen
+      && hasPreviousVersion,
+  );
 
   const initialFormData = useMemo(() => {
     if (!project) {
@@ -245,6 +253,52 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
     }
   };
 
+  const handleFinalizeUpdatedVersion = async () => {
+    setError(null);
+    setFinalizingVersion(true);
+
+    try {
+      const response = await projectService.finalizeVersion(selectedProjectId);
+
+      queryClient.setQueryData(["project", selectedProjectId], response);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] }),
+        queryClient.invalidateQueries({ queryKey: ["project-versions", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["projects"] }),
+      ]);
+      setFormData(null);
+      onSuccess?.();
+    } catch (err) {
+      const fieldErrors = err.response?.data?.errors;
+      const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
+      setError(firstFieldError || err.response?.data?.message || "No se pudo finalizar la versión.");
+    } finally {
+      setFinalizingVersion(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!shouldAskBeforeLeavingUpdatedVersion) {
+      onCancel?.();
+      return;
+    }
+
+    const shouldFinalize = window.confirm(
+      "Esta versión está ACTUALIZADA y seguirá tomando precios, composiciones y porcentajes actuales mientras no se finalice.\n\nAceptar: finalizar y congelar esta versión ahora.\nCancelar: salir sin finalizar.",
+    );
+
+    if (!shouldFinalize) {
+      onCancel?.();
+      return;
+    }
+
+    await handleFinalizeUpdatedVersion();
+  };
+
+  useImperativeHandle(ref, () => ({
+    requestExit: handleCancel,
+  }));
+
   if (contextLoading || projectLoading || versionsLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -302,12 +356,6 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
           Ver ítems y reportes de esta versión
         </a>
       </div>
-
-      {project?.aprobado === "AP" && (
-        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          Esta versión proviene de un proyecto finalizado. Sus precios, composiciones y porcentajes continuarán sincronizándose hasta que vuelva a finalizarse.
-        </div>
-      )}
 
       {isReadOnly && (
         <div className="flex items-start gap-3 rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-800">
@@ -421,7 +469,7 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
       <Separator className="bg-border/70" />
 
       <div className="flex flex-wrap justify-end gap-2">
-        <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={onCancel}>
+        <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={handleCancel} disabled={finalizingVersion}>
           Cancelar
         </Button>
         {project?.is_current_version && project?.is_frozen && (
@@ -448,4 +496,6 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
       </div>
     </form>
   );
-}
+});
+
+export default ProjectEditForm;
