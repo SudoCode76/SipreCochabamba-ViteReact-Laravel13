@@ -1,12 +1,14 @@
 import { Fragment, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChevronsUpDown, Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronsUpDown, GitCompare, History, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { openPdfViewer } from "@/lib/utils/pdf";
 import { modulesService } from "@/modules/modules/services/modules.service";
+import { getProjectApprovalLabel } from "../lib/project-status";
 import { projectService } from "../services/project.service";
 
 const formatOptions = [
@@ -36,6 +38,64 @@ function formatNumber(value, digits = 2) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(Number.isFinite(numericValue) ? numericValue : 0);
+}
+
+function formatDate(value) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Date(value).toLocaleDateString("es-BO");
+}
+
+function versionOptionLabel(version) {
+  const date = version.version_created_at ? formatDate(version.version_created_at) : version.fecha;
+
+  return `Versión ${version.version_number || 1} · ${date || "-"} · ${getProjectApprovalLabel(version.aprobado)}`;
+}
+
+function versionBadgeClass(project) {
+  if (project?.is_frozen) {
+    return "border-slate-300 bg-slate-100 text-slate-700";
+  }
+
+  if (project?.aprobado === "AP") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+
+  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
+function compareRowClass(type) {
+  if (type === "added") {
+    return "bg-emerald-50";
+  }
+
+  if (type === "removed") {
+    return "bg-rose-50";
+  }
+
+  if (type === "modified") {
+    return "bg-amber-50";
+  }
+
+  return "";
+}
+
+function compareLabel(type) {
+  if (type === "added") {
+    return "Agregado";
+  }
+
+  if (type === "removed") {
+    return "Quitado";
+  }
+
+  if (type === "modified") {
+    return "Modificado";
+  }
+
+  return "Sin cambios";
 }
 
 function buildRow(detail, draft, module) {
@@ -75,6 +135,7 @@ function buildRow(detail, draft, module) {
 }
 
 export default function ProjectItemsForm({ projectId, projectName, onCancel, onSuccess }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [format, setFormat] = useState("PCA");
   const [draft, setDraft] = useState(emptyDraft);
@@ -82,11 +143,21 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   const [rowsDirty, setRowsDirty] = useState(false);
   const [search, setSearch] = useState("");
   const [itemComboboxOpen, setItemComboboxOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareBaseId, setCompareBaseId] = useState("");
+  const [compareTargetId, setCompareTargetId] = useState("");
+  const [showUnchanged, setShowUnchanged] = useState(false);
   const [error, setError] = useState(null);
 
   const { data: projectData } = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => projectService.show(projectId),
+    enabled: Boolean(projectId),
+  });
+
+  const { data: versionsData, isLoading: versionsLoading } = useQuery({
+    queryKey: ["project-versions", projectId],
+    queryFn: () => projectService.versions(projectId),
     enabled: Boolean(projectId),
   });
 
@@ -116,6 +187,16 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
     queryKey: ["project-item-detail", draft.itemId, format],
     queryFn: () => projectService.itemIncidencePrice(draft.itemId, format),
     enabled: Boolean(draft.itemId),
+  });
+
+  const { data: comparisonData, isFetching: isComparing, isError: compareFailed } = useQuery({
+    queryKey: ["project-version-compare", projectId, compareBaseId, compareTargetId, format],
+    queryFn: () => projectService.compareVersions(projectId, {
+      base: compareBaseId,
+      target: compareTargetId,
+      format,
+    }),
+    enabled: compareOpen && Boolean(compareBaseId) && Boolean(compareTargetId) && compareBaseId !== compareTargetId,
   });
 
   const queryRows = useMemo(() => {
@@ -191,9 +272,24 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
     },
   });
 
+  const excludeInputMutation = useMutation({
+    mutationFn: (snapshotId) => projectService.excludeVersionInput(projectId, snapshotId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project-items", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["project-report-warnings", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+    onError: (mutationError) => {
+      setError(mutationError.response?.data?.message || "No se pudo excluir el insumo de esta versión.");
+    },
+  });
+
   const itemOptions = searchData?.data?.items ?? [];
   const selectedDetail = selectedItemData?.data?.item ?? null;
   const currentProject = projectData?.data?.project;
+  const versions = versionsData?.data?.items ?? [];
+  const isReadOnly = Boolean(currentProject && (!currentProject.is_current_version || currentProject.is_frozen));
   const displayProjectName = currentProject?.nombre_proyecto || projectName || "-";
   const selectedOption = itemOptions.find((option) => Number(option.id) === Number(draft.itemId));
   const effectiveModuleId = draft.moduleId || (generalModule ? String(generalModule.id_modulo) : "");
@@ -202,6 +298,10 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   const reportWarningsSummary = warningData?.data?.summary;
   const hasSavedRows = queryRows.length > 0;
   const effectivePrice = draft.precio || (selectedDetail?.precio != null ? String(selectedDetail.precio) : "");
+  const canCompareVersions = versions.length > 1;
+  const currentVersionOption = versions.find((version) => Number(version.id_proyecto) === Number(projectId)) ?? currentProject;
+  const comparison = comparisonData?.data;
+  const comparisonRows = (comparison?.items ?? []).filter((item) => showUnchanged || item.change_type !== "unchanged");
 
   const total = useMemo(
     () => effectiveRows.reduce((acc, row) => acc + (Number(row.cantidad || 0) * Number(row.precio || 0)), 0),
@@ -253,6 +353,10 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   };
 
   const handleAdd = () => {
+    if (isReadOnly) {
+      return;
+    }
+
     if (!selectedDetail) {
       setError("Selecciona un item para agregar al proyecto.");
       return;
@@ -284,6 +388,10 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
   };
 
   const handleRemove = (rowKey) => {
+    if (isReadOnly) {
+      return;
+    }
+
     setRows(effectiveRows.filter((row) => (row.id_proyecto_item ?? row.client_row_id) !== rowKey));
     setRowsDirty(true);
   };
@@ -331,7 +439,37 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
     });
   };
 
+  const handleVersionChange = (value) => {
+    if (rowsDirty) {
+      const confirmed = window.confirm("Hay cambios sin guardar. Si cambias de versión se perderán los cambios temporales de esta pantalla. ¿Deseas continuar?");
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    navigate(`/Proyecto/${value}/items`);
+  };
+
+  const handleOpenComparison = () => {
+    if (!currentProject || versions.length < 2) {
+      return;
+    }
+
+    const currentId = String(currentProject.id_proyecto);
+    const previousVersion = versions.find((version) => Number(version.version_number) < Number(currentProject.version_number || 1))
+      ?? versions.find((version) => Number(version.id_proyecto) !== Number(currentProject.id_proyecto));
+
+    setCompareBaseId(currentId);
+    setCompareTargetId(previousVersion ? String(previousVersion.id_proyecto) : "");
+    setCompareOpen(true);
+  };
+
   const handleOrder = () => {
+    if (isReadOnly) {
+      return;
+    }
+
     setRows([...effectiveRows].sort((a, b) => {
       const left = a.prioridad ?? Number.MAX_SAFE_INTEGER;
       const right = b.prioridad ?? Number.MAX_SAFE_INTEGER;
@@ -347,6 +485,10 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    if (isReadOnly) {
+      return;
+    }
 
     if (effectiveRows.length === 0) {
       setError("Agrega al menos un item antes de guardar.");
@@ -367,7 +509,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
     });
   };
 
-  if (isLoading) {
+  if (isLoading || versionsLoading) {
     return (
       <div className="flex items-center justify-center p-10 text-muted-foreground">
         <Loader2 className="size-5 animate-spin" />
@@ -383,6 +525,195 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
         </div>
       )}
 
+      <div className="grid gap-4 rounded-2xl border border-border/70 bg-muted/30 p-4 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="project-version" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Versión del proyecto
+            </Label>
+            <select
+              id="project-version"
+              value={projectId}
+              onChange={(event) => handleVersionChange(event.target.value)}
+              className="h-12 w-full rounded-2xl border border-border/80 bg-background px-3 text-sm"
+            >
+              {versions.map((version) => (
+                <option key={version.id_proyecto} value={version.id_proyecto}>
+                  {versionOptionLabel(version)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {currentVersionOption && (
+            <div className={`inline-flex h-12 items-center gap-2 rounded-full border px-4 text-sm font-semibold ${versionBadgeClass(currentVersionOption)}`}>
+              <History className="size-4" />
+              {currentVersionOption.is_current_version ? "Vigente" : "Histórica"}
+              {currentVersionOption.is_frozen ? " · Congelada" : ""}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col items-start gap-2 lg:items-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full"
+            onClick={handleOpenComparison}
+            disabled={!canCompareVersions}
+          >
+            <GitCompare className="mr-2 size-4" />
+            Comparar versiones
+          </Button>
+          {!canCompareVersions && (
+            <span className="text-xs text-muted-foreground">Solo existe una versión.</span>
+          )}
+        </div>
+      </div>
+
+      {compareOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+          <div className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-border/80 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-border/70 px-5 py-4">
+              <div>
+                <h2 className="text-xl font-semibold tracking-[-0.03em]">Comparar versiones</h2>
+                <p className="text-sm text-muted-foreground">Diferencias de ítems, cantidades, precios y subtotales.</p>
+              </div>
+              <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={() => setCompareOpen(false)}>
+                <X className="size-5" />
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-4 overflow-y-auto p-5">
+              <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="compare-base" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Base</Label>
+                  <select
+                    id="compare-base"
+                    value={compareBaseId}
+                    onChange={(event) => setCompareBaseId(event.target.value)}
+                    className="h-12 rounded-2xl border border-border/80 bg-background px-3 text-sm"
+                  >
+                    {versions.map((version) => (
+                      <option key={version.id_proyecto} value={version.id_proyecto}>
+                        {versionOptionLabel(version)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="compare-target" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Comparar con</Label>
+                  <select
+                    id="compare-target"
+                    value={compareTargetId}
+                    onChange={(event) => setCompareTargetId(event.target.value)}
+                    className="h-12 rounded-2xl border border-border/80 bg-background px-3 text-sm"
+                  >
+                    {versions.map((version) => (
+                      <option key={version.id_proyecto} value={version.id_proyecto}>
+                        {versionOptionLabel(version)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <label className="flex h-12 items-center gap-2 rounded-2xl border border-border/80 px-4 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={showUnchanged}
+                    onChange={(event) => setShowUnchanged(event.target.checked)}
+                    className="size-4"
+                  />
+                  Ver sin cambios
+                </label>
+              </div>
+
+              {compareBaseId === compareTargetId && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Selecciona dos versiones distintas para comparar.
+                </div>
+              )}
+
+              {isComparing && (
+                <div className="flex items-center justify-center gap-2 rounded-xl border border-border/70 px-4 py-8 text-muted-foreground">
+                  <Loader2 className="size-5 animate-spin" />
+                  Comparando versiones...
+                </div>
+              )}
+
+              {compareFailed && (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  No se pudo comparar las versiones seleccionadas.
+                </div>
+              )}
+
+              {comparison && compareBaseId !== compareTargetId && !isComparing && (
+                <>
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <div className="rounded-2xl border border-border/70 bg-background p-4">
+                      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Total base</span>
+                      <p className="mt-2 text-xl font-semibold">Bs {formatNumber(comparison.summary.base_total, 2)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-border/70 bg-background p-4">
+                      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Total comparación</span>
+                      <p className="mt-2 text-xl font-semibold">Bs {formatNumber(comparison.summary.target_total, 2)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-border/70 bg-background p-4">
+                      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Diferencia</span>
+                      <p className="mt-2 text-xl font-semibold">Bs {formatNumber(comparison.summary.difference, 2)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-border/70 bg-background p-4">
+                      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Variación</span>
+                      <p className="mt-2 text-xl font-semibold">
+                        {comparison.summary.difference_percent == null ? "-" : `${formatNumber(comparison.summary.difference_percent, 2)}%`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-hidden rounded-2xl border border-border/70">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-slate-100 text-slate-900">
+                          <tr>
+                            <th className="px-3 py-3 text-left">Cambio</th>
+                            <th className="px-3 py-3 text-left">Item</th>
+                            <th className="px-3 py-3 text-left">Módulo</th>
+                            <th className="px-3 py-3 text-right">Cant. base</th>
+                            <th className="px-3 py-3 text-right">Cant. comp.</th>
+                            <th className="px-3 py-3 text-right">Precio base</th>
+                            <th className="px-3 py-3 text-right">Precio comp.</th>
+                            <th className="px-3 py-3 text-right">Dif. subtotal</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {comparisonRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">No hay diferencias para mostrar.</td>
+                            </tr>
+                          ) : comparisonRows.map((row) => (
+                            <tr key={row.key} className={`border-t border-border/60 ${compareRowClass(row.change_type)}`}>
+                              <td className="px-3 py-3 font-semibold">{compareLabel(row.change_type)}</td>
+                              <td className="px-3 py-3">{row.item}</td>
+                              <td className="px-3 py-3">{row.target?.modulo ?? row.base?.modulo ?? "-"}</td>
+                              <td className="px-3 py-3 text-right">{row.base ? formatNumber(row.base.cantidad, 2) : "-"}</td>
+                              <td className="px-3 py-3 text-right">{row.target ? formatNumber(row.target.cantidad, 2) : "-"}</td>
+                              <td className="px-3 py-3 text-right">{row.base ? formatNumber(row.base.precio, 2) : "-"}</td>
+                              <td className="px-3 py-3 text-right">{row.target ? formatNumber(row.target.precio, 2) : "-"}</td>
+                              <td className="px-3 py-3 text-right">{formatNumber(row.diff.subtotal, 2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {reportWarningsSummary?.has_warnings && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           <div className="flex items-start gap-2">
@@ -394,6 +725,13 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {isReadOnly && (
+        <div className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-800">
+          <p className="font-semibold">Versión {currentProject?.version_number} congelada</p>
+          <p>Los ítems son de solo lectura. Las acciones de PDF y especificaciones continúan disponibles.</p>
         </div>
       )}
 
@@ -429,6 +767,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
             value={effectiveModuleId}
             onChange={(event) => handleDraftChange("moduleId", event.target.value)}
             className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4"
+            disabled={isReadOnly}
           >
             {moduleOptions.map((module) => (
               <option key={module.id_modulo} value={module.id_modulo}>
@@ -451,6 +790,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
               onFocus={() => setItemComboboxOpen(true)}
               placeholder="Buscar item..."
               className="h-12 rounded-2xl border-border/80 bg-background/90 pr-11"
+              disabled={isReadOnly}
             />
             <Button
               type="button"
@@ -458,6 +798,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
               size="icon-sm"
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full text-muted-foreground"
               onClick={() => setItemComboboxOpen((current) => !current)}
+              disabled={isReadOnly}
             >
               <ChevronsUpDown className="size-4" />
             </Button>
@@ -507,12 +848,12 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="cantidad" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cantidad</Label>
-          <Input id="cantidad" type="number" min="0" step="0.01" value={draft.cantidad} onChange={(event) => handleDraftChange("cantidad", event.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" />
+          <Input id="cantidad" type="number" min="0" step="0.01" value={draft.cantidad} onChange={(event) => handleDraftChange("cantidad", event.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled={isReadOnly} />
         </div>
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="prioridad" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Prioridad</Label>
-          <Input id="prioridad" type="number" min="1" step="1" value={draft.prioridad} onChange={(event) => handleDraftChange("prioridad", event.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" />
+          <Input id="prioridad" type="number" min="1" step="1" value={draft.prioridad} onChange={(event) => handleDraftChange("prioridad", event.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled={isReadOnly} />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -543,7 +884,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
           <Button type="button" variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700" onClick={handlePrintUnitPrices} disabled={!hasSavedRows}>
             Imprimir Precios Unitarios
           </Button>
-          <Button type="button" variant="outline" className="rounded-full border-slate-300 bg-slate-100 text-slate-700" onClick={handleOrder}>
+          <Button type="button" variant="outline" className="rounded-full border-slate-300 bg-slate-100 text-slate-700" onClick={handleOrder} disabled={isReadOnly}>
             Ordenar
           </Button>
           <Button type="button" variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700" onClick={handlePrintSpecifications} disabled={!hasSavedRows}>
@@ -560,7 +901,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
       <div className="overflow-hidden rounded-2xl border border-border/70 bg-white shadow-sm">
         <div className="flex items-center justify-between bg-teal-900 px-4 py-3 text-white">
           <span className="text-sm font-semibold uppercase tracking-[0.18em]">Items agregados</span>
-          <Button type="button" className="rounded-full bg-teal-500 text-white hover:bg-teal-400" onClick={handleAdd}>
+          <Button type="button" className="rounded-full bg-teal-500 text-white hover:bg-teal-400" onClick={handleAdd} disabled={isReadOnly}>
             <Plus className="mr-2 size-4" />
             Agregar
           </Button>
@@ -615,9 +956,22 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
                               </span>
                             )}
                             {inputWarnings.length > 0 && (
-                              <span className="text-xs font-medium text-rose-700">
-                                {inputWarnings.length} insumo(s) desactivado(s) o eliminado(s)
-                              </span>
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs font-medium text-rose-700">
+                                  {inputWarnings.length} insumo(s) desactivado(s) o eliminado(s)
+                                </span>
+                                {!isReadOnly && inputWarnings.map((warning) => (
+                                  <button
+                                    key={warning.id_snapshot}
+                                    type="button"
+                                    className="w-fit text-left text-xs font-semibold text-rose-700 underline underline-offset-2"
+                                    onClick={() => excludeInputMutation.mutate(warning.id_snapshot)}
+                                    disabled={excludeInputMutation.isPending}
+                                  >
+                                    Excluir {warning.description} de esta versión
+                                  </button>
+                                ))}
+                              </div>
                             )}
                           </div>
                         </td>
@@ -630,7 +984,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
                         </td>
                         <td className="px-3 py-3 text-center">{row.prioridad ?? index + 1}</td>
                         <td className="px-3 py-3 text-center">
-                          <Button type="button" variant="ghost" className="rounded-full text-destructive hover:text-destructive" onClick={() => handleRemove(rowKey)}>
+                          <Button type="button" variant="ghost" className="rounded-full text-destructive hover:text-destructive" onClick={() => handleRemove(rowKey)} disabled={isReadOnly}>
                             <Trash2 className="size-4" />
                           </Button>
                         </td>
@@ -655,6 +1009,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
         <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={onCancel}>
           Cancelar
         </Button>
+        {!isReadOnly && (
         <Button type="submit" className="rounded-full bg-teal-600 text-white hover:bg-teal-500" disabled={syncMutation.isPending}>
           {syncMutation.isPending ? (
             <>
@@ -668,6 +1023,7 @@ export default function ProjectItemsForm({ projectId, projectName, onCancel, onS
             </>
           )}
         </Button>
+        )}
       </div>
     </form>
   );

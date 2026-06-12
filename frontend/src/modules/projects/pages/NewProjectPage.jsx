@@ -49,7 +49,7 @@ export default function NewProjectPage() {
   const responsibleOptions = data?.data?.responsible_options ?? [];
   const requesterOptions = data?.data?.requester_options ?? [];
   const statuses = data?.data?.statuses ?? [];
-  const conditions = data?.data?.conditions ?? [];
+  const conditions = (data?.data?.conditions ?? []).filter((condition) => condition.code === "PD");
   const templates = templatesData?.data?.items ?? [];
 
   const handleChange = (field, value) => {
@@ -85,7 +85,7 @@ export default function NewProjectPage() {
       solicitante: template.solicitante ? String(template.solicitante) : "",
       observaciones: template.observaciones || "",
       estado: "AC",
-      aprobado: template.aprobado || "PD",
+      aprobado: "PD",
     }));
   };
 

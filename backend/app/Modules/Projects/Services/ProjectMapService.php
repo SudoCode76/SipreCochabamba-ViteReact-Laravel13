@@ -22,11 +22,16 @@ class ProjectMapService
                 'aprobado',
                 'latitud',
                 'longitud',
+                'numero_version',
             ])
             ->where('estado', 'AC')
             ->where(function ($query): void {
                 $query->where('es_plantilla', false)
                     ->orWhereNull('es_plantilla');
+            })
+            ->where(function ($query): void {
+                $query->where('es_version_actual', true)
+                    ->orWhereNull('es_version_actual');
             })
             ->orderBy('id_proyecto')
             ->chunkById(500, function ($projects) use (&$items, &$skipped): void {
@@ -50,6 +55,7 @@ class ProjectMapService
                         'latitude' => $project->latitud,
                         'longitude' => $project->longitud,
                         'coordinate_system' => $coordinateSystem,
+                        'version_number' => (int) ($project->numero_version ?? 1),
                     ];
                 }
             }, 'id_proyecto');

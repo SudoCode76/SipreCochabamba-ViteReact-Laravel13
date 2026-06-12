@@ -108,6 +108,38 @@ class ProjectHistoryService
         ]);
     }
 
+    public function recordVersionCreated(Project $project, ?User $actor, ?string $ip, Project $source): void
+    {
+        $this->record($project, $actor, $ip, 'version_created', 'Se creó una nueva versión del proyecto', 'Se creó la versión '.$project->numero_version.' desde la versión '.$source->numero_version.'.', [
+            'version_number' => $project->numero_version,
+            'source_project_id' => $source->id_proyecto,
+            'source_version_number' => $source->numero_version,
+        ]);
+    }
+
+    public function recordVersionFinalized(Project $project, ?User $actor, ?string $ip): void
+    {
+        $this->record($project, $actor, $ip, 'version_finalized', 'Se finalizó y congeló la versión', 'La versión '.$project->numero_version.' quedó congelada.', [
+            'version_number' => $project->numero_version,
+            'finalized_at' => $project->fecha_finalizacion?->toIso8601String(),
+        ]);
+    }
+
+    public function recordVersionSynchronized(Project $project, ?User $actor, ?string $ip): void
+    {
+        $this->record($project, $actor, $ip, 'version_synchronized', 'Se sincronizó la versión', 'Se actualizaron precios, composiciones y porcentajes desde los catálogos vigentes.', [
+            'version_number' => $project->numero_version,
+        ]);
+    }
+
+    public function recordInputExcluded(Project $project, ?User $actor, ?string $ip, int $snapshotId): void
+    {
+        $this->record($project, $actor, $ip, 'version_input_excluded', 'Se excluyó un insumo de la versión', 'El insumo dejó de participar en los cálculos de esta versión.', [
+            'version_number' => $project->numero_version,
+            'snapshot_id' => $snapshotId,
+        ]);
+    }
+
     private function record(Project $project, ?User $actor, ?string $ip, string $action, string $title, ?string $detail, array $metadata = []): void
     {
         ProjectHistory::query()->create([

@@ -21,10 +21,12 @@ class ProjectItemService
         private readonly ModuleService $moduleService,
         private readonly ProjectItemInputSnapshotService $snapshotService,
         private readonly PublicFileService $publicFileService,
+        private readonly ProjectVersionService $projectVersionService,
     ) {}
 
     public function sync(Project $project, array $items, User $user, ?string $ip = null): Project
     {
+        $this->projectVersionService->assertEditable($project);
         $historySummary = [
             'added' => [],
             'updated' => [],
@@ -138,7 +140,7 @@ class ProjectItemService
 
         return $items->map(function (ProjectItem $projectItem) use ($format, $warningItemsByProjectItem, $warningInputsByProjectItem): array {
             $item = $projectItem->item;
-            $price = $item ? round($this->legacyUnitPriceService->resolve($item, $format), 2) : null;
+            $price = round((float) $projectItem->precio, 2);
             $itemWarning = $warningItemsByProjectItem->get($projectItem->id_proyecto_item);
             $inputWarnings = $warningInputsByProjectItem->get($projectItem->id_proyecto_item, collect())->values();
 
@@ -162,17 +164,17 @@ class ProjectItemService
                     'id_subgrupo' => $item->subgroupCatalog->id_subgrupo,
                     'descripcion' => $item->subgroupCatalog->descripcion,
                 ] : null,
-                'item' => $item?->item,
-                'item_estado' => $item?->estado,
+                'item' => $projectItem->nombre_snapshot ?? $item?->item,
+                'item_estado' => $projectItem->estado_catalogo_snapshot ?? $item?->estado,
                 'has_warnings' => (bool) $itemWarning || $inputWarnings->isNotEmpty(),
                 'warnings' => [
                     'item' => $itemWarning,
                     'inputs' => $inputWarnings->all(),
                 ],
-                'unidad' => $item?->unitMeasure ? [
-                    'id_unidad_medida' => $item->unitMeasure->id_unidad_medida,
-                    'nombre_unidad_medida' => $item->unitMeasure->descripcion,
-                    'abreviatura' => $item->unitMeasure->abreviatura,
+                'unidad' => ($projectItem->unidad_snapshot || $item?->unitMeasure) ? [
+                    'id_unidad_medida' => $item?->unitMeasure?->id_unidad_medida,
+                    'nombre_unidad_medida' => $item?->unitMeasure?->descripcion ?? $projectItem->unidad_snapshot,
+                    'abreviatura' => $projectItem->unidad_snapshot ?? $item?->unitMeasure?->abreviatura,
                 ] : null,
                 'especificacion' => $item?->especificacion,
                 'especificacion_url' => $this->publicFileUrl($item?->especificacion),

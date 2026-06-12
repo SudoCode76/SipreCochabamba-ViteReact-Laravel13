@@ -116,7 +116,11 @@ class ProjectTemplateService
                 'distrito' => $request->filled('distrito') ? $request->string('distrito')->toString() : null,
                 'zona' => $request->filled('zona') ? $request->string('zona')->toString() : null,
                 'otb' => $request->filled('otb') ? $request->string('otb')->toString() : null,
+                'numero_version' => 1,
+                'es_version_actual' => true,
+                'fecha_version' => now(),
             ]);
+            $project->update(['id_proyecto_raiz' => $project->id_proyecto]);
 
             $this->copyActiveItems($template, $project, $user);
             $this->recalculateProjectPrice($project);
@@ -178,6 +182,11 @@ class ProjectTemplateService
     {
         $exists = Project::query()
             ->whereRaw('UPPER(TRIM(nombre_proyecto)) = ?', [strtoupper(trim($projectName))])
+            ->where(function ($query): void {
+                $query->where('es_plantilla', true)
+                    ->orWhere('es_version_actual', true)
+                    ->orWhereNull('es_version_actual');
+            })
             ->exists();
 
         if ($exists) {

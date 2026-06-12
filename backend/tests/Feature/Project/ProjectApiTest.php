@@ -135,8 +135,9 @@ class ProjectApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.items.0.action', 'updated')
             ->assertJsonPath('data.items.0.user_name', 'Usuario Demo')
-            ->assertJsonPath('data.items.1.action', 'created')
-            ->assertJsonPath('data.meta.total', 2);
+            ->assertJsonPath('data.items.1.action', 'version_finalized')
+            ->assertJsonPath('data.items.2.action', 'created')
+            ->assertJsonPath('data.meta.total', 3);
     }
 
     public function test_can_sort_projects_by_recent_and_oldest_registration(): void
@@ -642,9 +643,10 @@ class ProjectApiTest extends TestCase
         $data = app(\App\Modules\Projects\Services\ProjectBudgetService::class)
             ->budgetRecalculation(\App\Models\Project::findOrFail(1), \Carbon\Carbon::parse('2026-04-30'));
 
-        $this->assertSame([], $data['items']);
+        $this->assertCount(1, $data['items']);
+        $this->assertSame('ITEM FNDR TEST', $data['items'][0]['descripcion']);
         $this->assertSame([
-            'materiales' => 0.0,
+            'materiales' => 16.0,
             'mano_obra' => 0.0,
             'herramientas' => 0.0,
         ], $data['totals']);
@@ -1171,5 +1173,155 @@ class ProjectApiTest extends TestCase
         $pdf->Write(0, $text);
 
         return $pdf->Output('', 'S');
+    }
+
+    public function test_project_versions_follow_the_finalize_update_finalize_cycle(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createProjectRecord([
+            'id_proyecto' => 1,
+            'id_proyecto_raiz' => 1,
+            'numero_version' => 1,
+            'es_version_actual' => true,
+            'aprobado' => 'PD',
+        ]);
+
+        $payload = [
+            'nombre_proyecto' => 'PROYECTO TEST',
+            'fecha' => '2026-04-30',
+            'ubicacion' => 'CENTRO',
+            'responsable' => 1,
+            'solicitante' => 1,
+            'observaciones' => null,
+            'estado' => 'AC',
+            'aprobado' => 'RV',
+        ];
+
+        $this->putJson('/api/v1/projects/1', $payload)
+            ->assertOk()
+            ->assertJsonPath('data.project.aprobado', 'RV')
+            ->assertJsonPath('data.project.is_frozen', true);
+
+        $created = $this->postJson('/api/v1/projects/1/versions')
+            ->assertCreated()
+            ->assertJsonPath('data.project.aprobado', 'AP')
+            ->assertJsonPath('data.project.version_number', 2)
+            ->assertJsonPath('data.project.is_current_version', true);
+
+        $versionTwoId = $created->json('data.project.id_proyecto');
+
+        $this->getJson('/api/v1/projects/1/versions')
+            ->assertOk()
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.items.0.id_proyecto', $versionTwoId)
+            ->assertJsonPath('data.items.1.is_current_version', false);
+
+        $this->putJson('/api/v1/projects/1', [
+            ...$payload,
+            'aprobado' => 'RV',
+        ])->assertUnprocessable();
+
+        $this->postJson('/api/v1/projects/'.$versionTwoId.'/finalize')
+            ->assertOk()
+            ->assertJsonPath('data.project.aprobado', 'RV')
+            ->assertJsonPath('data.project.is_frozen', true);
+
+        $this->getJson('/api/v1/projects')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id_proyecto', $versionTwoId)
+            ->assertJsonPath('data.items.0.version_count', 2);
+    }
+
+    public function test_can_compare_project_versions_by_items(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createProjectRecord([
+            'id_proyecto' => 1,
+            'id_proyecto_raiz' => 1,
+            'numero_version' => 1,
+            'es_version_actual' => false,
+            'aprobado' => 'RV',
+        ]);
+        $this->createProjectRecord([
+            'id_proyecto' => 2,
+            'id_proyecto_raiz' => 1,
+            'id_version_origen' => 1,
+            'numero_version' => 2,
+            'es_version_actual' => true,
+            'aprobado' => 'AP',
+        ]);
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM MODIFICADO']);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM QUITADO']);
+        $this->createItemRecord(['id_item' => 3, 'item' => 'ITEM AGREGADO']);
+
+        $this->createProjectItemRecord([
+            'id_proyecto_item' => 1,
+            'id_proyecto' => 1,
+            'id_item' => 1,
+            'cantidad' => 2,
+            'precio' => 10,
+            'prioridad' => 1,
+            'nombre_snapshot' => 'ITEM MODIFICADO',
+        ]);
+        $this->createProjectItemRecord([
+            'id_proyecto_item' => 2,
+            'id_proyecto' => 1,
+            'id_item' => 2,
+            'cantidad' => 1,
+            'precio' => 20,
+            'prioridad' => 2,
+            'nombre_snapshot' => 'ITEM QUITADO',
+        ]);
+        $this->createProjectItemRecord([
+            'id_proyecto_item' => 3,
+            'id_proyecto' => 2,
+            'id_item' => 1,
+            'cantidad' => 3,
+            'precio' => 12,
+            'prioridad' => 1,
+            'nombre_snapshot' => 'ITEM MODIFICADO',
+        ]);
+        $this->createProjectItemRecord([
+            'id_proyecto_item' => 4,
+            'id_proyecto' => 2,
+            'id_item' => 3,
+            'cantidad' => 1,
+            'precio' => 5,
+            'prioridad' => 3,
+            'nombre_snapshot' => 'ITEM AGREGADO',
+        ]);
+
+        $this->getJson('/api/v1/projects/1/versions/compare?base=1&target=2&format=PCA')
+            ->assertOk()
+            ->assertJsonPath('data.base.id_proyecto', 1)
+            ->assertJsonPath('data.target.id_proyecto', 2)
+            ->assertJsonPath('data.summary.base_total', 40)
+            ->assertJsonPath('data.summary.target_total', 41)
+            ->assertJsonPath('data.summary.added_count', 1)
+            ->assertJsonPath('data.summary.removed_count', 1)
+            ->assertJsonPath('data.summary.modified_count', 1);
+    }
+
+    public function test_project_version_compare_rejects_different_families_and_missing_permission(): void
+    {
+        $this->createLegacyAuthUser();
+        $this->createProjectRecord(['id_proyecto' => 1, 'id_proyecto_raiz' => 1]);
+        $this->createProjectRecord(['id_proyecto' => 2, 'id_proyecto_raiz' => 2]);
+
+        Sanctum::actingAs($this->createProjectUserWithPermissions([]));
+
+        $this->getJson('/api/v1/projects/1/versions/compare?base=1&target=2&format=PCA')
+            ->assertForbidden();
+
+        Sanctum::actingAs(User::query()->findOrFail(1));
+
+        $this->getJson('/api/v1/projects/1/versions/compare?base=1&target=2&format=PCA')
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.version.0', 'Las versiones seleccionadas no pertenecen al mismo proyecto.');
     }
 }

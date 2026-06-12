@@ -39,6 +39,12 @@ trait InteractsWithLegacyProjects
             $table->string('distrito', 50)->nullable();
             $table->string('zona', 150)->nullable();
             $table->string('otb', 150)->nullable();
+            $table->unsignedInteger('id_proyecto_raiz')->nullable();
+            $table->unsignedInteger('id_version_origen')->nullable();
+            $table->unsignedInteger('numero_version')->default(1);
+            $table->boolean('es_version_actual')->default(true);
+            $table->timestamp('fecha_version')->nullable();
+            $table->timestamp('fecha_finalizacion')->nullable();
         });
 
         Schema::create('modulo', function (Blueprint $table): void {
@@ -72,6 +78,11 @@ trait InteractsWithLegacyProjects
             $table->float('precio')->nullable();
             $table->unsignedInteger('id_usuario')->nullable();
             $table->unsignedInteger('prioridad')->nullable();
+            $table->string('nombre_snapshot', 500)->nullable();
+            $table->string('grupo_snapshot', 255)->nullable();
+            $table->string('subgrupo_snapshot', 255)->nullable();
+            $table->string('unidad_snapshot', 100)->nullable();
+            $table->string('estado_catalogo_snapshot', 20)->nullable();
 
             $table->foreign('id_proyecto')->references('id_proyecto')->on('proyecto');
             $table->foreign('id_item')->references('id_item')->on('item');
@@ -116,6 +127,12 @@ trait InteractsWithLegacyProjects
             'distrito' => '1',
             'zona' => 'ZONA TEST',
             'otb' => 'OTB TEST',
+            'id_proyecto_raiz' => $overrides['id_proyecto'] ?? 1,
+            'id_version_origen' => null,
+            'numero_version' => 1,
+            'es_version_actual' => true,
+            'fecha_version' => now(),
+            'fecha_finalizacion' => null,
         ], $overrides));
     }
 
@@ -132,6 +149,11 @@ trait InteractsWithLegacyProjects
             'precio' => 10,
             'id_usuario' => 1,
             'prioridad' => 1,
+            'nombre_snapshot' => 'ITEM TEST',
+            'grupo_snapshot' => 'GRUPO TEST',
+            'subgrupo_snapshot' => 'SUBGRUPO TEST',
+            'unidad_snapshot' => 'u',
+            'estado_catalogo_snapshot' => 'AC',
         ], $overrides));
     }
 }

@@ -39,7 +39,7 @@ class StoreProjectRequest extends FormRequest
             'solicitante' => ['required', 'integer', 'exists:usuario,id_usuario'],
             'observaciones' => ['nullable', 'string', 'max:500'],
             'estado' => ['required', 'string', 'size:2', 'in:AC,DC'],
-            'aprobado' => ['required', 'string', 'size:2', 'in:PD,RV,AP'],
+            'aprobado' => ['required', 'string', 'size:2', 'in:PD'],
             'fecha_aprob' => ['nullable', 'date'],
             'distrito' => ['nullable', 'string', 'max:50'],
             'zona' => ['nullable', 'string', 'max:150'],

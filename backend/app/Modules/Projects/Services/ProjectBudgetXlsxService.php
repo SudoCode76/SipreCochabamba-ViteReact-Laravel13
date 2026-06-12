@@ -2,12 +2,8 @@
 
 namespace App\Modules\Projects\Services;
 
-use App\Models\FndrCalculationPercentage;
-use App\Models\FpsCalculationPercentage;
-use App\Models\GeneralCalculationPercentage;
-use App\Models\ObrasCalculationPercentage;
 use App\Models\Project;
-use App\Models\UpreCalculationPercentage;
+use App\Models\ProjectPercentageSnapshot;
 use App\Support\Xlsx\SimpleXlsxResponse;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Response;
@@ -38,7 +34,7 @@ class ProjectBudgetXlsxService
 
     public function incidenceSummary(Project $project, string $format): Response
     {
-        $percentages = $this->resolvePercentages($format);
+        $percentages = $this->resolvePercentages($project, $format);
         $budget = $this->projectBudgetService->budgetByGroupPdfData($project);
         $rows = [
             ['Proyecto', $project->nombre_proyecto],
@@ -253,18 +249,14 @@ class ProjectBudgetXlsxService
         ]]);
     }
 
-    private function resolvePercentages(string $format): array
+    private function resolvePercentages(Project $project, string $format): array
     {
-        $model = match ($format) {
-            'PC_FPS' => FpsCalculationPercentage::class,
-            'PC_UPRE' => UpreCalculationPercentage::class,
-            'PC_FNDR' => FndrCalculationPercentage::class,
-            'PC_OBRAS' => ObrasCalculationPercentage::class,
-            default => GeneralCalculationPercentage::class,
-        };
-
         $resolved = [];
-        foreach ($model::query()->active()->get() as $row) {
+        foreach (ProjectPercentageSnapshot::query()
+            ->where('id_proyecto', $project->id_proyecto)
+            ->where('formato', strtoupper($format))
+            ->where('estado', 'AC')
+            ->get() as $row) {
             $description = mb_strtoupper((string) $row->descripcion);
             if (str_contains($description, 'CARGAS SOCIALES')) {
                 $resolved['cs'] = (float) $row->porcentaje;

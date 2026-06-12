@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { downloadUrl, openPdfViewer } from "@/lib/utils/pdf";
 import ProjectEditForm from "../components/ProjectEditForm";
+import { getProjectApprovalLabel, PROJECT_APPROVAL_LABELS } from "../lib/project-status";
 import { projectService } from "../services/project.service";
 
 const statusClass = {
@@ -84,9 +85,7 @@ const historyFieldLabels = {
 const historyStatusLabels = {
   AC: "Activo",
   DC: "Inactivo",
-  PD: "Pendiente",
-  RV: "Revisado",
-  AP: "Aprobado",
+  ...PROJECT_APPROVAL_LABELS,
   1: "Material",
   2: "Mano de obra",
   3: "Maquinaria y herramientas",
@@ -126,6 +125,34 @@ const metadataRow = (label, value) => (
 );
 
 const itemLabel = (item) => `Item #${item?.id_item || "-"}`;
+
+const getReportVersionDate = (version) => version?.version_created_at || version?.fecha || version?.created_at;
+
+const getDefaultReportVersion = (versions, fallbackProject) => {
+  if (!versions?.length) {
+    return fallbackProject;
+  }
+
+  const currentVersion = versions.find((version) => Boolean(version.is_current_version));
+  if (currentVersion) {
+    return currentVersion;
+  }
+
+  return [...versions].sort((first, second) => Number(second.version_number || 1) - Number(first.version_number || 1))[0] || fallbackProject;
+};
+
+const formatReportVersionLabel = (version) => {
+  if (!version) {
+    return "Version no disponible";
+  }
+
+  const statusLabel = getProjectApprovalLabel(version.aprobado);
+  const date = getReportVersionDate(version);
+  const dateLabel = date ? formatDate(date) : "sin fecha";
+  const currentLabel = version.is_current_version ? " · vigente" : "";
+
+  return `Version ${version.version_number || 1} · ${dateLabel} · ${statusLabel}${currentLabel}`;
+};
 
 const renderChangedFields = (changes) => {
   const entries = Object.entries(changes || {});
@@ -267,6 +294,8 @@ export default function ProjectsPage() {
   const [feedback, setFeedback] = useState(null);
   const [exportChoice, setExportChoice] = useState(null);
   const [reportWarning, setReportWarning] = useState(null);
+  const [reportVersionProject, setReportVersionProject] = useState(null);
+  const [selectedReportProjectId, setSelectedReportProjectId] = useState("");
   const deferredSearch = useDeferredValue(search.trim());
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
@@ -305,6 +334,25 @@ export default function ProjectsPage() {
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
   const historyProjectId = historyProject?.id_proyecto;
+  const reportVersionProjectId = reportVersionProject?.id_proyecto;
+  const shouldLoadReportVersions = Boolean(reportVersionProjectId) && Number(reportVersionProject?.version_count || 1) > 1;
+
+  const {
+    data: reportVersionsData,
+    isLoading: reportVersionsLoading,
+  } = useQuery({
+    queryKey: ["project-versions", reportVersionProjectId],
+    queryFn: () => projectService.versions(reportVersionProjectId),
+    enabled: shouldLoadReportVersions,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const reportVersions = shouldLoadReportVersions
+    ? (reportVersionsData?.data?.items ?? (reportVersionProject ? [reportVersionProject] : []))
+    : (reportVersionProject ? [reportVersionProject] : []);
+  const selectedReportProject = reportVersions.find((version) => String(version.id_proyecto) === String(selectedReportProjectId))
+    || getDefaultReportVersion(reportVersions, reportVersionProject);
+  const resolvedReportProjectId = selectedReportProject?.id_proyecto || selectedReportProjectId || reportVersionProject?.id_proyecto;
 
   const {
     data: historyData,
@@ -422,6 +470,51 @@ export default function ProjectsPage() {
     setTemplatePending(false);
   };
 
+  const openReportVersionScope = (project) => {
+    setReportVersionProject(project);
+    setSelectedReportProjectId(project?.id_proyecto ? String(project.id_proyecto) : "");
+  };
+
+  const closeReportVersionScope = () => {
+    setReportVersionProject(null);
+    setSelectedReportProjectId("");
+  };
+
+  const renderReportVersionSelector = () => {
+    if (!shouldLoadReportVersions) {
+      return null;
+    }
+
+    return (
+      <div className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-muted/20 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="report-project-version" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            Version para el reporte
+          </Label>
+          {reportVersionsLoading && (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              Cargando
+            </span>
+          )}
+        </div>
+        <select
+          id="report-project-version"
+          value={String(selectedReportProject?.id_proyecto || selectedReportProjectId || "")}
+          onChange={(event) => setSelectedReportProjectId(event.target.value)}
+          className="h-11 rounded-xl border border-border/80 bg-background px-3 text-sm"
+          disabled={reportVersionsLoading && reportVersions.length <= 1}
+        >
+          {reportVersions.map((version) => (
+            <option key={version.id_proyecto} value={version.id_proyecto}>
+              {formatReportVersionLabel(version)}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  };
+
   const handleTemplateSubmit = async (event) => {
     event.preventDefault();
 
@@ -454,6 +547,7 @@ export default function ProjectsPage() {
   };
 
   const openRecalculate = (project) => {
+    openReportVersionScope(project);
     setRecalculateProject(project);
     setRecalculateDate("");
     setRecalculateStatus(null);
@@ -466,11 +560,12 @@ export default function ProjectsPage() {
     setRecalculateDate("");
     setRecalculateStatus(null);
     setRecalculatePending(false);
+    closeReportVersionScope();
   };
 
   const handleRecalculateSubmit = async (event) => {
     event.preventDefault();
-    if (!recalculateProject?.id_proyecto || !recalculateDate) {
+    if (!recalculateProject?.id_proyecto || !recalculateDate || !resolvedReportProjectId) {
       return;
     }
 
@@ -478,8 +573,8 @@ export default function ProjectsPage() {
     setRecalculatePending(true);
 
     try {
-      await runWithReportWarning(recalculateProject.id_proyecto, () => {
-        openPdfViewer(projectService.budgetRecalculationPdfUrl(recalculateProject.id_proyecto, recalculateDate), {
+      await runWithReportWarning(resolvedReportProjectId, () => {
+        openPdfViewer(projectService.budgetRecalculationPdfUrl(resolvedReportProjectId, recalculateDate), {
           title: "Presupuesto recalculado del proyecto",
           errorMessage: "No se pudo generar el presupuesto recalculado del proyecto.",
         });
@@ -498,15 +593,16 @@ export default function ProjectsPage() {
   };
 
   const handleRecalculateXlsx = async () => {
-    if (!recalculateProject?.id_proyecto || !recalculateDate) return;
-    await runWithReportWarning(recalculateProject.id_proyecto, () => {
-      downloadUrl(projectService.budgetRecalculationXlsxUrl(recalculateProject.id_proyecto, recalculateDate));
+    if (!recalculateProject?.id_proyecto || !recalculateDate || !resolvedReportProjectId) return;
+    await runWithReportWarning(resolvedReportProjectId, () => {
+      downloadUrl(projectService.budgetRecalculationXlsxUrl(resolvedReportProjectId, recalculateDate));
       closeRecalculate();
     });
   };
 
   const closeExportChoice = () => {
     setExportChoice(null);
+    closeReportVersionScope();
   };
 
   const warningSummaryHasWarnings = (warnings) => Boolean(warnings?.summary?.has_warnings);
@@ -549,12 +645,13 @@ export default function ProjectsPage() {
   const openBudgetByGroupExport = (project) => {
     if (!project?.id_proyecto) return;
     setFeedback(null);
+    openReportVersionScope(project);
     setExportChoice({
       title: "Presupuesto por rubros",
       description: project.nombre_proyecto,
       projectId: project.id_proyecto,
-      pdfUrl: projectService.budgetByGroupPdfUrl(project.id_proyecto),
-      xlsxUrl: projectService.budgetByGroupXlsxUrl(project.id_proyecto),
+      pdfUrlBuilder: projectService.budgetByGroupPdfUrl,
+      xlsxUrlBuilder: projectService.budgetByGroupXlsxUrl,
       errorMessage: "No se pudo generar el presupuesto por rubros.",
     });
   };
@@ -562,12 +659,13 @@ export default function ProjectsPage() {
   const openInputsReportExport = (project) => {
     if (!project?.id_proyecto) return;
     setFeedback(null);
+    openReportVersionScope(project);
     setExportChoice({
       title: "Reporte de insumos del proyecto",
       description: project.nombre_proyecto,
       projectId: project.id_proyecto,
-      pdfUrl: projectService.inputsReportPdfUrl(project.id_proyecto),
-      xlsxUrl: projectService.inputsReportXlsxUrl(project.id_proyecto),
+      pdfUrlBuilder: projectService.inputsReportPdfUrl,
+      xlsxUrlBuilder: projectService.inputsReportXlsxUrl,
       errorMessage: "No se pudo generar el reporte de insumos del proyecto.",
     });
   };
@@ -575,22 +673,23 @@ export default function ProjectsPage() {
   const openGroupedInputsReportExport = (project) => {
     if (!project?.id_proyecto) return;
     setFeedback(null);
+    openReportVersionScope(project);
     setExportChoice({
       title: "Proyecto agrupado por insumos",
       description: project.nombre_proyecto,
       projectId: project.id_proyecto,
-      pdfUrl: projectService.groupedInputsReportPdfUrl(project.id_proyecto),
-      xlsxUrl: projectService.groupedInputsReportXlsxUrl(project.id_proyecto),
+      pdfUrlBuilder: projectService.groupedInputsReportPdfUrl,
+      xlsxUrlBuilder: projectService.groupedInputsReportXlsxUrl,
       errorMessage: "No se pudo generar el reporte de proyecto agrupado por insumos.",
     });
   };
 
   const handleExportChoicePdf = async () => {
-    if (!exportChoice?.pdfUrl) return;
+    if (!exportChoice?.pdfUrlBuilder || !resolvedReportProjectId) return;
 
     try {
-      await runWithReportWarning(exportChoice.projectId, () => {
-        openPdfViewer(exportChoice.pdfUrl, {
+      await runWithReportWarning(resolvedReportProjectId, () => {
+        openPdfViewer(exportChoice.pdfUrlBuilder(resolvedReportProjectId), {
           title: exportChoice.title,
           errorMessage: exportChoice.errorMessage,
         });
@@ -605,14 +704,15 @@ export default function ProjectsPage() {
   };
 
   const handleExportChoiceXlsx = async () => {
-    if (!exportChoice?.xlsxUrl) return;
-    await runWithReportWarning(exportChoice.projectId, () => {
-      downloadUrl(exportChoice.xlsxUrl);
+    if (!exportChoice?.xlsxUrlBuilder || !resolvedReportProjectId) return;
+    await runWithReportWarning(resolvedReportProjectId, () => {
+      downloadUrl(exportChoice.xlsxUrlBuilder(resolvedReportProjectId));
       closeExportChoice();
     });
   };
 
   const openIncidenceSummary = (project) => {
+    openReportVersionScope(project);
     setIncidenceProject(project);
     setIncidenceFormat("PCA");
     setIncidenceStatus(null);
@@ -624,20 +724,21 @@ export default function ProjectsPage() {
     setIncidenceProject(null);
     setIncidenceFormat("PCA");
     setIncidenceStatus(null);
+    closeReportVersionScope();
   };
 
   const handleIncidenceSummarySubmit = async (event) => {
     event.preventDefault();
 
-    if (!incidenceProject?.id_proyecto) {
+    if (!incidenceProject?.id_proyecto || !resolvedReportProjectId) {
       return;
     }
 
     setIncidenceStatus(null);
 
     try {
-      await runWithReportWarning(incidenceProject.id_proyecto, () => {
-        openPdfViewer(projectService.incidenceSummaryPdfUrl(incidenceProject.id_proyecto, incidenceFormat), {
+      await runWithReportWarning(resolvedReportProjectId, () => {
+        openPdfViewer(projectService.incidenceSummaryPdfUrl(resolvedReportProjectId, incidenceFormat), {
           title: "Resumen por incidencia",
           errorMessage: "No se pudo generar el resumen por incidencia.",
         });
@@ -652,14 +753,15 @@ export default function ProjectsPage() {
   };
 
   const handleIncidenceSummaryXlsx = async () => {
-    if (!incidenceProject?.id_proyecto) return;
-    await runWithReportWarning(incidenceProject.id_proyecto, () => {
-      downloadUrl(projectService.incidenceSummaryXlsxUrl(incidenceProject.id_proyecto, incidenceFormat));
+    if (!incidenceProject?.id_proyecto || !resolvedReportProjectId) return;
+    await runWithReportWarning(resolvedReportProjectId, () => {
+      downloadUrl(projectService.incidenceSummaryXlsxUrl(resolvedReportProjectId, incidenceFormat));
       closeIncidenceSummary();
     });
   };
 
   const openGeneralBudget = (project) => {
+    openReportVersionScope(project);
     setGeneralBudgetProject(project);
     setGeneralBudgetFormat("PCA");
     setGeneralBudgetStatus(null);
@@ -671,20 +773,21 @@ export default function ProjectsPage() {
     setGeneralBudgetProject(null);
     setGeneralBudgetFormat("PCA");
     setGeneralBudgetStatus(null);
+    closeReportVersionScope();
   };
 
   const handleGeneralBudgetSubmit = async (event) => {
     event.preventDefault();
 
-    if (!generalBudgetProject?.id_proyecto) {
+    if (!generalBudgetProject?.id_proyecto || !resolvedReportProjectId) {
       return;
     }
 
     setGeneralBudgetStatus(null);
 
     try {
-      await runWithReportWarning(generalBudgetProject.id_proyecto, () => {
-        openPdfViewer(projectService.generalBudgetPdfUrl(generalBudgetProject.id_proyecto, generalBudgetFormat), {
+      await runWithReportWarning(resolvedReportProjectId, () => {
+        openPdfViewer(projectService.generalBudgetPdfUrl(resolvedReportProjectId, generalBudgetFormat), {
           title: "Presupuesto general",
           errorMessage: "No se pudo generar el presupuesto general.",
         });
@@ -699,14 +802,15 @@ export default function ProjectsPage() {
   };
 
   const handleGeneralBudgetXlsx = async () => {
-    if (!generalBudgetProject?.id_proyecto) return;
-    await runWithReportWarning(generalBudgetProject.id_proyecto, () => {
-      downloadUrl(projectService.generalBudgetXlsxUrl(generalBudgetProject.id_proyecto, generalBudgetFormat));
+    if (!generalBudgetProject?.id_proyecto || !resolvedReportProjectId) return;
+    await runWithReportWarning(resolvedReportProjectId, () => {
+      downloadUrl(projectService.generalBudgetXlsxUrl(resolvedReportProjectId, generalBudgetFormat));
       closeGeneralBudget();
     });
   };
 
   const openInputBreakdown = (project) => {
+    openReportVersionScope(project);
     setInputBreakdownProject(project);
     setInputBreakdownType("1");
     setInputBreakdownStatus(null);
@@ -718,20 +822,21 @@ export default function ProjectsPage() {
     setInputBreakdownProject(null);
     setInputBreakdownType("1");
     setInputBreakdownStatus(null);
+    closeReportVersionScope();
   };
 
   const handleInputBreakdownSubmit = async (event) => {
     event.preventDefault();
 
-    if (!inputBreakdownProject?.id_proyecto) {
+    if (!inputBreakdownProject?.id_proyecto || !resolvedReportProjectId) {
       return;
     }
 
     setInputBreakdownStatus(null);
 
     try {
-      await runWithReportWarning(inputBreakdownProject.id_proyecto, () => {
-        openPdfViewer(projectService.inputBreakdownPdfUrl(inputBreakdownProject.id_proyecto, inputBreakdownType), {
+      await runWithReportWarning(resolvedReportProjectId, () => {
+        openPdfViewer(projectService.inputBreakdownPdfUrl(resolvedReportProjectId, inputBreakdownType), {
           title: "Desglose de insumos del proyecto",
           errorMessage: "No se pudo generar el desglose de insumos del proyecto.",
         });
@@ -746,9 +851,9 @@ export default function ProjectsPage() {
   };
 
   const handleInputBreakdownXlsx = async () => {
-    if (!inputBreakdownProject?.id_proyecto) return;
-    await runWithReportWarning(inputBreakdownProject.id_proyecto, () => {
-      downloadUrl(projectService.inputBreakdownXlsxUrl(inputBreakdownProject.id_proyecto, inputBreakdownType));
+    if (!inputBreakdownProject?.id_proyecto || !resolvedReportProjectId) return;
+    await runWithReportWarning(resolvedReportProjectId, () => {
+      downloadUrl(projectService.inputBreakdownXlsxUrl(resolvedReportProjectId, inputBreakdownType));
       closeInputBreakdown();
     });
   };
@@ -894,6 +999,12 @@ export default function ProjectsPage() {
                             {formatProjectNameLines(project.nombre_proyecto).map((line, lineIndex) => (
                               <div key={`${project.id_proyecto}-name-line-${lineIndex}`}>{line}</div>
                             ))}
+                          </div>
+                          <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                            <span className="rounded-full border border-border/80 bg-muted/40 px-2 py-0.5 font-semibold">
+                              V{project.version_number || 1}
+                            </span>
+                            {(project.version_count || 1) > 1 && <span>{project.version_count} versiones</span>}
                           </div>
                         </td>
                         <td className="px-2 py-3 align-top text-muted-foreground">
@@ -1084,15 +1195,19 @@ export default function ProjectsPage() {
               </div>
             </CardHeader>
 
-            <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
-              <Button type="button" variant="outline" className="h-12 gap-2 rounded-xl" onClick={handleExportChoicePdf}>
-                <FileSpreadsheet className="h-4 w-4" />
-                Generar PDF
-              </Button>
-              <Button type="button" className="h-12 gap-2 rounded-xl" onClick={handleExportChoiceXlsx}>
-                <FileDown className="h-4 w-4" />
-                Exportar XLSX
-              </Button>
+            <CardContent className="space-y-4 p-5">
+              {renderReportVersionSelector()}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Button type="button" variant="outline" className="h-12 gap-2 rounded-xl" onClick={handleExportChoicePdf}>
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Generar PDF
+                </Button>
+                <Button type="button" className="h-12 gap-2 rounded-xl" onClick={handleExportChoiceXlsx}>
+                  <FileDown className="h-4 w-4" />
+                  Exportar XLSX
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>,
@@ -1435,6 +1550,8 @@ export default function ProjectsPage() {
                 )}
 
                 <form className="flex flex-col gap-5" onSubmit={handleRecalculateSubmit}>
+                  {renderReportVersionSelector()}
+
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="project_recalculate" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Proyecto</Label>
                     <Input
@@ -1506,6 +1623,8 @@ export default function ProjectsPage() {
                     </Alert>
                   )}
 
+                  {renderReportVersionSelector()}
+
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="incidence-format">Formato</Label>
                     <select
@@ -1559,6 +1678,8 @@ export default function ProjectsPage() {
                       <AlertDescription>{generalBudgetStatus.message}</AlertDescription>
                     </Alert>
                   )}
+
+                  {renderReportVersionSelector()}
 
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="general-budget-format">Formato</Label>
@@ -1616,6 +1737,8 @@ export default function ProjectsPage() {
                       <AlertDescription>{inputBreakdownStatus.message}</AlertDescription>
                     </Alert>
                   )}
+
+                  {renderReportVersionSelector()}
 
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="input-breakdown-type">Tipo</Label>

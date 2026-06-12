@@ -4,7 +4,6 @@ namespace App\Http\Requests\Project;
 
 use App\Models\Project;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdateProjectRequest extends FormRequest
 {
@@ -35,7 +34,7 @@ class UpdateProjectRequest extends FormRequest
         $project = $this->route('project');
 
         return [
-            'nombre_proyecto' => ['required', 'string', 'max:500', Rule::unique('proyecto', 'nombre_proyecto')->ignore($project->id_proyecto, 'id_proyecto')],
+            'nombre_proyecto' => ['required', 'string', 'max:500'],
             'fecha' => ['required', 'date'],
             'ubicacion' => ['required', 'string', 'max:100'],
             'latitud' => ['nullable', 'string', 'max:50'],

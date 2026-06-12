@@ -38,6 +38,12 @@ class Project extends Model
         'distrito',
         'zona',
         'otb',
+        'id_proyecto_raiz',
+        'id_version_origen',
+        'numero_version',
+        'es_version_actual',
+        'fecha_version',
+        'fecha_finalizacion',
     ];
 
     protected function casts(): array
@@ -49,6 +55,12 @@ class Project extends Model
             'id_usuario' => 'integer',
             'precio' => 'float',
             'es_plantilla' => 'boolean',
+            'id_proyecto_raiz' => 'integer',
+            'id_version_origen' => 'integer',
+            'numero_version' => 'integer',
+            'es_version_actual' => 'boolean',
+            'fecha_version' => 'datetime',
+            'fecha_finalizacion' => 'datetime',
         ];
     }
 
@@ -70,6 +82,26 @@ class Project extends Model
     public function history(): HasMany
     {
         return $this->hasMany(ProjectHistory::class, 'id_proyecto', 'id_proyecto');
+    }
+
+    public function versions(): HasMany
+    {
+        return $this->hasMany(self::class, 'id_proyecto_raiz', 'id_proyecto_raiz');
+    }
+
+    public function percentageSnapshots(): HasMany
+    {
+        return $this->hasMany(ProjectPercentageSnapshot::class, 'id_proyecto', 'id_proyecto');
+    }
+
+    public function isFrozen(): bool
+    {
+        return strtoupper((string) $this->aprobado) === 'RV';
+    }
+
+    public function isCurrentVersion(): bool
+    {
+        return (bool) $this->es_version_actual;
     }
 
     public function scopeActive(Builder $query): Builder

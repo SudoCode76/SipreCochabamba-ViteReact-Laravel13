@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, MapPin, Save } from "lucide-react";
+import { History, Loader2, Lock, MapPin, RefreshCw, Save } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { getProjectApprovalLabel } from "../lib/project-status";
 import { projectService } from "../services/project.service";
 
 const emptyForm = {
@@ -81,22 +82,33 @@ function ensureSelectedOption(options, value, label) {
 
 export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
   const queryClient = useQueryClient();
+  const [selectedProjectId, setSelectedProjectId] = useState(projectId);
   const [draftFormData, setFormData] = useState(null);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [versioning, setVersioning] = useState(false);
 
   const { data: contextData, isLoading: contextLoading } = useQuery({
     queryKey: ["project-context"],
     queryFn: projectService.context,
   });
 
-  const { data: projectData, isLoading: projectLoading, isError: projectError } = useQuery({
-    queryKey: ["project", projectId],
-    queryFn: () => projectService.show(projectId),
+  const { data: versionsData, isLoading: versionsLoading } = useQuery({
+    queryKey: ["project-versions", projectId],
+    queryFn: () => projectService.versions(projectId),
     enabled: Boolean(projectId),
   });
 
+  const { data: projectData, isLoading: projectLoading, isError: projectError } = useQuery({
+    queryKey: ["project", selectedProjectId],
+    queryFn: () => projectService.show(selectedProjectId),
+    enabled: Boolean(selectedProjectId),
+  });
+
   const project = projectData?.data?.project;
+  const versions = versionsData?.data?.items ?? [];
+  const isReadOnly = Boolean(project && (!project.is_current_version || project.is_frozen));
+
   const initialFormData = useMemo(() => {
     if (!project) {
       return emptyForm;
@@ -131,7 +143,17 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
     project?.solicitante_nombre,
   );
   const statuses = contextData?.data?.statuses ?? [];
-  const conditions = contextData?.data?.conditions ?? [];
+  const conditions = (contextData?.data?.conditions ?? []).filter((condition) => {
+    if (project?.aprobado === "PD") {
+      return ["PD", "RV"].includes(condition.code);
+    }
+
+    if (project?.aprobado === "AP") {
+      return ["AP", "RV"].includes(condition.code);
+    }
+
+    return condition.code === "RV";
+  });
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...(prev ?? formData), [field]: value }));
@@ -143,7 +165,16 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
     setSaving(true);
 
     try {
-      const response = await projectService.update(projectId, {
+      if (formData.aprobado === "RV") {
+        const confirmed = window.confirm("Al finalizar, esta versión quedará congelada y ya no podrá editarse. ¿Desea continuar?");
+
+        if (!confirmed) {
+          setSaving(false);
+          return;
+        }
+      }
+
+      const response = await projectService.update(selectedProjectId, {
         ...formData,
         observaciones: formData.observaciones?.trim() || null,
       });
@@ -172,7 +203,8 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
         };
       });
 
-      queryClient.setQueryData(["project", projectId], response);
+      queryClient.setQueryData(["project", selectedProjectId], response);
+      queryClient.invalidateQueries({ queryKey: ["project-versions", projectId] });
       onSuccess?.();
     } catch (err) {
       const fieldErrors = err.response?.data?.errors;
@@ -183,7 +215,37 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
     }
   };
 
-  if (contextLoading || projectLoading) {
+  const handleCreateUpdatedVersion = async () => {
+    const confirmed = window.confirm("Se creará una nueva versión ACTUALIZADA desde esta versión FINALIZADA. La anterior permanecerá congelada. ¿Desea continuar?");
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError(null);
+    setVersioning(true);
+
+    try {
+      const response = await projectService.createUpdatedVersion(selectedProjectId);
+      const nextProject = response?.data?.project;
+
+      await queryClient.invalidateQueries({ queryKey: ["project-versions", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+
+      if (nextProject?.id_proyecto) {
+        queryClient.setQueryData(["project", nextProject.id_proyecto], response);
+        setSelectedProjectId(nextProject.id_proyecto);
+      }
+    } catch (err) {
+      const fieldErrors = err.response?.data?.errors;
+      const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
+      setError(firstFieldError || err.response?.data?.message || "No se pudo crear la nueva versión.");
+    } finally {
+      setVersioning(false);
+    }
+  };
+
+  if (contextLoading || projectLoading || versionsLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="size-5 animate-spin" />
@@ -207,6 +269,57 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
         </div>
       )}
 
+      <div className="grid gap-4 rounded-2xl border border-border/70 bg-muted/30 p-4 sm:grid-cols-[1fr_auto] sm:items-end">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="project-version" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            Versión del proyecto
+          </Label>
+          <select
+            id="project-version"
+            value={selectedProjectId}
+            onChange={(event) => {
+              setSelectedProjectId(Number(event.target.value));
+              setFormData(null);
+              setError(null);
+            }}
+            className="h-12 w-full rounded-2xl border border-border/80 bg-background px-3 text-sm"
+          >
+            {versions.map((version) => (
+              <option key={version.id_proyecto} value={version.id_proyecto}>
+                Versión {version.version_number} · {version.version_created_at ? new Date(version.version_created_at).toLocaleDateString("es-BO") : version.fecha} · {getProjectApprovalLabel(version.aprobado)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <History className="size-4" />
+          {versions.length} versión(es)
+        </div>
+        <a
+          href={`/Proyecto/${selectedProjectId}/items`}
+          className="w-fit text-sm font-semibold text-sky-700 underline underline-offset-4 sm:col-span-2"
+        >
+          Ver ítems y reportes de esta versión
+        </a>
+      </div>
+
+      {project?.aprobado === "AP" && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          Esta versión proviene de un proyecto finalizado. Sus precios, composiciones y porcentajes continuarán sincronizándose hasta que vuelva a finalizarse.
+        </div>
+      )}
+
+      {isReadOnly && (
+        <div className="flex items-start gap-3 rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-800">
+          <Lock className="mt-0.5 size-4 shrink-0" />
+          <div>
+            <p className="font-semibold">Versión congelada de solo lectura</p>
+            <p>Puede consultarla y generar reportes, pero sus datos e ítems ya no pueden modificarse.</p>
+          </div>
+        </div>
+      )}
+
+      <fieldset disabled={isReadOnly} className="flex flex-col gap-5 disabled:opacity-75">
       <section className="flex flex-col gap-5">
         <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
           Ubicación
@@ -303,6 +416,7 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
         <Label htmlFor="observaciones" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Observación</Label>
         <textarea id="observaciones" value={formData.observaciones} onChange={(e) => handleChange("observaciones", e.target.value)} className="min-h-28 w-full rounded-2xl border border-border/80 bg-background/90 px-3 py-3 text-sm" />
       </div>
+      </fieldset>
 
       <Separator className="bg-border/70" />
 
@@ -310,6 +424,13 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
         <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={onCancel}>
           Cancelar
         </Button>
+        {project?.is_current_version && project?.is_frozen && (
+          <Button type="button" className="rounded-full bg-sky-700 text-white hover:bg-sky-600" onClick={handleCreateUpdatedVersion} disabled={versioning}>
+            {versioning ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
+            Crear versión actualizada
+          </Button>
+        )}
+        {!isReadOnly && (
         <Button type="submit" className="rounded-full bg-foreground text-background hover:bg-foreground/90" disabled={saving}>
           {saving ? (
             <>
@@ -323,6 +444,7 @@ export default function ProjectEditForm({ projectId, onCancel, onSuccess }) {
             </>
           )}
         </Button>
+        )}
       </div>
     </form>
   );

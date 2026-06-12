@@ -29,6 +29,11 @@ class ProjectItem extends Model
         'precio',
         'id_usuario',
         'prioridad',
+        'nombre_snapshot',
+        'grupo_snapshot',
+        'subgrupo_snapshot',
+        'unidad_snapshot',
+        'estado_catalogo_snapshot',
     ];
 
     protected function casts(): array

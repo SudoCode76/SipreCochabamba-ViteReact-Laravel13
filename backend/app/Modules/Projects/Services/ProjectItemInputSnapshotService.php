@@ -4,19 +4,40 @@ namespace App\Modules\Projects\Services;
 
 use App\Models\Project;
 use App\Models\ProjectItem;
+use App\Models\ProjectItemInputSnapshot;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ProjectItemInputSnapshotService
 {
+    public function __construct(
+        private readonly ProjectPercentageSnapshotService $percentageSnapshotService,
+        private readonly ProjectSnapshotAnalysisService $analysisService,
+    ) {}
+
     public function syncForProjectItem(ProjectItem $projectItem): void
     {
-        DB::table('proyecto_item_insumo_snapshot')
-            ->where('id_proyecto_item', $projectItem->id_proyecto_item)
-            ->delete();
+        $projectItem->loadMissing(['item.groupCatalog', 'item.subgroupCatalog', 'item.unitMeasure']);
+        $item = $projectItem->item;
 
-        if (! $projectItem->id_item) {
+        if (! $projectItem->id_item || ! $item) {
+            $projectItem->update(['estado_catalogo_snapshot' => 'NO_DISPONIBLE']);
+            ProjectItemInputSnapshot::query()
+                ->where('id_proyecto_item', $projectItem->id_proyecto_item)
+                ->where('estado', '<>', 'EX')
+                ->update(['estado' => 'DP']);
+
             return;
         }
+
+        $projectItem->update([
+            'nombre_snapshot' => $item->item,
+            'grupo_snapshot' => $item->groupCatalog?->nombre_grupo,
+            'subgrupo_snapshot' => $item->subgroupCatalog?->descripcion,
+            'unidad_snapshot' => $item->unitMeasure?->abreviatura,
+            'estado_catalogo_snapshot' => $item->estado,
+        ]);
 
         $rows = DB::table('item_insumo')
             ->leftJoin('insumo', 'insumo.id_insumo', '=', 'item_insumo.id_insumo')
@@ -25,52 +46,137 @@ class ProjectItemInputSnapshotService
             ->where('item_insumo.estado', 'AC')
             ->orderBy('item_insumo.id_item_insumo')
             ->get([
+                'item_insumo.id_item_insumo',
                 'item_insumo.id_insumo',
                 'item_insumo.cantidad',
                 'insumo.descripcion',
                 'insumo.tipo',
                 'insumo.precio',
+                'insumo.estado as insumo_estado',
                 'unidad_medida.abreviatura',
             ]);
 
         $now = now();
-        $payload = $rows->map(function ($row) use ($projectItem, $now): array {
+        $seenSourceIds = [];
+
+        foreach ($rows as $row) {
+            $sourceId = (int) $row->id_item_insumo;
+            $seenSourceIds[] = $sourceId;
             $quantity = round((float) $row->cantidad, 4);
             $unitPrice = round((float) $row->precio, 4);
+            $snapshot = ProjectItemInputSnapshot::query()
+                ->where('id_proyecto_item', $projectItem->id_proyecto_item)
+                ->where('id_item_insumo_origen', $sourceId)
+                ->first();
 
-            return [
-                'id_proyecto_item' => $projectItem->id_proyecto_item,
-                'id_insumo' => $row->id_insumo !== null ? (int) $row->id_insumo : null,
-                'descripcion' => (string) ($row->descripcion ?? 'Insumo no disponible'),
-                'tipo' => $row->tipo !== null ? (int) $row->tipo : null,
-                'unidad' => $row->abreviatura,
+            $catalogStatus = $row->id_insumo === null ? 'DP' : strtoupper((string) ($row->insumo_estado ?? 'DP'));
+            $status = $snapshot?->estado === 'EX' ? 'EX' : ($catalogStatus === 'AC' ? 'AC' : $catalogStatus);
+            $payload = [
+                'id_insumo' => $row->id_insumo !== null ? (int) $row->id_insumo : $snapshot?->id_insumo,
+                'descripcion' => (string) ($row->descripcion ?? $snapshot?->descripcion ?? 'Insumo no disponible'),
+                'tipo' => $row->tipo !== null ? (int) $row->tipo : $snapshot?->tipo,
+                'unidad' => $row->abreviatura ?? $snapshot?->unidad,
                 'cantidad' => $quantity,
-                'precio_unitario' => $unitPrice,
-                'parcial' => round($quantity * $unitPrice, 4),
-                'estado' => 'AC',
-                'created_at' => $now,
-                'updated_at' => $now,
+                'estado' => $status,
             ];
-        })->all();
 
-        if ($payload !== []) {
-            DB::table('proyecto_item_insumo_snapshot')->insert($payload);
+            if ($catalogStatus === 'AC' || ! $snapshot) {
+                $payload['precio_unitario'] = $unitPrice;
+                $payload['parcial'] = round($quantity * $unitPrice, 4);
+            }
+
+            if ($snapshot) {
+                $snapshot->update($payload);
+            } else {
+                ProjectItemInputSnapshot::query()->create(array_merge($payload, [
+                    'id_proyecto_item' => $projectItem->id_proyecto_item,
+                    'id_item_insumo_origen' => $sourceId,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]));
+            }
         }
+
+        ProjectItemInputSnapshot::query()
+            ->where('id_proyecto_item', $projectItem->id_proyecto_item)
+            ->where('estado', '<>', 'EX')
+            ->when($seenSourceIds !== [], fn ($query) => $query->whereNotIn('id_item_insumo_origen', $seenSourceIds))
+            ->when($seenSourceIds === [], fn ($query) => $query)
+            ->update(['estado' => 'DP']);
     }
 
     public function ensureForProject(Project $project): void
     {
-        ProjectItem::query()
+        $this->percentageSnapshotService->ensure($project);
+
+        $items = ProjectItem::query()
             ->where('id_proyecto', $project->id_proyecto)
             ->where('estado', 'AC')
             ->whereNotNull('id_item')
-            ->whereNotExists(function ($query): void {
-                $query->selectRaw('1')
-                    ->from('proyecto_item_insumo_snapshot')
-                    ->whereColumn('proyecto_item_insumo_snapshot.id_proyecto_item', 'proyecto_item.id_proyecto_item');
-            })
-            ->get()
+            ->get();
+
+        if (! $project->isFrozen()) {
+            $this->percentageSnapshotService->synchronize($project);
+            $items->each(fn (ProjectItem $projectItem) => $this->syncForProjectItem($projectItem));
+            $this->recalculateProject($project, $items);
+
+            return;
+        }
+
+        $items
+            ->filter(fn (ProjectItem $projectItem): bool => ! ProjectItemInputSnapshot::query()
+                ->where('id_proyecto_item', $projectItem->id_proyecto_item)
+                ->exists())
             ->each(fn (ProjectItem $projectItem) => $this->syncForProjectItem($projectItem));
+    }
+
+    public function exclude(Project $project, ProjectItemInputSnapshot $snapshot, User $user): ProjectItemInputSnapshot
+    {
+        if ($project->isFrozen() || ! $project->isCurrentVersion()) {
+            throw ValidationException::withMessages([
+                'version' => ['La versión seleccionada está congelada y no puede modificarse.'],
+            ]);
+        }
+
+        if ((int) $snapshot->projectItem?->id_proyecto !== (int) $project->id_proyecto) {
+            throw ValidationException::withMessages([
+                'snapshot' => ['El insumo no pertenece a la versión seleccionada.'],
+            ]);
+        }
+
+        $snapshot->update([
+            'estado' => 'EX',
+            'excluido_por' => $user->id_usuario,
+            'excluido_en' => now(),
+        ]);
+
+        $this->recalculateProject($project);
+
+        return $snapshot->refresh();
+    }
+
+    public function recalculateProject(Project $project, ?iterable $items = null): void
+    {
+        $items = collect($items ?? ProjectItem::query()
+            ->where('id_proyecto', $project->id_proyecto)
+            ->where('estado', 'AC')
+            ->whereNotNull('id_item')
+            ->get());
+
+        $total = 0.0;
+
+        foreach ($items as $projectItem) {
+            try {
+                $price = round($this->analysisService->price($projectItem, 'PCA'), 4);
+            } catch (\InvalidArgumentException) {
+                $price = (float) $projectItem->precio;
+            }
+
+            $projectItem->update(['precio' => $price]);
+            $total += $price * (float) $projectItem->cantidad;
+        }
+
+        $project->update(['precio' => round($total, 4)]);
     }
 
     public function warnings(Project $project): array
@@ -93,6 +199,8 @@ class ProjectItemInputSnapshotService
                 'proyecto_item.id_proyecto_item',
                 'proyecto_item.id_item',
                 'proyecto_item.prioridad',
+                'proyecto_item.nombre_snapshot',
+                'proyecto_item.estado_catalogo_snapshot',
                 'item.item as name',
                 'item.estado as status',
                 'modulo.nombre_modulo as module',
@@ -100,9 +208,9 @@ class ProjectItemInputSnapshotService
             ->map(fn ($row): array => [
                 'id_proyecto_item' => (int) $row->id_proyecto_item,
                 'id_item' => $row->id_item !== null ? (int) $row->id_item : null,
-                'name' => $row->name ?? 'Item no disponible',
-                'status' => $row->status ?? 'NO_DISPONIBLE',
-                'status_label' => $this->statusLabel($row->status),
+                'name' => $row->nombre_snapshot ?? $row->name ?? 'Item no disponible',
+                'status' => $row->estado_catalogo_snapshot ?? $row->status ?? 'NO_DISPONIBLE',
+                'status_label' => $this->statusLabel($row->estado_catalogo_snapshot ?? $row->status),
                 'priority' => $row->prioridad !== null ? (int) $row->prioridad : null,
                 'module' => $row->module,
             ])
@@ -114,9 +222,9 @@ class ProjectItemInputSnapshotService
             ->leftJoin('insumo', 'insumo.id_insumo', '=', 'proyecto_item_insumo_snapshot.id_insumo')
             ->where('proyecto_item.id_proyecto', $project->id_proyecto)
             ->where('proyecto_item.estado', 'AC')
-            ->where('proyecto_item_insumo_snapshot.estado', 'AC')
             ->where(function ($query): void {
-                $query->whereNull('insumo.id_insumo')
+                $query->whereIn('proyecto_item_insumo_snapshot.estado', ['DC', 'DP'])
+                    ->orWhereNull('insumo.id_insumo')
                     ->orWhere('insumo.estado', '<>', 'AC');
             })
             ->orderBy('proyecto_item.prioridad')
@@ -128,7 +236,9 @@ class ProjectItemInputSnapshotService
                 'proyecto_item_insumo_snapshot.descripcion',
                 'proyecto_item_insumo_snapshot.tipo',
                 'proyecto_item_insumo_snapshot.unidad',
+                'proyecto_item_insumo_snapshot.estado as snapshot_status',
                 'insumo.estado as status',
+                'proyecto_item.nombre_snapshot as snapshot_item_name',
                 'item.item as item_name',
                 'proyecto_item.prioridad',
             ])
@@ -139,9 +249,9 @@ class ProjectItemInputSnapshotService
                 'description' => $row->descripcion,
                 'type' => $row->tipo !== null ? (int) $row->tipo : null,
                 'unit' => $row->unidad,
-                'status' => $row->status ?? 'NO_DISPONIBLE',
-                'status_label' => $this->statusLabel($row->status),
-                'item_name' => $row->item_name,
+                'status' => $row->snapshot_status ?? $row->status ?? 'NO_DISPONIBLE',
+                'status_label' => $this->statusLabel($row->snapshot_status ?? $row->status),
+                'item_name' => $row->snapshot_item_name ?? $row->item_name,
                 'priority' => $row->prioridad !== null ? (int) $row->prioridad : null,
             ])
             ->values();
@@ -163,6 +273,7 @@ class ProjectItemInputSnapshotService
             'AC' => 'HABILITADO',
             'DC' => 'INHABILITADO',
             'DP' => 'ELIMINADO',
+            'EX' => 'EXCLUIDO DE LA VERSIÓN',
             default => 'NO DISPONIBLE',
         };
     }

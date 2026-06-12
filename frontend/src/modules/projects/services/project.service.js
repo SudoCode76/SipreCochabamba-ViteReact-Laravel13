@@ -29,6 +29,38 @@ export const projectService = {
     return response.data;
   },
 
+  versions: async (projectId) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/versions`);
+    return response.data;
+  },
+
+  createUpdatedVersion: async (projectId) => {
+    const response = await apiClient.post(`/v1/projects/${projectId}/versions`);
+    return response.data;
+  },
+
+  compareVersions: async (projectId, { base, target, format = "PCA" }) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/versions/compare`, {
+      params: { base, target, format },
+    });
+    return response.data;
+  },
+
+  finalizeVersion: async (projectId) => {
+    const response = await apiClient.post(`/v1/projects/${projectId}/finalize`);
+    return response.data;
+  },
+
+  synchronizeVersion: async (projectId) => {
+    const response = await apiClient.post(`/v1/projects/${projectId}/synchronize`);
+    return response.data;
+  },
+
+  excludeVersionInput: async (projectId, snapshotId) => {
+    const response = await apiClient.post(`/v1/projects/${projectId}/input-snapshots/${snapshotId}/exclude`);
+    return response.data;
+  },
+
   history: async (projectId, { page = 1, perPage = 10, action = "", user = "", dateFrom = "", dateTo = "" } = {}) => {
     const response = await apiClient.get(`/v1/projects/${projectId}/history`, {
       params: {

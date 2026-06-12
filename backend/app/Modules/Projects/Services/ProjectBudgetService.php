@@ -15,6 +15,7 @@ class ProjectBudgetService
         private readonly ProjectItemIncidencePriceService $incidencePriceService,
         private readonly ItemPriceAnalysisService $priceAnalysisService,
         private readonly ProjectItemInputSnapshotService $snapshotService,
+        private readonly ProjectSnapshotAnalysisService $snapshotAnalysisService,
     ) {}
 
     public function budgetByGroup(Project $project): array
@@ -23,8 +24,8 @@ class ProjectBudgetService
 
         $rows = $this->activeProjectItems($project)
             ->sortBy([
-                fn (ProjectItem $item) => $item->item?->groupCatalog?->nombre_grupo,
-                fn (ProjectItem $item) => $item->item?->subgroupCatalog?->descripcion,
+                fn (ProjectItem $item) => $item->grupo_snapshot ?? $item->item?->groupCatalog?->nombre_grupo,
+                fn (ProjectItem $item) => $item->subgrupo_snapshot ?? $item->item?->subgroupCatalog?->descripcion,
             ])
             ->values();
 
@@ -44,14 +45,14 @@ class ProjectBudgetService
                 'id_proyecto' => $row->id_proyecto,
                 'nombre_proy' => $row->project?->nombre_proyecto,
                 'id_item' => $row->id_item,
-                'descripcion' => $row->item?->item,
+                'descripcion' => $row->nombre_snapshot ?? $row->item?->item,
                 'materiales' => $acc['materiales'],
                 'mano_obra' => $acc['mano_obra'],
                 'herramientas' => $acc['herramientas'],
                 'id_grupo' => $row->item?->groupCatalog?->id_grupo,
-                'grupo' => $row->item?->groupCatalog?->nombre_grupo,
+                'grupo' => $row->grupo_snapshot ?? $row->item?->groupCatalog?->nombre_grupo,
                 'id_subgrupo' => $row->item?->subgroupCatalog?->id_subgrupo,
-                'subgrupo' => $row->item?->subgroupCatalog?->descripcion,
+                'subgrupo' => $row->subgrupo_snapshot ?? $row->item?->subgroupCatalog?->descripcion,
             ];
         })->values();
 
@@ -81,26 +82,28 @@ class ProjectBudgetService
 
     public function incidenceSummary(Project $project, string $format): array
     {
+        $this->snapshotService->ensureForProject($project);
         $rows = $this->activeProjectItems($project)
             ->sortBy([
-                fn (ProjectItem $item) => $item->item?->groupCatalog?->nombre_grupo,
-                fn (ProjectItem $item) => $item->item?->subgroupCatalog?->descripcion,
+                fn (ProjectItem $item) => $item->grupo_snapshot ?? $item->item?->groupCatalog?->nombre_grupo,
+                fn (ProjectItem $item) => $item->subgrupo_snapshot ?? $item->item?->subgroupCatalog?->descripcion,
             ])
             ->values();
 
         $items = $rows->map(function (ProjectItem $row) use ($format): array {
-            $price = $this->incidencePriceService->resolve($row->item, $format);
+            $price = $this->snapshotAnalysisService->price($row, $format);
+            $displayPrice = round($price, 4);
             $partial = round(((float) $row->cantidad) * $price, 4);
 
             return [
                 'id_proyecto' => $row->id_proyecto,
                 'nombre_proyecto' => $row->project?->nombre_proyecto,
                 'id_item' => $row->id_item,
-                'nombre_item' => $row->item?->item,
-                'grupo' => $row->item?->groupCatalog?->nombre_grupo,
-                'subgrupo' => $row->item?->subgroupCatalog?->descripcion,
+                'nombre_item' => $row->nombre_snapshot ?? $row->item?->item,
+                'grupo' => $row->grupo_snapshot ?? $row->item?->groupCatalog?->nombre_grupo,
+                'subgrupo' => $row->subgrupo_snapshot ?? $row->item?->subgroupCatalog?->descripcion,
                 'cantidad' => round((float) $row->cantidad, 4),
-                'precio' => $price,
+                'precio' => $displayPrice,
                 'parcial' => $partial,
             ];
         })->values();
@@ -115,19 +118,20 @@ class ProjectBudgetService
 
     public function breakdownCalculation(Project $project, string $format): array
     {
+        $this->snapshotService->ensureForProject($project);
         $rows = $this->activeProjectItems($project)
             ->sortBy(fn (ProjectItem $item) => $item->prioridad)
             ->values();
 
         $items = $rows->map(function (ProjectItem $row) use ($format): array {
-            $price = $this->incidencePriceService->resolve($row->item, $format);
+            $price = $this->snapshotAnalysisService->price($row, $format);
 
             return [
                 'id_item' => $row->id_item,
-                'nombre_item' => $row->item?->item,
-                'nombre_grupo' => $row->item?->groupCatalog?->nombre_grupo,
-                'nombre_subgrupo' => $row->item?->subgroupCatalog?->descripcion,
-                'unidad' => $row->item?->unitMeasure?->abreviatura,
+                'nombre_item' => $row->nombre_snapshot ?? $row->item?->item,
+                'nombre_grupo' => $row->grupo_snapshot ?? $row->item?->groupCatalog?->nombre_grupo,
+                'nombre_subgrupo' => $row->subgrupo_snapshot ?? $row->item?->subgroupCatalog?->descripcion,
+                'unidad' => $row->unidad_snapshot ?? $row->item?->unitMeasure?->abreviatura,
                 'prioridad' => $row->prioridad,
                 'cantidad' => round((float) $row->cantidad, 4),
                 'precio' => $price,
@@ -145,18 +149,19 @@ class ProjectBudgetService
 
     public function generalBudgetPdfItems(Project $project, string $format, ProjectLegacyUnitPriceService $legacyUnitPriceService): array
     {
+        $this->snapshotService->ensureForProject($project);
         return $this->activeProjectItems($project)
             ->sortBy(fn (ProjectItem $item) => $item->prioridad)
             ->values()
             ->map(function (ProjectItem $row) use ($format, $legacyUnitPriceService): array {
-                $price = $legacyUnitPriceService->resolve($row->item, $format);
+                $price = $this->snapshotAnalysisService->price($row, $format);
 
                 return [
                     'id_item' => $row->id_item,
-                    'nombre_item' => $row->item?->item,
-                    'nombre_grupo' => $row->item?->groupCatalog?->nombre_grupo,
-                    'nombre_subgrupo' => $row->item?->subgroupCatalog?->descripcion,
-                    'unidad' => $row->item?->unitMeasure?->abreviatura,
+                    'nombre_item' => $row->nombre_snapshot ?? $row->item?->item,
+                    'nombre_grupo' => $row->grupo_snapshot ?? $row->item?->groupCatalog?->nombre_grupo,
+                    'nombre_subgrupo' => $row->subgrupo_snapshot ?? $row->item?->subgroupCatalog?->descripcion,
+                    'unidad' => $row->unidad_snapshot ?? $row->item?->unitMeasure?->abreviatura,
                     'prioridad' => $row->prioridad,
                     'cantidad' => round((float) $row->cantidad, 4),
                     'precio' => $price,
@@ -168,12 +173,12 @@ class ProjectBudgetService
 
     public function unitPrices(Project $project, string $format): array
     {
+        $this->snapshotService->ensureForProject($project);
         $items = ProjectItem::query()
             ->with('item')
             ->where('id_proyecto', $project->id_proyecto)
             ->where('estado', 'AC')
             ->whereNotNull('id_item')
-            ->whereHas('item')
             ->orderBy('prioridad')
             ->orderBy('id_item')
             ->get();
@@ -183,19 +188,19 @@ class ProjectBudgetService
                 'id_proyecto_item' => $projectItem->id_proyecto_item,
                 'prioridad' => $projectItem->prioridad,
                 'cantidad' => round((float) $projectItem->cantidad, 4),
-                'analysis' => $this->priceAnalysisService->buildCurrent($projectItem->item, $this->formatToMode($format)),
+                'analysis' => $this->snapshotAnalysisService->build($projectItem, $format),
             ];
         })->values()->all();
     }
 
     public function unitPricesForLegacyProjectPdf(Project $project, string $format): array
     {
+        $this->snapshotService->ensureForProject($project);
         $items = ProjectItem::query()
             ->with('item')
             ->where('id_proyecto', $project->id_proyecto)
             ->where('estado', 'AC')
             ->whereNotNull('id_item')
-            ->whereHas('item')
             ->orderBy('prioridad')
             ->orderBy('id_item')
             ->get();
@@ -205,35 +210,34 @@ class ProjectBudgetService
                 'id_proyecto_item' => $projectItem->id_proyecto_item,
                 'prioridad' => $projectItem->prioridad,
                 'cantidad' => round((float) $projectItem->cantidad, 4),
-                'analysis' => $this->priceAnalysisService->buildLegacyProjectCurrent($projectItem->item, $this->formatToMode($format)),
+                'analysis' => $this->snapshotAnalysisService->build($projectItem, $format),
             ];
         })->values()->all();
     }
 
     private function activeProjectItems(Project $project): Collection
     {
+        $this->snapshotService->ensureForProject($project);
+
         return ProjectItem::query()
             ->with(['project', 'item.groupCatalog', 'item.subgroupCatalog', 'item.unitMeasure'])
             ->where('proyecto_item.id_proyecto', $project->id_proyecto)
             ->where('proyecto_item.estado', 'AC')
             ->whereNotNull('proyecto_item.id_item')
-            ->whereHas('item')
             ->get();
     }
 
     private function activeProjectItemsForLegacyBudgetPdf(Project $project): Collection
     {
+        $this->snapshotService->ensureForProject($project);
+
         return ProjectItem::query()
-            ->select('proyecto_item.*')
-            ->join('item', 'item.id_item', '=', 'proyecto_item.id_item')
-            ->join('grupo', 'grupo.id_grupo', '=', 'item.grupo')
-            ->join('sub_grupo', 'sub_grupo.id_subgrupo', '=', 'item.subgrupo')
             ->with(['project', 'item.groupCatalog', 'item.subgroupCatalog', 'item.unitMeasure'])
             ->where('proyecto_item.id_proyecto', $project->id_proyecto)
             ->where('proyecto_item.estado', 'AC')
             ->whereNotNull('proyecto_item.id_item')
-            ->orderBy('grupo.nombre_grupo')
-            ->orderBy('sub_grupo.descripcion')
+            ->orderBy('grupo_snapshot')
+            ->orderBy('subgrupo_snapshot')
             ->orderBy('proyecto_item.id_proyecto_item')
             ->get();
     }
@@ -247,14 +251,14 @@ class ProjectBudgetService
                 'id_proyecto' => $row->id_proyecto,
                 'nombre_proyecto' => $row->project?->nombre_proyecto,
                 'id_item' => $row->id_item,
-                'descripcion' => $row->item?->item,
+                'descripcion' => $row->nombre_snapshot ?? $row->item?->item,
                 'materiales' => $acc['materiales'],
                 'mano_obra' => $acc['mano_obra'],
                 'herramientas' => $acc['herramientas'],
                 'id_grupo' => $row->item?->groupCatalog?->id_grupo,
-                'grupo' => $row->item?->groupCatalog?->nombre_grupo,
+                'grupo' => $row->grupo_snapshot ?? $row->item?->groupCatalog?->nombre_grupo,
                 'id_subgrupo' => $row->item?->subgroupCatalog?->id_subgrupo,
-                'subgrupo' => $row->item?->subgroupCatalog?->descripcion,
+                'subgrupo' => $row->subgrupo_snapshot ?? $row->item?->subgroupCatalog?->descripcion,
             ];
         })->values();
 
@@ -312,7 +316,7 @@ class ProjectBudgetService
     {
         $rows = DB::table('proyecto_item_insumo_snapshot')
             ->where('id_proyecto_item', $projectItem->id_proyecto_item)
-            ->where('estado', 'AC')
+            ->where('estado', '<>', 'EX')
             ->where('tipo', $type)
             ->select(['cantidad', 'precio_unitario'])
             ->get();
@@ -336,7 +340,7 @@ class ProjectBudgetService
             ->join('tipo_insumo', 'tipo_insumo.id_tipo', '=', 'log_insumo.tipo')
             ->where('log_insumo.fecha', '<=', $date->toDateString())
             ->where('log_insumo.tipo', $type)
-            ->where('proyecto_item_insumo_snapshot.estado', 'AC')
+            ->where('proyecto_item_insumo_snapshot.estado', '<>', 'EX')
             ->where('proyecto_item_insumo_snapshot.id_proyecto_item', $projectItem->id_proyecto_item)
             ->orderBy('log_insumo.tipo')
             ->orderBy('log_insumo.id_insumo')

@@ -22,6 +22,12 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::post('/project-templates/{template}/create-project', [ProjectTemplateController::class, 'createProject']);
     Route::post('/projects/{project}/template', [ProjectTemplateController::class, 'store']);
     Route::get('/projects/{project}/history', [ProjectHistoryController::class, 'history']);
+    Route::get('/projects/{project}/versions', [ProjectCatalogController::class, 'versions']);
+    Route::get('/projects/{project}/versions/compare', [ProjectCatalogController::class, 'compareVersions']);
+    Route::post('/projects/{project}/versions', [ProjectCatalogController::class, 'createUpdatedVersion']);
+    Route::post('/projects/{project}/finalize', [ProjectCatalogController::class, 'finalizeVersion']);
+    Route::post('/projects/{project}/synchronize', [ProjectCatalogController::class, 'synchronizeVersion']);
+    Route::post('/projects/{project}/input-snapshots/{snapshot}/exclude', [ProjectCatalogController::class, 'excludeVersionInput']);
     Route::get('/projects/{project}/report-warnings', [ProjectReportController::class, 'reportWarnings']);
     Route::get('/projects/{project}', [ProjectCatalogController::class, 'show']);
     Route::put('/projects/{project}', [ProjectCatalogController::class, 'update']);

@@ -62,7 +62,7 @@ class ProjectInputBreakdownPdfService
         return DB::table('proyecto_item_insumo_snapshot')
             ->join('proyecto_item', 'proyecto_item.id_proyecto_item', '=', 'proyecto_item_insumo_snapshot.id_proyecto_item')
             ->join('item', 'item.id_item', '=', 'proyecto_item.id_item')
-            ->where('proyecto_item_insumo_snapshot.estado', 'AC')
+            ->where('proyecto_item_insumo_snapshot.estado', '<>', 'EX')
             ->where('proyecto_item.estado', 'AC')
             ->where('proyecto_item.id_proyecto', $project->id_proyecto)
             ->where('proyecto_item_insumo_snapshot.tipo', $type)

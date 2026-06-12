@@ -16,6 +16,7 @@ use App\Http\Requests\Project\UpdateProjectRequest;
 use App\Http\Resources\Project\ProjectHistoryResource;
 use App\Models\Item;
 use App\Models\Project;
+use App\Models\ProjectItemInputSnapshot;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Modules\Projects\Services\ProjectBudgetService;
@@ -36,6 +37,8 @@ use App\Modules\Projects\Services\ProjectMapService;
 use App\Modules\Projects\Services\ProjectPermissionService;
 use App\Modules\Projects\Services\ProjectSpecificationsPdfMergeService;
 use App\Modules\Projects\Services\ProjectUnitPricesPdfService;
+use App\Modules\Projects\Services\ProjectVersionComparisonService;
+use App\Modules\Projects\Services\ProjectVersionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -62,6 +65,8 @@ class ProjectController extends Controller
         private readonly ProjectHistoryService $projectHistoryService,
         private readonly ProjectItemInputSnapshotService $snapshotService,
         private readonly AuditService $auditService,
+        private readonly ProjectVersionService $projectVersionService,
+        private readonly ProjectVersionComparisonService $projectVersionComparisonService,
     ) {}
 
     public function context(Request $request): JsonResponse
@@ -137,6 +142,12 @@ class ProjectController extends Controller
             return $response;
         }
 
+        if (! $project->isFrozen()) {
+            $this->snapshotService->ensureForProject($project);
+            $project->refresh();
+        }
+
+        $project->loadCount('versions');
         $project->load(['creator', 'requester']);
 
         return response()->json([
@@ -145,6 +156,106 @@ class ProjectController extends Controller
             'data' => [
                 'project' => $this->serializeProject($project, true),
             ],
+        ]);
+    }
+
+    public function versions(Project $project): JsonResponse
+    {
+        if ($response = $this->denyIfMissingPermission(request()->user(), 'can_view', 'No tiene permisos para ver versiones del proyecto.')) {
+            return $response;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Versiones del proyecto obtenidas correctamente.',
+            'data' => [
+                'items' => $this->projectVersionService->versions($project)
+                    ->map(fn (Project $version): array => $this->serializeProject($version, true))
+                    ->values(),
+            ],
+        ]);
+    }
+
+    public function createUpdatedVersion(Request $request, Project $project): JsonResponse
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_edit', 'No tiene permisos para crear versiones del proyecto.')) {
+            return $response;
+        }
+
+        $version = $this->projectVersionService->createUpdatedVersion($project, $request->user(), $request->ip());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Nueva versión ACTUALIZADA creada correctamente.',
+            'data' => ['project' => $this->serializeProject($version, true)],
+        ], 201);
+    }
+
+    public function compareVersions(Request $request, Project $project): JsonResponse
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view', 'No tiene permisos para comparar versiones del proyecto.')) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'base' => ['required', 'integer', 'exists:proyecto,id_proyecto'],
+            'target' => ['required', 'integer', 'exists:proyecto,id_proyecto'],
+            'format' => ['nullable', 'string', 'in:PCA,PC_FPS,PC_UPRE,PC_FNDR,PC_OBRAS'],
+        ]);
+
+        $base = Project::query()->findOrFail((int) $validated['base']);
+        $target = Project::query()->findOrFail((int) $validated['target']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Comparación de versiones obtenida correctamente.',
+            'data' => $this->projectVersionComparisonService->compare($project, $base, $target),
+        ]);
+    }
+
+    public function finalizeVersion(Request $request, Project $project): JsonResponse
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_edit', 'No tiene permisos para finalizar versiones del proyecto.')) {
+            return $response;
+        }
+
+        $version = $this->projectVersionService->finalize($project, $request->user(), $request->ip());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Versión finalizada y congelada correctamente.',
+            'data' => ['project' => $this->serializeProject($version, true)],
+        ]);
+    }
+
+    public function synchronizeVersion(Request $request, Project $project): JsonResponse
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_edit', 'No tiene permisos para sincronizar versiones del proyecto.')) {
+            return $response;
+        }
+
+        $version = $this->projectVersionService->synchronize($project, $request->user(), $request->ip());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Versión sincronizada correctamente.',
+            'data' => ['project' => $this->serializeProject($version, true)],
+        ]);
+    }
+
+    public function excludeVersionInput(Request $request, Project $project, ProjectItemInputSnapshot $snapshot): JsonResponse
+    {
+        if ($response = $this->denyIfMissingPermission($request->user(), 'can_edit', 'No tiene permisos para modificar la versión del proyecto.')) {
+            return $response;
+        }
+
+        $snapshot = $this->snapshotService->exclude($project, $snapshot, $request->user());
+        $this->projectHistoryService->recordInputExcluded($project, $request->user(), $request->ip(), $snapshot->id_snapshot);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Insumo excluido de la versión correctamente.',
+            'data' => ['snapshot' => $snapshot],
         ]);
     }
 
@@ -548,6 +659,15 @@ class ProjectController extends Controller
             'estado' => $project->estado,
             'es_plantilla' => (bool) $project->es_plantilla,
             'id_usuario' => $project->id_usuario,
+            'version_number' => (int) ($project->numero_version ?? 1),
+            'version_count' => (int) ($project->version_count ?? 1),
+            'root_project_id' => (int) ($project->id_proyecto_raiz ?: $project->id_proyecto),
+            'source_version_id' => $project->id_version_origen ? (int) $project->id_version_origen : null,
+            'is_current_version' => $project->es_version_actual === null ? true : (bool) $project->es_version_actual,
+            'is_frozen' => $project->isFrozen(),
+            'is_editable' => $project->isCurrentVersion() && ! $project->isFrozen(),
+            'version_created_at' => $project->fecha_version?->toIso8601String(),
+            'finalized_at' => $project->fecha_finalizacion?->toIso8601String(),
         ];
 
         if (! $full) {

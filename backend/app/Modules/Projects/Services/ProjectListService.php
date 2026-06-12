@@ -15,7 +15,16 @@ class ProjectListService
             ->where(function ($query): void {
                 $query->where('es_plantilla', false)
                     ->orWhereNull('es_plantilla');
-            });
+            })
+            ->where(function ($query): void {
+                $query->where('es_version_actual', true)
+                    ->orWhereNull('es_version_actual');
+            })
+            ->withCount(['versions as version_count' => function ($query): void {
+                $query->where(function ($query): void {
+                    $query->where('es_plantilla', false)->orWhereNull('es_plantilla');
+                });
+            }]);
 
         $order = strtolower((string) ($filters['order'] ?? 'legacy'));
 

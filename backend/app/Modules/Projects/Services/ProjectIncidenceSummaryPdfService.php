@@ -2,12 +2,8 @@
 
 namespace App\Modules\Projects\Services;
 
-use App\Models\FndrCalculationPercentage;
-use App\Models\FpsCalculationPercentage;
-use App\Models\GeneralCalculationPercentage;
-use App\Models\ObrasCalculationPercentage;
 use App\Models\Project;
-use App\Models\UpreCalculationPercentage;
+use App\Models\ProjectPercentageSnapshot;
 use App\Support\Pdf\LegacyPdfFormat;
 use App\Support\Pdf\MunicipalReportPdfFactory;
 use Illuminate\Http\Response;
@@ -21,7 +17,7 @@ class ProjectIncidenceSummaryPdfService
 
     public function stream(Project $project, string $format): Response
     {
-        $percentages = $this->resolvePercentages($format);
+        $percentages = $this->resolvePercentages($project, $format);
         $budget = $this->projectBudgetService->budgetByGroupPdfData($project);
         $items = $budget['items'] ?? [];
 
@@ -46,17 +42,13 @@ class ProjectIncidenceSummaryPdfService
         return MunicipalReportPdfFactory::inlineResponse($pdf, 'resumen_incidencia.pdf');
     }
 
-    private function resolvePercentages(string $format): array
+    private function resolvePercentages(Project $project, string $format): array
     {
-        $model = match ($format) {
-            'PC_FPS' => FpsCalculationPercentage::class,
-            'PC_UPRE' => UpreCalculationPercentage::class,
-            'PC_FNDR' => FndrCalculationPercentage::class,
-            'PC_OBRAS' => ObrasCalculationPercentage::class,
-            default => GeneralCalculationPercentage::class,
-        };
-
-        return $this->normalizePercentages($model::query()->active()->get());
+        return $this->normalizePercentages(ProjectPercentageSnapshot::query()
+            ->where('id_proyecto', $project->id_proyecto)
+            ->where('formato', strtoupper($format))
+            ->where('estado', 'AC')
+            ->get());
     }
 
     private function normalizePercentages(Collection $rows): array
