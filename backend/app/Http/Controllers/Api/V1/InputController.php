@@ -66,7 +66,7 @@ class InputController extends Controller
     public function store(StoreInputRequest $request): JsonResponse
     {
         $input = $this->inputCrudService->create($request, $request->user());
-        $input->load(['type', 'unitMeasure', 'creator']);
+        $input->load(['type', 'category', 'unitMeasure', 'creator']);
 
         return response()->json([
             'success' => true,
@@ -79,7 +79,7 @@ class InputController extends Controller
 
     public function show(Input $input): JsonResponse
     {
-        $input->load(['type', 'unitMeasure', 'creator']);
+        $input->load(['type', 'category', 'unitMeasure', 'creator']);
 
         return response()->json([
             'success' => true,
@@ -105,7 +105,7 @@ class InputController extends Controller
     public function update(UpdateInputRequest $request, Input $input): JsonResponse
     {
         $input = $this->inputCrudService->update($request, $input, $request->user());
-        $input->load(['type', 'unitMeasure', 'creator']);
+        $input->load(['type', 'category', 'unitMeasure', 'creator']);
 
         return response()->json([
             'success' => true,
@@ -125,7 +125,7 @@ class InputController extends Controller
             $request->ip(),
         );
 
-        $input->load(['type', 'unitMeasure', 'creator']);
+        $input->load(['type', 'category', 'unitMeasure', 'creator']);
 
         return response()->json([
             'success' => true,
@@ -195,7 +195,7 @@ class InputController extends Controller
     public function history(Input $input): JsonResponse
     {
         $history = $input->histories()
-            ->with(['user', 'type', 'unitMeasure'])
+            ->with(['user', 'type', 'category', 'unitMeasure'])
             ->orderByDesc('id')
             ->get();
 
@@ -212,7 +212,7 @@ class InputController extends Controller
     public function logs(Input $input): JsonResponse
     {
         $logs = $input->logs()
-            ->with(['user', 'type', 'unitMeasure'])
+            ->with(['user', 'type', 'category', 'unitMeasure'])
             ->orderByDesc('id_log')
             ->get();
 

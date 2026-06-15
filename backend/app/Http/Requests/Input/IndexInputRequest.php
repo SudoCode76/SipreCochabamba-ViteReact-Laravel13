@@ -17,6 +17,7 @@ class IndexInputRequest extends FormRequest
             'search' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:100'],
             'type_id' => ['nullable', 'integer', 'exists:tipo_insumo,id_tipo'],
+            'category_id' => ['nullable', 'integer', 'exists:categoria_insumo,id_categoria'],
             'unit_measure_id' => ['nullable', 'integer', 'exists:unidad_medida,id_unidad_medida'],
             'status' => ['nullable', 'string', 'size:2', 'in:AC,DC,DP'],
             'order' => ['nullable', 'string', 'in:legacy,recent,oldest'],

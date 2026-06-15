@@ -33,6 +33,7 @@ class InputApiTest extends TestCase
         $this->setUpLegacyItemSchema();
         $this->setUpLegacyProjectSchema();
         $this->createInputType();
+        $this->createInputCategory();
         $this->createUnitMeasure();
     }
 
@@ -53,10 +54,17 @@ class InputApiTest extends TestCase
             'estado' => 'AC',
         ]);
 
+        $this->createInputCategory([
+            'id_categoria' => 2,
+            'descripcion' => 'Categoria secundaria',
+            'estado' => 'AC',
+        ]);
+
         $this->createInput([
             'id_insumo' => 1,
             'descripcion' => 'Zinc',
             'tipo' => 2,
+            'id_categoria' => 2,
             'unidad_medida' => 2,
             'estado' => 'AC',
         ]);
@@ -94,6 +102,13 @@ class InputApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.meta.total', 1)
             ->assertJsonPath('data.items.0.id_insumo', 2);
+
+        $this->getJson('/api/v1/inputs?category_id=2&status=AC&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.items.0.id_insumo', 1)
+            ->assertJsonPath('data.items.0.id_categoria', 2)
+            ->assertJsonPath('data.items.0.nombre_categoria', 'Categoria secundaria');
     }
 
     public function test_admin_can_search_inputs_by_independent_words(): void
@@ -329,6 +344,7 @@ class InputApiTest extends TestCase
             'unidad_medida' => 1,
             'precio' => 65.50,
             'tipo' => 1,
+            'category_id' => 1,
             'estado' => 'AC',
             'cod' => 'INS-100',
             'fecha_cotiz' => '2026-04-29',
@@ -346,11 +362,13 @@ class InputApiTest extends TestCase
         $this->assertDatabaseHas('log_insumo', [
             'id_insumo' => $inputId,
             'accion' => 'RG',
+            'id_categoria' => 1,
         ]);
 
         $this->assertDatabaseHas('historial_insumo', [
             'id_insumo' => $inputId,
             'accion' => 'REGISTRADOR',
+            'id_categoria' => 1,
         ]);
 
         $this->getJson('/api/v1/inputs/'.$inputId)
@@ -369,6 +387,7 @@ class InputApiTest extends TestCase
             'unidad_medida' => 1,
             'precio' => 70.00,
             'tipo' => 1,
+            'category_id' => 1,
             'estado' => 'DC',
             'cod' => 'INS-101',
             'fecha_cotiz' => '2026-05-01',
@@ -380,7 +399,12 @@ class InputApiTest extends TestCase
         $this->assertDatabaseHas('historial_insumo', [
             'id_insumo' => $inputId,
             'accion' => 'MODIFICADO',
+            'id_categoria' => 1,
         ]);
+
+        $this->getJson('/api/v1/inputs/'.$inputId.'/history')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.nombre_categoria', 'Categoria demo');
     }
 
     public function test_cannot_create_or_update_duplicate_input_description_when_other_input_is_not_deleted(): void

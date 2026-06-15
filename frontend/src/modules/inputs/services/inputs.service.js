@@ -1,13 +1,14 @@
 import apiClient from "@/lib/api/client";
 
 export const inputsService = {
-  list: async ({ page = 1, perPage = 10, description = "", order = "legacy" } = {}) => {
+  list: async ({ page = 1, perPage = 10, description = "", order = "legacy", categoryId = "" } = {}) => {
     const response = await apiClient.get("/v1/inputs", {
       params: {
         page,
         per_page: perPage,
         order,
         ...(description ? { description } : {}),
+        ...(categoryId ? { category_id: categoryId } : {}),
       },
     });
     return response.data;

@@ -24,6 +24,7 @@ class Input extends Model
         'unidad_medida',
         'precio',
         'tipo',
+        'id_categoria',
         'estado',
         'usuario',
         'fecha',
@@ -39,6 +40,7 @@ class Input extends Model
             'unidad_medida' => 'integer',
             'precio' => 'decimal:2',
             'tipo' => 'integer',
+            'id_categoria' => 'integer',
             'usuario' => 'integer',
             'fecha' => 'date',
             'solicitud' => 'integer',
@@ -49,6 +51,11 @@ class Input extends Model
     public function type(): BelongsTo
     {
         return $this->belongsTo(InputType::class, 'tipo', 'id_tipo');
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(InputCategory::class, 'id_categoria', 'id_categoria');
     }
 
     public function unitMeasure(): BelongsTo

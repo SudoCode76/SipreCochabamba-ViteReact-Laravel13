@@ -75,6 +75,7 @@ export default function InputsPage() {
   const queryClient = useQueryClient();
   const [perPage, setPerPage] = useState(15);
   const [order, setOrder] = useState("legacy");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -97,6 +98,7 @@ export default function InputsPage() {
     precio: "",
     unidad_medida: "",
     tipo: "",
+    categoria: "",
     fecha_cotiz: new Date().toISOString().split("T")[0],
     observacion: "",
     estado: "AC",
@@ -107,6 +109,7 @@ export default function InputsPage() {
     precio: "",
     unidad_medida: "",
     tipo: "",
+    categoria: "",
     fecha_cotiz: "",
     observacion: "",
     estado: "AC",
@@ -114,8 +117,8 @@ export default function InputsPage() {
   });
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["inputs", { page, perPage, description: search, order }],
-    queryFn: () => inputsService.list({ page, perPage, description: search, order }),
+    queryKey: ["inputs", { page, perPage, description: search, order, categoryId: categoryFilter }],
+    queryFn: () => inputsService.list({ page, perPage, description: search, order, categoryId: categoryFilter }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -125,7 +128,7 @@ export default function InputsPage() {
       const response = await apiClient.get("/v1/inputs/context");
       return response.data;
     },
-    enabled: createOpen || editOpen,
+    enabled: true,
   });
 
   const { data: quoteHistoryData, isLoading: quoteHistoryLoading } = useQuery({
@@ -172,6 +175,7 @@ export default function InputsPage() {
   const meta = data?.data?.meta ?? { current_page: 1, per_page: perPage, total: 0 };
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
   const inputTypes = contextData?.data?.types ?? [];
+  const inputCategories = contextData?.data?.categories ?? [];
   const unitMeasures = contextData?.data?.unit_measures ?? [];
   const statuses = contextData?.data?.statuses ?? [];
   const quoteHistoryItems = quoteHistoryData?.data?.items ?? [];
@@ -278,6 +282,11 @@ export default function InputsPage() {
     setPage(1);
   };
 
+  const handleCategoryFilterChange = (event) => {
+    setCategoryFilter(event.target.value);
+    setPage(1);
+  };
+
   const handleEdit = (item) => {
     setSelectedInput(item);
     setEditError(null);
@@ -286,6 +295,7 @@ export default function InputsPage() {
       precio: item.precio ?? "",
       unidad_medida: String(item.unidad_medida ?? ""),
       tipo: String(item.tipo ?? ""),
+      categoria: String(item.id_categoria ?? item.categoria ?? ""),
       fecha_cotiz: item.fecha_cotiz ?? "",
       observacion: item.observacion ?? "",
       estado: item.estado ?? "AC",
@@ -327,6 +337,7 @@ export default function InputsPage() {
       precio: "",
       unidad_medida: "",
       tipo: "",
+      categoria: "",
       fecha_cotiz: new Date().toISOString().split("T")[0],
       observacion: "",
       estado: "AC",
@@ -343,6 +354,7 @@ export default function InputsPage() {
       precio: "",
       unidad_medida: "",
       tipo: "",
+      categoria: "",
       fecha_cotiz: "",
       observacion: "",
       estado: "AC",
@@ -389,6 +401,7 @@ export default function InputsPage() {
         precio: Number(createForm.precio),
         unidad_medida: Number(createForm.unidad_medida),
         tipo: Number(createForm.tipo),
+        id_categoria: createForm.categoria ? Number(createForm.categoria) : null,
         fecha_cotiz: createForm.fecha_cotiz,
         observacion: createForm.observacion.trim() || null,
         estado: createForm.estado,
@@ -422,6 +435,7 @@ export default function InputsPage() {
           precio: Number(editForm.precio),
           unidad_medida: Number(editForm.unidad_medida),
           tipo: Number(editForm.tipo),
+          id_categoria: editForm.categoria ? Number(editForm.categoria) : null,
           fecha_cotiz: editForm.fecha_cotiz,
           observacion: editForm.observacion.trim() || null,
           estado: editForm.estado,
@@ -583,6 +597,28 @@ export default function InputsPage() {
                   <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
                 </div>
               </div>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Categoría
+                </span>
+                <div className="relative">
+                  <select
+                    className="h-12 min-w-52 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20"
+                    value={categoryFilter}
+                    onChange={handleCategoryFilterChange}
+                    disabled={contextLoading}
+                  >
+                    <option value="">Todas</option>
+                    {inputCategories.map((category) => (
+                      <option key={category.id_categoria} value={category.id_categoria}>
+                        {category.descripcion}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
+                </div>
+              </div>
             </div>
 
             <div className="flex w-full max-w-sm flex-col gap-2">
@@ -600,6 +636,12 @@ export default function InputsPage() {
               </div>
             </div>
           </div>
+
+          {isFetching && !isLoading && (
+            <div className="flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+              <Loader2 className="mr-2 size-4 animate-spin" /> Actualizando resultados...
+            </div>
+          )}
 
           {isLoading && (
             <div className="flex items-center justify-center rounded-2xl border border-border/70 bg-background/70 p-8 text-muted-foreground">
@@ -624,6 +666,7 @@ export default function InputsPage() {
                       <th className="px-5 py-4 font-semibold text-foreground">N°</th>
                       <th className="px-5 py-4 font-semibold text-foreground">Insumo</th>
                       <th className="px-5 py-4 font-semibold text-foreground">Tipo</th>
+                      <th className="px-5 py-4 font-semibold text-foreground">Categoría</th>
                       <th className="px-5 py-4 font-semibold text-foreground">Precio</th>
                       <th className="px-5 py-4 font-semibold text-foreground">Unidad</th>
                       <th className="px-5 py-4 font-semibold text-foreground">Fecha Cotización</th>
@@ -642,6 +685,9 @@ export default function InputsPage() {
                         </td>
                         <td className="px-5 py-4 align-top text-muted-foreground">
                           {item.nombre_tipo}
+                        </td>
+                        <td className="px-5 py-4 align-top text-muted-foreground">
+                          {item.nombre_categoria || "Sin categoría"}
                         </td>
                         <td className="px-5 py-4 align-top text-foreground">
                           {Number(item.precio).toFixed(2)}
@@ -703,7 +749,7 @@ export default function InputsPage() {
                     ))}
                     {items.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                        <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">
                           No se encontraron insumos.
                         </td>
                       </tr>
@@ -855,6 +901,23 @@ export default function InputsPage() {
                             {inputTypes.map((type) => (
                               <option key={type.id_tipo} value={type.id_tipo}>
                                 {type.descripcion}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="edit_categoria" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Categoría</Label>
+                          <select
+                            id="edit_categoria"
+                            value={editForm.categoria}
+                            onChange={(event) => handleEditChange("categoria", event.target.value)}
+                            className="h-12 rounded-2xl border border-border/80 bg-background/90 px-3 text-sm"
+                          >
+                            <option value="">Sin categoría</option>
+                            {inputCategories.map((category) => (
+                              <option key={category.id_categoria} value={category.id_categoria}>
+                                {category.descripcion}
                               </option>
                             ))}
                           </select>
@@ -1263,6 +1326,25 @@ export default function InputsPage() {
                         </div>
 
                         <div className="flex flex-col gap-2">
+                          <Label htmlFor="categoria_nueva" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                            Categoría
+                          </Label>
+                          <select
+                            id="categoria_nueva"
+                            value={createForm.categoria}
+                            onChange={(event) => handleCreateChange("categoria", event.target.value)}
+                            className="h-12 rounded-2xl border border-border/80 bg-background/90 px-3 text-sm"
+                          >
+                            <option value="">Sin categoría</option>
+                            {inputCategories.map((category) => (
+                              <option key={category.id_categoria} value={category.id_categoria}>
+                                {category.descripcion}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
                           <Label htmlFor="fecha_cotiz_nueva" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                             Fecha Cotizacion
                           </Label>
@@ -1371,6 +1453,7 @@ export default function InputsPage() {
                           <th className="px-5 py-4 font-semibold text-foreground">Usuario</th>
                           <th className="px-5 py-4 font-semibold text-foreground">Precio</th>
                           <th className="px-5 py-4 font-semibold text-foreground">Tipo</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Categoría</th>
                           <th className="px-5 py-4 font-semibold text-foreground">Unidad</th>
                           <th className="px-5 py-4 font-semibold text-foreground">Estado</th>
                           <th className="px-5 py-4 font-semibold text-foreground">IP</th>
@@ -1379,7 +1462,7 @@ export default function InputsPage() {
                       <tbody>
                         {inputHistoryLoading && (
                           <tr>
-                            <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                            <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">
                               <Loader2 className="mr-2 inline size-4 animate-spin" /> Cargando historial...
                             </td>
                           </tr>
@@ -1391,6 +1474,7 @@ export default function InputsPage() {
                             <td className="px-5 py-4 align-top text-muted-foreground">{history.nombre_usuario ?? history.user?.full_name ?? history.usuario ?? "-"}</td>
                             <td className="px-5 py-4 align-top text-foreground">{formatMoney(history.precio ?? history.price)}</td>
                             <td className="px-5 py-4 align-top text-muted-foreground">{history.nombre_tipo ?? history.type_name ?? history.tipo ?? "-"}</td>
+                            <td className="px-5 py-4 align-top text-muted-foreground">{history.nombre_categoria ?? history.category_name ?? "Sin categoría"}</td>
                             <td className="px-5 py-4 align-top text-muted-foreground">{history.abreviatura ?? history.nombre_unidad_medida ?? history.unit_measure_name ?? "-"}</td>
                             <td className="px-5 py-4 align-top">
                               <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${statusClass[history.estado ?? history.status] || "bg-slate-500 text-white"}`}>
@@ -1402,7 +1486,7 @@ export default function InputsPage() {
                         ))}
                         {!inputHistoryLoading && !inputHistoryIsError && inputHistoryItems.length === 0 && (
                           <tr>
-                            <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                            <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">
                               No hay movimientos registrados para este insumo.
                             </td>
                           </tr>

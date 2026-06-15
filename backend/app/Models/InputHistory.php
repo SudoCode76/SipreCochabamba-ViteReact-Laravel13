@@ -22,6 +22,7 @@ class InputHistory extends Model
         'id_insumo',
         'precio',
         'tipo',
+        'id_categoria',
         'unidad_medida',
         'accion',
         'usuario',
@@ -37,6 +38,7 @@ class InputHistory extends Model
             'id_insumo' => 'integer',
             'precio' => 'decimal:2',
             'tipo' => 'integer',
+            'id_categoria' => 'integer',
             'unidad_medida' => 'integer',
             'usuario' => 'integer',
             'fecha' => 'datetime',
@@ -56,6 +58,11 @@ class InputHistory extends Model
     public function type(): BelongsTo
     {
         return $this->belongsTo(InputType::class, 'tipo', 'id_tipo');
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(InputCategory::class, 'id_categoria', 'id_categoria');
     }
 
     public function unitMeasure(): BelongsTo

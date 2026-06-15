@@ -23,6 +23,7 @@ const loadFunctionsPage = () => import("@/modules/functions/pages/FunctionsPage"
 const loadGroupsPage = () => import("@/modules/groups/pages/GroupsPage");
 const loadInputRequestsPage = () => import("@/modules/input-requests/pages/InputRequestsPage");
 const loadInputsPage = () => import("@/modules/inputs/pages/InputsPage");
+const loadInputCategoriesPage = () => import("@/modules/input-types/pages/InputCategoriesPage");
 const loadInputTypesPage = () => import("@/modules/input-types/pages/InputTypesPage");
 const loadItemsPage = () => import("@/modules/items/pages/ItemsPage");
 const loadManageInputRequestsPage = () => import("@/modules/input-requests/pages/ManageInputRequestsPage");
@@ -60,6 +61,7 @@ const FunctionsPage = lazy(loadFunctionsPage);
 const GroupsPage = lazy(loadGroupsPage);
 const InputRequestsPage = lazy(loadInputRequestsPage);
 const InputsPage = lazy(loadInputsPage);
+const InputCategoriesPage = lazy(loadInputCategoriesPage);
 const InputTypesPage = lazy(loadInputTypesPage);
 const ItemsPage = lazy(loadItemsPage);
 const ManageInputRequestsPage = lazy(loadManageInputRequestsPage);
@@ -315,6 +317,10 @@ export const router = createBrowserRouter([
           {
             path: "/Tipo de Insumo",
             element: routeElement(<InputTypesPage />),
+          },
+          {
+            path: "/Categoria de Insumo",
+            element: routeElement(<InputCategoriesPage />),
           },
           {
             path: "/Unidad de Medida",

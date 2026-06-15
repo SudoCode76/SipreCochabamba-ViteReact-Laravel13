@@ -29,7 +29,7 @@ class InputListService
                     ->limit(1),
                 'pending_delete_authorization_id'
             )
-            ->with(['type', 'unitMeasure', 'creator']);
+            ->with(['type', 'category', 'unitMeasure', 'creator']);
 
         $order = strtolower((string) ($filters['order'] ?? 'legacy'));
 
@@ -72,6 +72,10 @@ class InputListService
 
         if (! empty($filters['type_id'])) {
             $query->where('tipo', (int) $filters['type_id']);
+        }
+
+        if (! empty($filters['category_id'])) {
+            $query->where('id_categoria', (int) $filters['category_id']);
         }
 
         if (! empty($filters['unit_measure_id'])) {

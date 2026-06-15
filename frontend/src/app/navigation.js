@@ -52,6 +52,7 @@ export const navigationSections = [
     icon: FolderKanban,
     children: [
       { title: "Tipo de Insumo", path: "/Tipo de Insumo", icon: Package, accent: "emerald", permission: { className: "PARAMETROS", functions: ["TIPOINSUMO"] } },
+      { title: "Categoría de Insumo", path: "/Categoria de Insumo", icon: Package, accent: "emerald", permission: { className: "PARAMETROS", functions: ["CATEGORIAINSUMO", "CATEGORIA_INSUMO", "INPUT_CATEGORIES", "TIPOINSUMO"] } },
       { title: "Unidad de Medida", path: "/Unidad de Medida", icon: FolderKanban, accent: "sky", permission: { className: "PARAMETROS", functions: ["UNIDAD_MEDIDA"] } },
       { title: "Grupos", path: "/Grupos", icon: FolderKanban, accent: "sky", permission: { className: "PARAMETROS", functions: ["GRUPOS"] } },
       { title: "Sub grupos", path: "/Sub grupos", icon: FolderKanban, accent: "sky", permission: { className: "PARAMETROS", functions: ["SUBGRUPOS"] } },

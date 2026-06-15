@@ -4,6 +4,7 @@ namespace Tests\Concerns;
 
 use App\Models\Authorization;
 use App\Models\Input;
+use App\Models\InputCategory;
 use App\Models\InputHistory;
 use App\Models\InputLog;
 use App\Models\InputQuote;
@@ -23,6 +24,16 @@ trait InteractsWithLegacyInputs
             $table->string('estado', 2)->nullable();
         });
 
+        if (Schema::hasTable('categoria_insumo') === false) {
+            Schema::create('categoria_insumo', function (Blueprint $table): void {
+                $table->increments('id_categoria');
+                $table->string('descripcion', 80)->nullable();
+                $table->string('estado', 2)->nullable();
+                $table->unsignedInteger('usuario')->nullable();
+                $table->date('fecha')->nullable();
+            });
+        }
+
         Schema::create('unidad_medida', function (Blueprint $table): void {
             $table->increments('id_unidad_medida');
             $table->string('descripcion', 30)->nullable();
@@ -37,6 +48,7 @@ trait InteractsWithLegacyInputs
             $table->unsignedInteger('unidad_medida')->nullable();
             $table->decimal('precio', 10, 2)->nullable();
             $table->unsignedInteger('tipo')->nullable();
+            $table->unsignedInteger('id_categoria')->nullable();
             $table->string('estado', 2)->nullable();
             $table->unsignedInteger('usuario')->nullable();
             $table->date('fecha')->nullable();
@@ -47,6 +59,7 @@ trait InteractsWithLegacyInputs
 
             $table->foreign('unidad_medida')->references('id_unidad_medida')->on('unidad_medida');
             $table->foreign('tipo')->references('id_tipo')->on('tipo_insumo');
+            $table->foreign('id_categoria')->references('id_categoria')->on('categoria_insumo');
         });
 
         Schema::create('historial_insumo', function (Blueprint $table): void {
@@ -55,6 +68,7 @@ trait InteractsWithLegacyInputs
             $table->unsignedInteger('id_insumo')->nullable();
             $table->decimal('precio', 10, 2)->nullable();
             $table->unsignedInteger('tipo')->nullable();
+            $table->unsignedInteger('id_categoria')->nullable();
             $table->unsignedInteger('unidad_medida')->nullable();
             $table->text('accion')->nullable();
             $table->unsignedInteger('usuario')->nullable();
@@ -72,6 +86,7 @@ trait InteractsWithLegacyInputs
             $table->unsignedInteger('id_insumo')->nullable();
             $table->decimal('precio', 10, 2)->nullable();
             $table->unsignedInteger('tipo')->nullable();
+            $table->unsignedInteger('id_categoria')->nullable();
             $table->unsignedInteger('unidad_medida')->nullable();
             $table->string('accion', 2)->nullable();
             $table->unsignedInteger('usuario')->nullable();
@@ -147,10 +162,22 @@ trait InteractsWithLegacyInputs
         ], $overrides));
     }
 
+    protected function createInputCategory(array $overrides = []): InputCategory
+    {
+        return InputCategory::query()->create(array_merge([
+            'id_categoria' => 1,
+            'descripcion' => 'Categoria demo',
+            'estado' => 'AC',
+            'usuario' => 1,
+            'fecha' => now()->toDateString(),
+        ], $overrides));
+    }
+
     protected function createInput(array $overrides = []): Input
     {
         $typeId = $overrides['tipo'] ?? 1;
         $unitMeasureId = $overrides['unidad_medida'] ?? 1;
+        $categoryId = $overrides['id_categoria'] ?? 1;
 
         if (InputType::query()->whereKey($typeId)->exists() === false) {
             $this->createInputType(['id_tipo' => $typeId]);
@@ -160,12 +187,17 @@ trait InteractsWithLegacyInputs
             $this->createUnitMeasure(['id_unidad_medida' => $unitMeasureId]);
         }
 
+        if ($categoryId !== null && InputCategory::query()->whereKey($categoryId)->exists() === false) {
+            $this->createInputCategory(['id_categoria' => $categoryId]);
+        }
+
         return Input::query()->create(array_merge([
             'id_insumo' => 1,
             'descripcion' => 'Acero estructural',
             'unidad_medida' => $unitMeasureId,
             'precio' => 15.36,
             'tipo' => $typeId,
+            'id_categoria' => $categoryId,
             'estado' => 'AC',
             'usuario' => 1,
             'fecha' => now()->toDateString(),
@@ -184,6 +216,7 @@ trait InteractsWithLegacyInputs
             'id_insumo' => 1,
             'precio' => 15.36,
             'tipo' => 1,
+            'id_categoria' => 1,
             'unidad_medida' => 1,
             'accion' => 'RG',
             'usuario' => 1,
@@ -200,6 +233,7 @@ trait InteractsWithLegacyInputs
             'id_insumo' => 1,
             'precio' => 15.36,
             'tipo' => 1,
+            'id_categoria' => 1,
             'unidad_medida' => 1,
             'accion' => 'MODIFICADO',
             'usuario' => 1,

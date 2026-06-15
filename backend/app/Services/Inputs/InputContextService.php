@@ -2,6 +2,7 @@
 
 namespace App\Services\Inputs;
 
+use App\Models\InputCategory;
 use App\Models\InputType;
 use App\Models\UnitMeasure;
 use App\Models\User;
@@ -37,8 +38,21 @@ class InputContextService
             ->values()
             ->all();
 
+        $categories = InputCategory::query()
+            ->active()
+            ->orderBy('descripcion')
+            ->get()
+            ->map(fn (InputCategory $category): array => [
+                'id_categoria' => $category->id_categoria,
+                'descripcion' => $category->descripcion,
+                'estado' => $category->estado,
+            ])
+            ->values()
+            ->all();
+
         return [
             'types' => $types,
+            'categories' => $categories,
             'unit_measures' => $unitMeasures,
             'statuses' => [
                 ['code' => 'AC', 'label' => 'ACTIVO'],

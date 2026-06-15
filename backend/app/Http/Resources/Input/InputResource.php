@@ -18,6 +18,8 @@ class InputResource extends JsonResource
             'precio' => $this->precio !== null ? (float) $this->precio : null,
             'id_tipo' => $this->tipo,
             'nombre_tipo' => $this->type?->descripcion,
+            'id_categoria' => $this->id_categoria,
+            'nombre_categoria' => $this->category?->descripcion,
             'id_unidad_medida' => $this->unidad_medida,
             'nombre_unidad_medida' => $this->unitMeasure?->descripcion,
             'abreviatura' => $this->unitMeasure?->abreviatura,
@@ -28,6 +30,7 @@ class InputResource extends JsonResource
             'delete_authorization_id' => $hasPendingDeleteAuthorization ? (int) $pendingDeleteAuthorizationId : null,
             'observacion' => $this->observacion,
             'tipo' => $this->tipo,
+            'categoria' => $this->id_categoria,
             'unidad_medida' => $this->unidad_medida,
             'id' => $this->id_insumo,
             'description' => $this->descripcion,
@@ -45,6 +48,11 @@ class InputResource extends JsonResource
                 'id' => $this->type->id_tipo,
                 'description' => $this->type->descripcion,
                 'status' => $this->type->estado,
+            ] : null),
+            'category' => $this->whenLoaded('category', fn (): ?array => $this->category ? [
+                'id' => $this->category->id_categoria,
+                'description' => $this->category->descripcion,
+                'status' => $this->category->estado,
             ] : null),
             'unit_measure' => $this->whenLoaded('unitMeasure', fn (): ?array => $this->unitMeasure ? [
                 'id' => $this->unitMeasure->id_unidad_medida,
