@@ -90,17 +90,32 @@ class ProjectBudgetXlsxService
             ['Proyecto', $project->nombre_proyecto],
             ['Formato', $format],
             [],
-            ['Nro', 'Grupo', 'Subgrupo', 'Descripcion', 'Unidad', 'Cantidad', 'Unitario', 'Parcial'],
+            ['Nro', 'Modulo', 'Grupo', 'Subgrupo', 'Descripcion', 'Unidad', 'Cantidad', 'Unitario', 'Parcial'],
         ];
         $total = 0.0;
+        $moduleTotal = 0.0;
+        $lastModule = null;
 
         foreach ($items as $index => $item) {
+            if ($lastModule !== $item['modulo']) {
+                if ($lastModule !== null) {
+                    $rows[] = ['SUBTOTAL MODULO '.$lastModule, '', '', '', '', '', '', '', round($moduleTotal, 2)];
+                    $rows[] = [];
+                }
+
+                $rows[] = ['MODULO', $item['modulo']];
+                $lastModule = $item['modulo'];
+                $moduleTotal = 0.0;
+            }
+
             $price = round((float) $item['precio'], 2);
             $quantity = round((float) $item['cantidad'], 4);
             $partial = round($quantity * $price, 2);
             $total += $partial;
+            $moduleTotal += $partial;
             $rows[] = [
                 $index + 1,
+                $item['modulo'] ?? 'General',
                 $item['nombre_grupo'] ?? '',
                 $item['nombre_subgrupo'] ?? '',
                 $item['nombre_item'] ?? '',
@@ -111,8 +126,12 @@ class ProjectBudgetXlsxService
             ];
         }
 
+        if ($lastModule !== null) {
+            $rows[] = ['SUBTOTAL MODULO '.$lastModule, '', '', '', '', '', '', '', round($moduleTotal, 2)];
+        }
+
         $rows[] = [];
-        $rows[] = ['TOTAL', '', '', '', '', '', '', round($total, 2)];
+        $rows[] = ['TOTAL', '', '', '', '', '', '', '', round($total, 2)];
 
         return SimpleXlsxResponse::make('presupuesto_general.xlsx', [[
             'title' => 'Presupuesto general',

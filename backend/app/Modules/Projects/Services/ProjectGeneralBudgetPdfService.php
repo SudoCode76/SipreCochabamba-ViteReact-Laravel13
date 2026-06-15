@@ -34,6 +34,8 @@ class ProjectGeneralBudgetPdfService
     private function buildHtml(Project $project, array $items): string
     {
         $total = 0.0;
+        $moduleTotal = 0.0;
+        $lastModule = null;
         $lastGroup = null;
         $lastSubgroup = null;
         $html = '
@@ -62,6 +64,23 @@ class ProjectGeneralBudgetPdfService
 <tbody>';
 
         foreach ($items as $index => $item) {
+            if ($lastModule !== $item['modulo']) {
+                if ($lastModule !== null) {
+                    $html .= '
+<tr class="subseccion" nobr="true">
+<td width="600" colspan="5"><b>SUBTOTAL MÓDULO '.htmlentities((string) $lastModule).'</b></td>
+<td width="80" align="right"><b>'.LegacyPdfFormat::number($moduleTotal, 2).'</b></td>
+</tr>';
+                }
+
+                $html .= '
+<tr nobr="true" bgcolor="#8cb9b5"><td width="680" colspan="6"><h4>MÓDULO: '.htmlentities((string) $item['modulo']).'</h4></td></tr>';
+                $lastModule = $item['modulo'];
+                $lastGroup = null;
+                $lastSubgroup = null;
+                $moduleTotal = 0.0;
+            }
+
             if ($lastGroup !== $item['nombre_grupo']) {
                 $html .= '
 <tr nobr="true" bgcolor="#99a3a2"><td width="680" colspan="6"><h4><font color="#fcfdfd">'.htmlentities((string) $item['nombre_grupo']).'</font></h4></td></tr>';
@@ -78,6 +97,7 @@ class ProjectGeneralBudgetPdfService
             $quantity = round((float) $item['cantidad'], 4);
             $subtotal = $quantity * $price;
             $total += $subtotal;
+            $moduleTotal += $subtotal;
 
             $html .= '
 <tr nobr="true">
@@ -90,15 +110,23 @@ class ProjectGeneralBudgetPdfService
 </tr>';
         }
 
+        if ($lastModule !== null) {
+            $html .= '
+<tr class="subseccion" nobr="true">
+<td width="600" colspan="5"><b>SUBTOTAL MÓDULO '.htmlentities((string) $lastModule).'</b></td>
+<td width="80" align="right"><b>'.LegacyPdfFormat::number($moduleTotal, 2).'</b></td>
+</tr>';
+        }
+
         $total = round($total, 2);
         $totalLiteral = 'SON: BOLIVIANOS '.ltrim(LegacyPdfFormat::amountLiteral($total));
         $html .= '
 <tr class="subseccion" nobr="true">
-<td colspan="4"><b>TOTAL</b></td>
-<td colspan="2" align="right"><b>'.LegacyPdfFormat::number($total, 2).'</b></td>
+<td width="600" colspan="5"><b>TOTAL</b></td>
+<td width="80" align="right"><b>'.LegacyPdfFormat::number($total, 2).'</b></td>
 </tr>
 <tr nobr="true">
-<td colspan="6">'.$totalLiteral.'</td>
+<td width="680" colspan="6">'.$totalLiteral.'</td>
 </tr>
 </tbody>
 </table>';

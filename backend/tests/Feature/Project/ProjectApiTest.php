@@ -792,6 +792,55 @@ class ProjectApiTest extends TestCase
         $this->assertStringStartsWith('PK', $xlsx->getContent());
     }
 
+    public function test_general_budget_items_are_grouped_by_module_with_subtotals(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->seedGeneralPercentages();
+        $this->createProjectRecord();
+        \Illuminate\Support\Facades\DB::table('modulo')->insert([
+            ['id_modulo' => 2, 'nombre_modulo' => 'Modulo A', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
+            ['id_modulo' => 3, 'nombre_modulo' => 'Modulo B', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
+        ]);
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material A']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 1, 'precio' => 20, 'descripcion' => 'Material B']);
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM A']);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM B', 'cod' => 'ITM-002']);
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 2, 'id_insumo' => 2, 'cantidad' => 3]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'id_modulo' => 2, 'cantidad' => 2, 'prioridad' => 2]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'id_modulo' => 3, 'cantidad' => 1, 'prioridad' => 1]);
+
+        $items = app(\App\Modules\Projects\Services\ProjectBudgetService::class)->generalBudgetPdfItems(
+            \App\Models\Project::findOrFail(1),
+            'PCA',
+            app(\App\Modules\Projects\Services\ProjectLegacyUnitPriceService::class),
+        );
+
+        $this->assertSame(['Modulo A', 'Modulo B'], array_column($items, 'modulo'));
+        $moduleTotals = collect($items)
+            ->groupBy('modulo')
+            ->map(fn ($rows): float => round((float) $rows->sum('parcial'), 2))
+            ->all();
+        $this->assertEqualsWithDelta(
+            round(array_sum(array_column($items, 'parcial')), 2),
+            round(array_sum($moduleTotals), 2),
+            0.02,
+        );
+
+        $pdf = $this->get('/api/v1/projects/1/general-budget/pdf?format=PCA');
+        $pdf->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        $xlsx = $this->get('/api/v1/projects/1/general-budget/xlsx?format=PCA');
+        $xlsx->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringStartsWith('PK', $xlsx->getContent());
+    }
+
     public function test_general_budget_pdf_is_valid_when_project_has_no_items(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

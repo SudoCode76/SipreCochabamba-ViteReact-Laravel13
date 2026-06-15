@@ -151,13 +151,21 @@ class ProjectBudgetService
     {
         $this->snapshotService->ensureForProject($project);
         return $this->activeProjectItems($project)
-            ->sortBy(fn (ProjectItem $item) => $item->prioridad)
+            ->sortBy(fn (ProjectItem $item) => [
+                $item->module?->nombre_modulo ?? 'General',
+                $item->grupo_snapshot ?? $item->item?->groupCatalog?->nombre_grupo ?? '',
+                $item->subgrupo_snapshot ?? $item->item?->subgroupCatalog?->descripcion ?? '',
+                $item->prioridad,
+                $item->nombre_snapshot ?? $item->item?->item ?? '',
+            ])
             ->values()
             ->map(function (ProjectItem $row) use ($format, $legacyUnitPriceService): array {
                 $price = $this->snapshotAnalysisService->price($row, $format);
 
                 return [
                     'id_item' => $row->id_item,
+                    'id_modulo' => $row->id_modulo,
+                    'modulo' => $row->module?->nombre_modulo ?: 'General',
                     'nombre_item' => $row->nombre_snapshot ?? $row->item?->item,
                     'nombre_grupo' => $row->grupo_snapshot ?? $row->item?->groupCatalog?->nombre_grupo,
                     'nombre_subgrupo' => $row->subgrupo_snapshot ?? $row->item?->subgroupCatalog?->descripcion,
@@ -220,7 +228,7 @@ class ProjectBudgetService
         $this->snapshotService->ensureForProject($project);
 
         return ProjectItem::query()
-            ->with(['project', 'item.groupCatalog', 'item.subgroupCatalog', 'item.unitMeasure'])
+            ->with(['project', 'module', 'item.groupCatalog', 'item.subgroupCatalog', 'item.unitMeasure'])
             ->where('proyecto_item.id_proyecto', $project->id_proyecto)
             ->where('proyecto_item.estado', 'AC')
             ->whereNotNull('proyecto_item.id_item')
