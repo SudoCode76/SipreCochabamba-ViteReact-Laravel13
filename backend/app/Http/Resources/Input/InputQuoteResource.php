@@ -13,6 +13,7 @@ class InputQuoteResource extends JsonResource
         $official = $this->filePayload($this->archivo, 'Propuesta oficial');
         $proposalOne = $this->filePayload($this->archivo1, 'Propuesta alternativa 1');
         $proposalTwo = $this->filePayload($this->archivo2, 'Propuesta alternativa 2');
+        $proposalThree = $this->filePayload($this->archivo3, 'Propuesta alternativa 3');
 
         return [
             'id_cotizacion' => $this->id_cotizacion,
@@ -33,6 +34,10 @@ class InputQuoteResource extends JsonResource
             'archivo2_url' => $proposalTwo['url'],
             'archivo2_available' => $proposalTwo['available'],
             'archivo2_label' => $proposalTwo['label'],
+            'archivo3' => $this->archivo3,
+            'archivo3_url' => $proposalThree['url'],
+            'archivo3_available' => $proposalThree['available'],
+            'archivo3_label' => $proposalThree['label'],
             'id_solicitud' => $this->id_solicitud,
             'id' => $this->id_cotizacion,
             'input_id' => $this->id_insumo,
@@ -52,6 +57,10 @@ class InputQuoteResource extends JsonResource
             'file_2_url' => $proposalTwo['url'],
             'file_2_available' => $proposalTwo['available'],
             'file_2_label' => $proposalTwo['label'],
+            'file_3' => $this->archivo3,
+            'file_3_url' => $proposalThree['url'],
+            'file_3_available' => $proposalThree['available'],
+            'file_3_label' => $proposalThree['label'],
             'request_id' => $this->id_solicitud,
             'input_description' => $this->input?->descripcion,
         ];

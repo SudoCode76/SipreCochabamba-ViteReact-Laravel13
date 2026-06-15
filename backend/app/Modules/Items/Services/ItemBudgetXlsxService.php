@@ -5,9 +5,17 @@ namespace App\Modules\Items\Services;
 use App\Models\Item;
 use App\Modules\Items\Services\Analysis\ItemPriceAnalysisService;
 use App\Support\Pdf\LegacyPdfFormat;
+use App\Support\Xlsx\MunicipalXlsxHeader;
 use App\Support\Xlsx\SimpleXlsxResponse;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Response;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ItemBudgetXlsxService
 {
@@ -23,24 +31,213 @@ class ItemBudgetXlsxService
             ? $this->itemPriceAnalysisService->buildRecalculated($item, $date, $mode)
             : $this->itemPriceAnalysisService->buildCurrent($item, $mode);
 
-        return SimpleXlsxResponse::make($date ? 'recalcular_analisis_precios.xlsx' : 'analisis_precios_unitarios.xlsx', [
-            [
-                'title' => 'Analisis',
-                'rows' => $this->analysisReportRows($analysis),
-            ],
-            [
-                'title' => 'Componentes',
-                'rows' => $this->analysisComponentsRows($analysis),
-            ],
-            [
-                'title' => 'Parametros',
-                'rows' => $this->analysisPercentagesRows($analysis),
-            ],
-            [
-                'title' => 'Resumen',
-                'rows' => $this->analysisTotalsRows($analysis),
-            ],
+        return $this->formattedPriceAnalysisResponse(
+            $date ? 'recalcular_analisis_precios.xlsx' : 'analisis_precios_unitarios.xlsx',
+            $analysis,
+        );
+    }
+
+    private function formattedPriceAnalysisResponse(string $filename, array $analysis): Response
+    {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Analisis');
+        $this->configureAnalysisSheet($sheet);
+
+        $row = MunicipalXlsxHeader::apply($sheet, 'Análisis de Precios Unitarios');
+        $itemName = mb_strtoupper((string) ($analysis['item']['name'] ?? ''), 'UTF-8');
+        $unit = $analysis['item']['unit_measure']['description'] ?? $analysis['item']['unit_measure']['abbreviation'] ?? '';
+
+        $sheet->setCellValue('A'.$row, 'ITEM:');
+        $sheet->setCellValue('B'.$row, $itemName);
+        $sheet->mergeCells('B'.$row.':D'.$row);
+        $sheet->setCellValue('E'.$row, 'UNIDAD:');
+        $sheet->setCellValue('F'.$row, $unit);
+        $sheet->getStyle('A'.$row.':F'.$row)->getFont()->setBold(true)->setSize(12);
+        $sheet->getStyle('E'.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $row += 2;
+
+        $headers = ['Nº P', 'Insumo/Parametro', 'Unid.', 'Cant.', 'Unit.(Bs)', 'Parcial(Bs)'];
+        $this->writeRow($sheet, $row, $headers);
+        $sheet->getStyle('A'.$row.':F'.$row)->applyFromArray($this->headerStyle());
+        $row++;
+
+        $totals = $analysis['totals'] ?? [];
+        $percentages = $this->resolveAnalysisPercentages($analysis['percentages'] ?? []);
+
+        $row = $this->writeSection($sheet, $row, 'A', 'MATERIALES');
+        foreach (($analysis['materials'] ?? []) as $index => $component) {
+            $this->writeComponentRow($sheet, $row, $index, $component);
+            $row++;
+        }
+        $row = $this->writeTotalRow($sheet, $row, 'D', 'TOTAL MATERIALES', '(A)=', $totals['materials_total'] ?? 0);
+
+        $row = $this->writeSection($sheet, $row, 'B', 'MANO DE OBRA', false);
+        foreach (($analysis['labor'] ?? []) as $index => $component) {
+            $this->writeComponentRow($sheet, $row, $index, $component);
+            $row++;
+        }
+        $row = $this->writeTotalRow($sheet, $row, 'E', 'SUBTOTAL MANO DE OBRA', '(B)=', $totals['labor_base_total'] ?? 0);
+        $row = $this->writePercentageRow($sheet, $row, 'F', $percentages['social_charges']['description'] ?? 'CARGAS SOCIALES', $percentages['social_charges']['percentage'] ?? 0, '(E)=', $totals['social_charges_amount'] ?? 0);
+        $row = $this->writePercentageRow($sheet, $row, 'O', $percentages['vat']['description'] ?? 'IMPUESTO AL VALOR AGREGADO', $percentages['vat']['percentage'] ?? 0, '(E+F)=', $totals['labor_vat_amount'] ?? 0);
+        $row = $this->writeTotalRow($sheet, $row, 'G', 'TOTAL MANO DE OBRA', '(E+F+O)=', $totals['labor_total'] ?? 0);
+
+        $row = $this->writeSection($sheet, $row, 'C', 'EQUIPO, MAQUINARIA Y HERRAMIENTA', false);
+        foreach (($analysis['tools'] ?? []) as $index => $component) {
+            $this->writeComponentRow($sheet, $row, $index, $component);
+            $row++;
+        }
+        $row = $this->writePercentageRow($sheet, $row, 'H', $percentages['minor_tools']['description'] ?? 'HERRAMIENTAS MENORES', $percentages['minor_tools']['percentage'] ?? 0, '(G)=', $totals['minor_tools_amount'] ?? 0);
+        $row = $this->writeTotalRow($sheet, $row, 'I', 'TOTAL HERRAMIENTAS Y EQUIPO', '(C+H)=', $totals['tools_total'] ?? 0);
+        $row = $this->writeTotalRow($sheet, $row, 'J', 'SUBTOTAL', '(D+G+I)=', $totals['direct_cost_total'] ?? 0);
+        $row = $this->writePercentageRow($sheet, $row, 'L', $percentages['administration']['description'] ?? 'GASTOS GRALES Y ADMINISTRATIVOS', $percentages['administration']['percentage'] ?? 0, '(E)=', $totals['administration_amount'] ?? 0);
+        $row = $this->writePercentageRow($sheet, $row, 'M', $percentages['utility']['description'] ?? 'UTILIDAD', $percentages['utility']['percentage'] ?? 0, '(J+L)=', $totals['utility_amount'] ?? 0);
+        $row = $this->writeTotalRow($sheet, $row, 'N', 'PARCIAL', '(J+L+M)=', $totals['subtotal_total'] ?? 0);
+        $row = $this->writePercentageRow($sheet, $row, 'M', $percentages['transaction_tax']['description'] ?? 'IMPUESTO A LAS TRANSACCIONES', $percentages['transaction_tax']['percentage'] ?? 0, '(N)=', $totals['transaction_tax_amount'] ?? 0);
+
+        $totalPrice = round((float) ($totals['total_price'] ?? 0), 2);
+        $row = $this->writeTotalRow($sheet, $row, 'Q', 'TOTAL PRECIO UNITARIO', '((N+P)=', $totalPrice);
+        $sheet->mergeCells('A'.$row.':E'.$row);
+        $sheet->setCellValue('A'.$row, 'PRECIO ADOPTADO');
+        $sheet->setCellValue('F'.$row, $totalPrice);
+        $sheet->getStyle('A'.$row.':F'.$row)->applyFromArray($this->subtotalStyle());
+        $sheet->getStyle('F'.$row)->getNumberFormat()->setFormatCode('#,##0.00');
+        $row++;
+
+        $sheet->mergeCells('A'.$row.':F'.$row);
+        $sheet->setCellValue('A'.$row, 'SON: BOLIVIANOS '.trim(LegacyPdfFormat::amountLiteral($totalPrice)));
+        $sheet->getStyle('A'.$row.':F'.$row)->getFont()->setBold(true);
+        $sheet->getStyle('A7:F'.$row)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFD6E4E2'));
+        $sheet->getStyle('A1:F'.$row)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'sipre_xlsx_');
+        (new Xlsx($spreadsheet))->save($tempPath);
+        $content = file_get_contents($tempPath);
+        @unlink($tempPath);
+        $spreadsheet->disconnectWorksheets();
+
+        return response($content, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
         ]);
+    }
+
+    private function configureAnalysisSheet(Worksheet $sheet): void
+    {
+        foreach (['A' => 8, 'B' => 44, 'C' => 12, 'D' => 14, 'E' => 16, 'F' => 16] as $column => $width) {
+            $sheet->getColumnDimension($column)->setWidth($width);
+        }
+
+        $sheet->freezePane('A10');
+        $sheet->getPageSetup()->setFitToWidth(1)->setFitToHeight(0);
+        $sheet->getPageMargins()->setTop(0.4)->setRight(0.25)->setBottom(0.4)->setLeft(0.25);
+    }
+
+    private function writeRow(Worksheet $sheet, int $row, array $values): void
+    {
+        foreach ($values as $index => $value) {
+            $sheet->setCellValue(Coordinate::stringFromColumnIndex($index + 1).$row, $value);
+        }
+    }
+
+    private function writeSection(Worksheet $sheet, int $row, string $code, string $label, bool $strong = true): int
+    {
+        $sheet->setCellValue('A'.$row, $code);
+        $sheet->setCellValue('B'.$row, $label);
+        $sheet->mergeCells('B'.$row.':F'.$row);
+        $sheet->getStyle('A'.$row.':F'.$row)->applyFromArray($strong ? $this->sectionStyle() : $this->plainSectionStyle());
+
+        return $row + 1;
+    }
+
+    private function writeComponentRow(Worksheet $sheet, int $row, int $index, array $component): void
+    {
+        $quantity = (float) ($component['quantity'] ?? 0);
+        $unitPrice = (float) ($component['unit_price'] ?? 0);
+        $partial = round((float) ($component['partial'] ?? ($quantity * $unitPrice)), 2);
+
+        $this->writeRow($sheet, $row, [
+            $index + 1,
+            $component['description'] ?? '',
+            $component['unit_measure']['abbreviation'] ?? $component['unit_measure']['description'] ?? '',
+            $quantity,
+            $unitPrice,
+            $partial,
+        ]);
+        $sheet->getStyle('A'.$row.':F'.$row)->applyFromArray($this->bodyStyle());
+        $sheet->getStyle('D'.$row)->getNumberFormat()->setFormatCode('#,##0.0000');
+        $sheet->getStyle('E'.$row.':F'.$row)->getNumberFormat()->setFormatCode('#,##0.00');
+        $sheet->getStyle('D'.$row.':F'.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+    }
+
+    private function writeTotalRow(Worksheet $sheet, int $row, string $code, string $label, string $formulaLabel, mixed $amount): int
+    {
+        $sheet->setCellValue('A'.$row, $code);
+        $sheet->setCellValue('B'.$row, $label);
+        $sheet->mergeCells('B'.$row.':D'.$row);
+        $sheet->setCellValue('E'.$row, $formulaLabel);
+        $sheet->setCellValue('F'.$row, round((float) $amount, 2));
+        $sheet->getStyle('A'.$row.':F'.$row)->applyFromArray($this->subtotalStyle());
+        $sheet->getStyle('E'.$row.':F'.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $sheet->getStyle('F'.$row)->getNumberFormat()->setFormatCode('#,##0.00');
+
+        return $row + 1;
+    }
+
+    private function writePercentageRow(Worksheet $sheet, int $row, string $code, string $label, float|int $percentage, string $formulaLabel, mixed $amount): int
+    {
+        $sheet->setCellValue('A'.$row, $code);
+        $sheet->setCellValue('B'.$row, $label);
+        $sheet->mergeCells('B'.$row.':C'.$row);
+        $sheet->setCellValue('D'.$row, $this->percentageLabel($percentage));
+        $sheet->setCellValue('E'.$row, $formulaLabel);
+        $sheet->setCellValue('F'.$row, round((float) $amount, 2));
+        $sheet->getStyle('A'.$row.':F'.$row)->applyFromArray($this->bodyStyle());
+        $sheet->getStyle('D'.$row.':F'.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $sheet->getStyle('F'.$row)->getNumberFormat()->setFormatCode('#,##0.00');
+
+        return $row + 1;
+    }
+
+    private function headerStyle(): array
+    {
+        return [
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '55827E']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        ];
+    }
+
+    private function sectionStyle(): array
+    {
+        return [
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '0D9C8A']],
+        ];
+    }
+
+    private function plainSectionStyle(): array
+    {
+        return [
+            'font' => ['bold' => true],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFFFFF']],
+        ];
+    }
+
+    private function subtotalStyle(): array
+    {
+        return [
+            'font' => ['bold' => true],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'CCEBE8']],
+        ];
+    }
+
+    private function bodyStyle(): array
+    {
+        return [
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFFFFF']],
+        ];
     }
 
     private function analysisReportRows(array $analysis): array

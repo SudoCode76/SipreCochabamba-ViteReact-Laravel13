@@ -13,6 +13,7 @@ class InputRequestQuoteResource extends JsonResource
         $official = $this->filePayload($this->archivo, 'Propuesta oficial');
         $proposalOne = $this->filePayload($this->archivo1, 'Propuesta alternativa 1');
         $proposalTwo = $this->filePayload($this->archivo2, 'Propuesta alternativa 2');
+        $proposalThree = $this->filePayload($this->archivo3, 'Propuesta alternativa 3');
 
         return [
             'id_cotizacion' => $this->id_cotizacion,
@@ -30,6 +31,10 @@ class InputRequestQuoteResource extends JsonResource
             'archivo2_url' => $proposalTwo['url'],
             'archivo2_available' => $proposalTwo['available'],
             'archivo2_label' => $proposalTwo['label'],
+            'archivo3' => $this->archivo3,
+            'archivo3_url' => $proposalThree['url'],
+            'archivo3_available' => $proposalThree['available'],
+            'archivo3_label' => $proposalThree['label'],
             'estado' => $this->estado,
             'condicion' => $this->condicion,
             'id_log_insumo' => $this->id_log_insumo,

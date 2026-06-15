@@ -26,6 +26,7 @@ class InputQuote extends Model
         'fecha',
         'archivo1',
         'archivo2',
+        'archivo3',
         'id_solicitud',
     ];
 

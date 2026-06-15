@@ -194,9 +194,11 @@ export default function InputsPage() {
       quote.archivo,
       quote.archivo1,
       quote.archivo2,
+      quote.archivo3,
       quote.archivo_label,
       quote.archivo1_label,
       quote.archivo2_label,
+      quote.archivo3_label,
     ].some((value) => String(value ?? "").toLowerCase().includes(term));
   });
 
@@ -445,6 +447,7 @@ export default function InputsPage() {
     const valido = formData.get("valido");
     const propuesto1 = formData.get("propuesto_1");
     const propuesto2 = formData.get("propuesto_2");
+    const propuesto3 = formData.get("propuesto_3");
 
     if (valido instanceof File && valido.size > 0) {
       payload.append("valido", valido);
@@ -458,7 +461,11 @@ export default function InputsPage() {
       payload.append("propuesto_2", propuesto2);
     }
 
-    if (![valido, propuesto1, propuesto2].some((file) => file instanceof File && file.size > 0)) {
+    if (propuesto3 instanceof File && propuesto3.size > 0) {
+      payload.append("propuesto_3", propuesto3);
+    }
+
+    if (![valido, propuesto1, propuesto2, propuesto3].some((file) => file instanceof File && file.size > 0)) {
       setQuoteError("Adjunta al menos un archivo de cotización.");
       return;
     }
@@ -944,7 +951,7 @@ export default function InputsPage() {
                     {currentQuoteLoading ? (
                       <p className="text-sm text-muted-foreground"><Loader2 className="mr-2 inline size-4 animate-spin" /> Cargando cotizaciones...</p>
                     ) : (
-                      <div className="grid gap-3 text-sm md:grid-cols-3">
+                      <div className="mx-auto grid max-w-3xl gap-4 text-sm md:grid-cols-2">
                         <div>
                           <p className="mb-1 font-medium text-foreground">Propuesta oficial</p>
                           {renderQuoteFile(currentQuote, "archivo")}
@@ -957,11 +964,15 @@ export default function InputsPage() {
                           <p className="mb-1 font-medium text-foreground">Alternativa 2</p>
                           {renderQuoteFile(currentQuote, "archivo2")}
                         </div>
+                        <div>
+                          <p className="mb-1 font-medium text-foreground">Alternativa 3</p>
+                          {renderQuoteFile(currentQuote, "archivo3")}
+                        </div>
                       </div>
                     )}
                   </div>
 
-                  <div className="grid gap-6 md:grid-cols-3">
+                  <div className="mx-auto grid max-w-3xl gap-6 md:grid-cols-2">
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="quote_valido" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cotización Válida</Label>
                       <Input id="quote_valido" name="valido" type="file" accept="application/pdf,.pdf" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
@@ -975,6 +986,11 @@ export default function InputsPage() {
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="quote_propuesto_2" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cotización Propuesta 2</Label>
                       <Input id="quote_propuesto_2" name="propuesto_2" type="file" accept="application/pdf,.pdf" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="quote_propuesto_3" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cotización Propuesta 3</Label>
+                      <Input id="quote_propuesto_3" name="propuesto_3" type="file" accept="application/pdf,.pdf" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
                     </div>
                   </div>
 
@@ -1477,12 +1493,13 @@ export default function InputsPage() {
                           <th className="px-5 py-4 font-semibold text-foreground">Propuesta oficial</th>
                           <th className="px-5 py-4 font-semibold text-foreground">Propuesta Alternativa 1</th>
                           <th className="px-5 py-4 font-semibold text-foreground">Propuesta Alternativa 2</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Propuesta Alternativa 3</th>
                         </tr>
                       </thead>
                       <tbody>
                         {quoteHistoryLoading && (
                           <tr>
-                            <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
+                            <td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">
                               <Loader2 className="mr-2 inline size-4 animate-spin" /> Cargando cotizaciones...
                             </td>
                           </tr>
@@ -1500,11 +1517,14 @@ export default function InputsPage() {
                             <td className="px-5 py-4 align-top">
                               {renderQuoteFile(quote, "archivo2")}
                             </td>
+                            <td className="px-5 py-4 align-top">
+                              {renderQuoteFile(quote, "archivo3")}
+                            </td>
                           </tr>
                         ))}
                         {!quoteHistoryLoading && visibleQuoteHistory.length === 0 && (
                           <tr>
-                            <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
+                            <td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">
                               No hay cotizaciones registradas.
                             </td>
                           </tr>

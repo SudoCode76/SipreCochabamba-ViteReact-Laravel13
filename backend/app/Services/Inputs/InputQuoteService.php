@@ -26,6 +26,7 @@ class InputQuoteService
             'fecha' => $request->filled('date') ? $request->date('date')->toDateString() : now()->toDateString(),
             'archivo1' => $this->resolveFilePath($request->file('propuesto_1'), $request->input('file_1'), 'propuesto_1'),
             'archivo2' => $this->resolveFilePath($request->file('propuesto_2'), $request->input('file_2'), 'propuesto_2'),
+            'archivo3' => $this->resolveFilePath($request->file('propuesto_3'), $request->input('file_3'), 'propuesto_3'),
             'id_solicitud' => $request->filled('request_id') ? (int) $request->integer('request_id') : null,
         ]);
     }
