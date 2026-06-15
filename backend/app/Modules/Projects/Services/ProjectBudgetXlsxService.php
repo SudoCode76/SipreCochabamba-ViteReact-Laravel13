@@ -126,14 +126,29 @@ class ProjectBudgetXlsxService
             ['Proyecto', $project->nombre_proyecto],
             ['Tipo', $this->typeLabel($type)],
             [],
-            ['Nro', 'Prioridad', 'Item', 'Insumo/Parametro', 'Unidad', 'Cantidad', 'Unitario', 'Parcial'],
+            ['Nro', 'Modulo', 'Prioridad', 'Item', 'Insumo/Parametro', 'Unidad', 'Cantidad', 'Unitario', 'Parcial'],
         ];
         $total = 0.0;
+        $moduleTotal = 0.0;
+        $lastModule = null;
 
         foreach ($this->projectInputBreakdownPdfService->rows($project, $type) as $index => $row) {
+            if ($lastModule !== $row['modulo']) {
+                if ($lastModule !== null) {
+                    $rows[] = ['SUBTOTAL MODULO '.$lastModule, '', '', '', '', '', '', '', round($moduleTotal, 2)];
+                    $rows[] = [];
+                }
+
+                $rows[] = ['MODULO', $row['modulo']];
+                $lastModule = $row['modulo'];
+                $moduleTotal = 0.0;
+            }
+
             $total += (float) $row['parcial'];
+            $moduleTotal += (float) $row['parcial'];
             $rows[] = [
                 $index + 1,
+                $row['modulo'],
                 $row['prioridad'],
                 $row['nombre_item'],
                 $row['descripcion'],
@@ -144,8 +159,12 @@ class ProjectBudgetXlsxService
             ];
         }
 
+        if ($lastModule !== null) {
+            $rows[] = ['SUBTOTAL MODULO '.$lastModule, '', '', '', '', '', '', '', round($moduleTotal, 2)];
+        }
+
         $rows[] = [];
-        $rows[] = ['TOTAL', '', '', '', '', '', '', round($total, 2)];
+        $rows[] = ['TOTAL', '', '', '', '', '', '', '', round($total, 2)];
 
         return SimpleXlsxResponse::make($this->inputBreakdownFilename($type), [[
             'title' => 'Desglose',

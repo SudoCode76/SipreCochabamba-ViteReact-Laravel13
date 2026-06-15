@@ -43,6 +43,8 @@ class ProjectInputBreakdownPdfService
                     'id_item_insumo' => (int) $row->id_item_insumo,
                     'id_insumo' => (int) $row->id_insumo,
                     'id_item' => (int) $row->id_item,
+                    'id_modulo' => $row->id_modulo !== null ? (int) $row->id_modulo : null,
+                    'modulo' => $row->modulo ?: 'General',
                     'prioridad' => (int) $row->prioridad,
                     'nombre_item' => $row->nombre_item,
                     'descripcion' => $row->descripcion,
@@ -62,15 +64,21 @@ class ProjectInputBreakdownPdfService
         return DB::table('proyecto_item_insumo_snapshot')
             ->join('proyecto_item', 'proyecto_item.id_proyecto_item', '=', 'proyecto_item_insumo_snapshot.id_proyecto_item')
             ->join('item', 'item.id_item', '=', 'proyecto_item.id_item')
+            ->leftJoin('modulo', 'modulo.id_modulo', '=', 'proyecto_item.id_modulo')
             ->where('proyecto_item_insumo_snapshot.estado', '<>', 'EX')
             ->where('proyecto_item.estado', 'AC')
             ->where('proyecto_item.id_proyecto', $project->id_proyecto)
             ->where('proyecto_item_insumo_snapshot.tipo', $type)
+            ->orderByRaw('COALESCE(modulo.nombre_modulo, ?)', ['General'])
             ->orderBy('proyecto_item.prioridad')
+            ->orderBy('item.item')
+            ->orderBy('proyecto_item_insumo_snapshot.descripcion')
             ->select([
                 'proyecto_item_insumo_snapshot.id_snapshot as id_item_insumo',
                 'proyecto_item_insumo_snapshot.id_insumo',
                 'proyecto_item.id_item',
+                'proyecto_item.id_modulo',
+                'modulo.nombre_modulo as modulo',
                 'proyecto_item_insumo_snapshot.cantidad',
                 'proyecto_item.prioridad',
                 'item.item as nombre_item',
@@ -84,6 +92,8 @@ class ProjectInputBreakdownPdfService
     private function buildHtml(Project $project, array $rows, int $type): string
     {
         $total = 0.0;
+        $moduleTotal = 0.0;
+        $lastModule = null;
         $lastItemName = null;
         $position = 0;
         $html = '
@@ -119,16 +129,35 @@ class ProjectInputBreakdownPdfService
  <tbody>';
 
         foreach ($rows as $row) {
+            if ($lastModule !== $row['modulo']) {
+                if ($lastModule !== null) {
+                    $html .= '
+          <tr bgcolor="#d9f2ef">
+            <td width="550" colspan="5"><b>SUBTOTAL MÓDULO '.htmlentities((string) $lastModule).'</b></td>
+            <td width="110" align="right"><b>'.LegacyPdfFormat::number($moduleTotal, 2).'</b></td>
+          </tr>';
+                }
+
+                $html .= '
+          <tr bgcolor="#8cb9b5">
+            <td width="660" colspan="6"><b>MÓDULO: '.htmlentities((string) $row['modulo']).'</b></td>
+          </tr>';
+                $lastModule = $row['modulo'];
+                $lastItemName = null;
+                $moduleTotal = 0.0;
+            }
+
             if ($lastItemName !== $row['nombre_item']) {
                 $html .= '
           <tr bgcolor="#ccebe8">
-            <td colspan="6"><b>PR: '.$row['prioridad'].' &nbsp;&nbsp; ITEM: '.htmlentities((string) $row['nombre_item']).'</b></td>
+            <td width="660" colspan="6"><b>PR: '.$row['prioridad'].' &nbsp;&nbsp; ITEM: '.htmlentities((string) $row['nombre_item']).'</b></td>
           </tr>';
                 $lastItemName = $row['nombre_item'];
             }
 
             $position++;
             $total += $row['parcial'];
+            $moduleTotal += $row['parcial'];
             $html .= '
           <tr>
             <td width="40">'.$position.'</td>
@@ -140,13 +169,21 @@ class ProjectInputBreakdownPdfService
           </tr>';
         }
 
+        if ($lastModule !== null) {
+            $html .= '
+      <tr bgcolor="#d9f2ef">
+        <td width="550" colspan="5"><b>SUBTOTAL MÓDULO '.htmlentities((string) $lastModule).'</b></td>
+        <td width="110" align="right"><b>'.LegacyPdfFormat::number($moduleTotal, 2).'</b></td>
+      </tr>';
+        }
+
         $html .= '
       <tr bgcolor="#ccebe8">
-        <td colspan="5"><b>'.$this->totalLabelFor($type).'</b></td>
-        <td><b>'.LegacyPdfFormat::number($total, 2).'</b></td>
+        <td width="550" colspan="5"><b>'.$this->totalLabelFor($type).'</b></td>
+        <td width="110" align="right"><b>'.LegacyPdfFormat::number($total, 2).'</b></td>
       </tr>
       <tr>
-      <td width="100%"><b>'.$this->literalFor($type, $total).'</b></td>
+      <td width="660" colspan="6"><b>'.$this->literalFor($type, $total).'</b></td>
       </tr>
       </tbody>
       </table>';

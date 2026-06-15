@@ -865,6 +865,44 @@ class ProjectApiTest extends TestCase
         $this->assertSame([10, 20], array_column($rows, 'prioridad'));
     }
 
+    public function test_project_input_breakdown_rows_are_grouped_by_module_with_subtotals(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        \Illuminate\Support\Facades\DB::table('modulo')->insert([
+            ['id_modulo' => 2, 'nombre_modulo' => 'Modulo A', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
+            ['id_modulo' => 3, 'nombre_modulo' => 'Modulo B', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
+        ]);
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material A']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 1, 'precio' => 20, 'descripcion' => 'Material B']);
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM A']);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM B', 'cod' => 'ITM-002']);
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 2, 'id_insumo' => 2, 'cantidad' => 3]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'id_modulo' => 2, 'prioridad' => 2]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'id_modulo' => 3, 'prioridad' => 1]);
+
+        $rows = app(\App\Modules\Projects\Services\ProjectInputBreakdownPdfService::class)
+            ->rows(\App\Models\Project::findOrFail(1), 1);
+
+        $this->assertSame(['Modulo A', 'Modulo B'], array_column($rows, 'modulo'));
+        $this->assertSame([20.0, 60.0], array_map(fn (array $row): float => $row['parcial'], $rows));
+        $this->assertSame(80.0, array_sum(array_column($rows, 'parcial')));
+
+        $pdf = $this->get('/api/v1/projects/1/input-breakdown/pdf?type=1');
+        $pdf->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        $xlsx = $this->get('/api/v1/projects/1/input-breakdown/xlsx?type=1');
+        $xlsx->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringStartsWith('PK', $xlsx->getContent());
+    }
+
     public function test_project_input_breakdown_pdf_keeps_project_snapshot_when_input_is_inactive(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
