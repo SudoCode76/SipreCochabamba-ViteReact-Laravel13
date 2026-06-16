@@ -170,7 +170,7 @@ export default function MainLayout() {
                     <>
                       <DropdownMenuSeparator className="bg-border/70" />
                       <DropdownMenuItem asChild className="rounded-xl px-3 py-2 cursor-pointer">
-                        <Link to="/items?freshness=outdated">
+                        <Link to="/items">
                           <Bell className="mr-2 size-4" />
                           Ver ítems pendientes
                         </Link>

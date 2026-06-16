@@ -76,7 +76,9 @@ class ListAnalysisItemsService
             $query->where('item.estado', strtoupper((string) $filters['status']));
         }
 
-        if (($filters['freshness'] ?? null) === 'outdated') {
+        if (! empty($filters['review_days'])) {
+            $this->itemFreshnessService->applyReviewDaysFilter($query, (int) $filters['review_days']);
+        } elseif (($filters['freshness'] ?? null) === 'outdated') {
             $this->itemFreshnessService->applyOutdatedFilter($query);
         }
 

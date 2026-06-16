@@ -2,7 +2,7 @@ import apiClient from "@/lib/api/client";
 import { buildApiUrl } from "@/lib/utils/pdf";
 
 export const itemsService = {
-  list: async ({ page = 1, perPage = 10, search = "", order = "legacy", freshness = "" } = {}) => {
+  list: async ({ page = 1, perPage = 10, search = "", order = "legacy", freshness = "", reviewDays = "" } = {}) => {
     const response = await apiClient.get("/v1/items", {
       params: {
         page,
@@ -10,6 +10,7 @@ export const itemsService = {
         order,
         ...(search ? { search } : {}),
         ...(freshness ? { freshness } : {}),
+        ...(reviewDays ? { review_days: reviewDays } : {}),
       },
     });
     return response.data;

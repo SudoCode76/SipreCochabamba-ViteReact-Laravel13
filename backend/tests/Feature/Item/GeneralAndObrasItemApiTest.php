@@ -530,7 +530,7 @@ class GeneralAndObrasItemApiTest extends TestCase
             ->assertJsonPath('data.totals.total_price', 31);
     }
 
-    public function test_item_maintenance_summary_filter_and_review_follow_ninety_day_rule(): void
+    public function test_item_maintenance_summary_filter_and_review_follow_review_day_rules(): void
     {
         Carbon::setTestNow('2026-06-10 10:00:00');
 
@@ -563,17 +563,45 @@ class GeneralAndObrasItemApiTest extends TestCase
                 'estado' => 'DC',
                 'fecha_item' => now()->subDays(200)->toDateString(),
             ]);
+            $this->createItemRecord([
+                'id_item' => 5,
+                'item' => 'RECIENTE TREINTA',
+                'fecha_item' => now()->subDays(30)->toDateString(),
+            ]);
+            $this->createItemRecord([
+                'id_item' => 6,
+                'item' => 'RECIENTE CIENTO DIECINUEVE',
+                'fecha_item' => now()->subDays(119)->toDateString(),
+            ]);
+            $this->createItemRecord([
+                'id_item' => 7,
+                'item' => 'ANTIGUO CIENTO OCHENTA Y UNO',
+                'fecha_item' => now()->subDays(181)->toDateString(),
+            ]);
 
             $this->getJson('/api/v1/items/maintenance-summary')
                 ->assertOk()
-                ->assertJsonPath('data.outdated_count', 2)
+                ->assertJsonPath('data.outdated_count', 4)
                 ->assertJsonPath('data.threshold_days', 90);
 
             $this->getJson('/api/v1/items?freshness=outdated&per_page=10')
                 ->assertOk()
-                ->assertJsonCount(2, 'data.items')
+                ->assertJsonCount(4, 'data.items')
                 ->assertJsonPath('data.items.0.is_outdated', true)
                 ->assertJsonPath('data.items.1.is_outdated', true);
+
+            $this->getJson('/api/v1/items?review_days=60&per_page=10')
+                ->assertOk()
+                ->assertJsonCount(1, 'data.items')
+                ->assertJsonPath('data.items.0.name', 'RECIENTE TREINTA');
+
+            $this->getJson('/api/v1/items?review_days=120&per_page=10')
+                ->assertOk()
+                ->assertJsonCount(4, 'data.items');
+
+            $this->getJson('/api/v1/items?review_days=180&per_page=10')
+                ->assertOk()
+                ->assertJsonCount(2, 'data.items');
 
             $this->postJson('/api/v1/items/1/review')
                 ->assertOk()
@@ -583,7 +611,7 @@ class GeneralAndObrasItemApiTest extends TestCase
 
             $this->getJson('/api/v1/items/maintenance-summary')
                 ->assertOk()
-                ->assertJsonPath('data.outdated_count', 1);
+                ->assertJsonPath('data.outdated_count', 3);
         } finally {
             Carbon::setTestNow();
         }
