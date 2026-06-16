@@ -91,6 +91,7 @@ export default function InputsPage() {
   const [deleteError, setDeleteError] = useState(null);
   const [quoteError, setQuoteError] = useState(null);
   const [quoteSuccess, setQuoteSuccess] = useState(null);
+  const [selectedQuoteIds, setSelectedQuoteIds] = useState([]);
   const [viewSearch, setViewSearch] = useState("");
   const [viewPerPage, setViewPerPage] = useState(25);
   const [createForm, setCreateForm] = useState({
@@ -149,6 +150,19 @@ export default function InputsPage() {
     enabled: quoteOpen && Boolean(selectedInput?.id_insumo),
   });
 
+  const priceChanged = selectedInput
+    ? Number(editForm.precio) !== Number(selectedInput.precio)
+    : false;
+
+  const { data: unassignedQuotesData, isLoading: unassignedQuotesLoading } = useQuery({
+    queryKey: ["input-unassigned-quotes", selectedInput?.id_insumo],
+    queryFn: async () => {
+      const response = await apiClient.get(`/v1/inputs/${selectedInput.id_insumo}/quotes/unassigned`);
+      return response.data;
+    },
+    enabled: editOpen && priceChanged && Boolean(selectedInput?.id_insumo),
+  });
+
   const {
     data: deleteImpactData,
     isLoading: deleteImpactLoading,
@@ -180,6 +194,7 @@ export default function InputsPage() {
   const statuses = contextData?.data?.statuses ?? [];
   const quoteHistoryItems = quoteHistoryData?.data?.items ?? [];
   const currentQuote = currentQuoteData?.data?.quote ?? null;
+  const unassignedQuotes = unassignedQuotesData?.data?.items ?? [];
   const deleteImpact = deleteImpactData?.data ?? null;
   const impactedItems = deleteImpact?.items ?? [];
   const impactedProjects = deleteImpact?.pending_projects ?? [];
@@ -226,6 +241,23 @@ export default function InputsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inputs"] });
+      closeEdit();
+    },
+  });
+
+  const priceUpdateMutation = useMutation({
+    mutationFn: async ({ id, payload }) => {
+      const response = await apiClient.post(`/v1/inputs/${id}/price-update`, payload, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["inputs"] });
+      queryClient.invalidateQueries({ queryKey: ["input-history", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["input-quote-history", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["input-current-quote", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["input-unassigned-quotes", variables.id] });
       closeEdit();
     },
   });
@@ -290,6 +322,7 @@ export default function InputsPage() {
   const handleEdit = (item) => {
     setSelectedInput(item);
     setEditError(null);
+    setSelectedQuoteIds([]);
     setEditForm({
       descripcion: item.descripcion ?? "",
       precio: item.precio ?? "",
@@ -348,6 +381,7 @@ export default function InputsPage() {
   const closeEdit = () => {
     setEditOpen(false);
     setEditError(null);
+    setSelectedQuoteIds([]);
     setSelectedInput(null);
     setEditForm({
       descripcion: "",
@@ -418,6 +452,16 @@ export default function InputsPage() {
     setEditForm((current) => ({ ...current, [field]: value }));
   };
 
+  const handleQuoteSelectionChange = (quoteId, checked) => {
+    setSelectedQuoteIds((current) => {
+      if (checked) {
+        return current.includes(quoteId) ? current : [...current, quoteId];
+      }
+
+      return current.filter((id) => id !== quoteId);
+    });
+  };
+
   const handleEditSubmit = async (event) => {
     event.preventDefault();
 
@@ -428,19 +472,50 @@ export default function InputsPage() {
     setEditError(null);
 
     try {
-      await updateMutation.mutateAsync({
+      const payload = {
+        descripcion: editForm.descripcion.trim(),
+        precio: Number(editForm.precio),
+        unidad_medida: Number(editForm.unidad_medida),
+        tipo: Number(editForm.tipo),
+        id_categoria: editForm.categoria ? Number(editForm.categoria) : null,
+        fecha_cotiz: editForm.fecha_cotiz,
+        observacion: editForm.observacion.trim() || null,
+        estado: editForm.estado,
+        cod: editForm.cod.trim() || null,
+      };
+
+      if (!priceChanged) {
+        await updateMutation.mutateAsync({
+          id: selectedInput.id_insumo,
+          payload,
+        });
+        return;
+      }
+
+      const submittedForm = new FormData(event.currentTarget);
+      const pricePayload = new FormData();
+
+      Object.entries(payload).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+          pricePayload.append(key, value);
+        }
+      });
+
+      selectedQuoteIds.forEach((quoteId) => {
+        pricePayload.append("quote_ids[]", quoteId);
+      });
+
+      ["valido", "propuesto_1", "propuesto_2", "propuesto_3"].forEach((field) => {
+        const file = submittedForm.get(field);
+
+        if (file instanceof File && file.size > 0) {
+          pricePayload.append(field, file);
+        }
+      });
+
+      await priceUpdateMutation.mutateAsync({
         id: selectedInput.id_insumo,
-        payload: {
-          descripcion: editForm.descripcion.trim(),
-          precio: Number(editForm.precio),
-          unidad_medida: Number(editForm.unidad_medida),
-          tipo: Number(editForm.tipo),
-          id_categoria: editForm.categoria ? Number(editForm.categoria) : null,
-          fecha_cotiz: editForm.fecha_cotiz,
-          observacion: editForm.observacion.trim() || null,
-          estado: editForm.estado,
-          cod: editForm.cod.trim() || null,
-        },
+        payload: pricePayload,
       });
     } catch (err) {
       const fieldErrors = err.response?.data?.errors;
@@ -517,6 +592,49 @@ export default function InputsPage() {
       <a href={url} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline">
         {label ?? "Ver archivo"}
       </a>
+    );
+  };
+
+  const renderHistoryQuoteFiles = (quotes = []) => {
+    const files = quotes.flatMap((quote) => (
+      ["archivo", "archivo1", "archivo2", "archivo3"].map((field) => ({
+        id: `${quote.id_cotizacion}-${field}`,
+        path: quote?.[field],
+        url: quote?.[`${field}_url`],
+        available: quote?.[`${field}_available`],
+        label: quote?.[`${field}_label`],
+      }))
+    )).filter((file) => file.path);
+
+    if (files.length === 0) {
+      return <span className="text-xs text-muted-foreground">Sin respaldo asociado</span>;
+    }
+
+    return (
+      <div className="flex min-w-44 flex-wrap gap-2">
+        {files.map((file) => (
+          file.available && file.url ? (
+            <a
+              key={file.id}
+              href={file.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+            >
+              <FileText className="size-3.5" />
+              {file.label ?? "Ver archivo"}
+            </a>
+          ) : (
+            <span
+              key={file.id}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground"
+            >
+              <FileText className="size-3.5" />
+              No disponible
+            </span>
+          )
+        ))}
+      </div>
     );
   };
 
@@ -824,7 +942,7 @@ export default function InputsPage() {
 
               <CardContent className="p-5 sm:p-6">
                 {selectedInput && (
-                  <form className="flex flex-col gap-6" onSubmit={handleEditSubmit}>
+                  <form className="flex flex-col gap-6" onSubmit={handleEditSubmit} encType="multipart/form-data">
                     {editError && (
                       <Alert variant="destructive" className="rounded-2xl">
                         <AlertDescription>{editError}</AlertDescription>
@@ -949,12 +1067,89 @@ export default function InputsPage() {
                       </div>
                     </div>
 
+                    {priceChanged && (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950">
+                        <div className="mb-4">
+                          <p className="text-sm font-semibold">Respaldo de cotización obligatorio</p>
+                          <p className="mt-1 text-sm text-amber-900">
+                            Cambiaste el precio del insumo. Selecciona una cotización libre o adjunta al menos un PDF para justificar el nuevo precio.
+                            Puedes adjuntar varios si corresponde.
+                          </p>
+                        </div>
+
+                        {unassignedQuotesLoading ? (
+                          <p className="text-sm text-amber-900">
+                            <Loader2 className="mr-2 inline size-4 animate-spin" />
+                            Cargando cotizaciones libres...
+                          </p>
+                        ) : unassignedQuotes.length > 0 ? (
+                          <div className="mb-5 rounded-xl border border-amber-200 bg-white/70 p-3">
+                            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-800">
+                              Cotizaciones libres disponibles
+                            </p>
+                            <div className="flex flex-col gap-3">
+                              {unassignedQuotes.map((quote) => (
+                                <label key={quote.id_cotizacion} className="flex gap-3 rounded-xl border border-border/70 bg-background/90 p-3 text-sm">
+                                  <input
+                                    type="checkbox"
+                                    className="mt-1 size-4"
+                                    checked={selectedQuoteIds.includes(quote.id_cotizacion)}
+                                    onChange={(event) => handleQuoteSelectionChange(quote.id_cotizacion, event.target.checked)}
+                                  />
+                                  <span className="flex flex-1 flex-col gap-2">
+                                    <span className="font-medium text-foreground">
+                                      Cotización #{quote.id_cotizacion} · {(quote.fecha ?? quote.date) ? formatDate(quote.fecha ?? quote.date) : "Sin fecha"}
+                                    </span>
+                                    <span className="grid gap-2 text-muted-foreground md:grid-cols-2">
+                                      <span>Válida: {renderQuoteFile(quote, "archivo")}</span>
+                                      <span>Propuesta 1: {renderQuoteFile(quote, "archivo1")}</span>
+                                      <span>Propuesta 2: {renderQuoteFile(quote, "archivo2")}</span>
+                                      <span>Propuesta 3: {renderQuoteFile(quote, "archivo3")}</span>
+                                    </span>
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <Alert className="mb-5 rounded-2xl border-amber-200 bg-white/70 text-amber-950">
+                            <AlertDescription>
+                              No hay cotizaciones libres para este insumo. Adjunta al menos un archivo PDF para guardar el nuevo precio.
+                              Los demás archivos son opcionales.
+                            </AlertDescription>
+                          </Alert>
+                        )}
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="edit_quote_valido" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-800">Cotización Válida</Label>
+                            <Input id="edit_quote_valido" name="valido" type="file" accept="application/pdf,.pdf" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                          </div>
+
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="edit_quote_propuesto_1" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-800">Cotización Propuesta 1</Label>
+                            <Input id="edit_quote_propuesto_1" name="propuesto_1" type="file" accept="application/pdf,.pdf" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                          </div>
+
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="edit_quote_propuesto_2" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-800">Cotización Propuesta 2</Label>
+                            <Input id="edit_quote_propuesto_2" name="propuesto_2" type="file" accept="application/pdf,.pdf" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                          </div>
+
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="edit_quote_propuesto_3" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-800">Cotización Propuesta 3</Label>
+                            <Input id="edit_quote_propuesto_3" name="propuesto_3" type="file" accept="application/pdf,.pdf" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <DialogFooter className="mt-2 justify-center gap-2 sm:justify-center">
                       <Button type="button" variant="outline" className="min-w-36 rounded-full" onClick={closeEdit}>
                         Cancelar
                       </Button>
-                      <Button type="submit" className="min-w-36 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={updateMutation.isPending || contextLoading}>
-                        {updateMutation.isPending ? (
+                      <Button type="submit" className="min-w-36 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={updateMutation.isPending || priceUpdateMutation.isPending || contextLoading}>
+                        {updateMutation.isPending || priceUpdateMutation.isPending ? (
                           <>
                             <Loader2 className="mr-2 size-4 animate-spin" />
                             Guardando...
@@ -1456,13 +1651,14 @@ export default function InputsPage() {
                           <th className="px-5 py-4 font-semibold text-foreground">Categoría</th>
                           <th className="px-5 py-4 font-semibold text-foreground">Unidad</th>
                           <th className="px-5 py-4 font-semibold text-foreground">Estado</th>
+                          <th className="px-5 py-4 font-semibold text-foreground">Respaldos</th>
                           <th className="px-5 py-4 font-semibold text-foreground">IP</th>
                         </tr>
                       </thead>
                       <tbody>
                         {inputHistoryLoading && (
                           <tr>
-                            <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">
+                            <td colSpan={10} className="px-5 py-8 text-center text-muted-foreground">
                               <Loader2 className="mr-2 inline size-4 animate-spin" /> Cargando historial...
                             </td>
                           </tr>
@@ -1481,12 +1677,13 @@ export default function InputsPage() {
                                 {getHistoryStatusLabel(history.estado ?? history.status)}
                               </Badge>
                             </td>
+                            <td className="px-5 py-4 align-top">{renderHistoryQuoteFiles(history.quotes ?? [])}</td>
                             <td className="px-5 py-4 align-top text-muted-foreground">{history.ip ?? "-"}</td>
                           </tr>
                         ))}
                         {!inputHistoryLoading && !inputHistoryIsError && inputHistoryItems.length === 0 && (
                           <tr>
-                            <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">
+                            <td colSpan={10} className="px-5 py-8 text-center text-muted-foreground">
                               No hay movimientos registrados para este insumo.
                             </td>
                           </tr>

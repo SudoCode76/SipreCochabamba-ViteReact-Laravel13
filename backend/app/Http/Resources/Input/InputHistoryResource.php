@@ -12,6 +12,7 @@ class InputHistoryResource extends JsonResource
         return [
             'id_historial' => $this->id,
             'id_insumo' => $this->id_insumo,
+            'id_log_insumo' => $this->id_log_insumo,
             'descripcion' => $this->descripcion,
             'precio' => $this->precio !== null ? (float) $this->precio : null,
             'tipo' => $this->tipo,
@@ -27,8 +28,14 @@ class InputHistoryResource extends JsonResource
             'ip' => $this->ip,
             'usuario' => $this->usuario,
             'nombre_usuario' => $this->nombre_usuario ?: $this->user?->funcionario,
+            'quotes' => $this->whenLoaded(
+                'quotes',
+                fn () => InputQuoteResource::collection($this->quotes)->resolve(),
+                []
+            ),
             'id' => $this->id,
             'input_id' => $this->id_insumo,
+            'log_id' => $this->id_log_insumo,
             'description' => $this->descripcion,
             'price' => $this->precio !== null ? (float) $this->precio : null,
             'type_id' => $this->tipo,

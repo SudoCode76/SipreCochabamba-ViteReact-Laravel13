@@ -11,6 +11,7 @@ Route::middleware(['auth:sanctum', 'active_user', 'db_permission:INSUMO,INSUMO|I
     Route::get('/inputs/{input}', [InputController::class, 'show']);
     Route::get('/inputs/{input}/name', [InputController::class, 'name']);
     Route::put('/inputs/{input}', [InputController::class, 'update']);
+    Route::post('/inputs/{input}/price-update', [InputController::class, 'updatePrice']);
     Route::delete('/inputs/{input}', [InputController::class, 'destroy']);
     Route::post('/inputs/{input}/delete-authorization-request', [InputController::class, 'requestDeleteAuthorization']);
     Route::get('/inputs/{input}/delete-authorization-status', [InputController::class, 'deleteAuthorizationStatus']);
@@ -19,6 +20,7 @@ Route::middleware(['auth:sanctum', 'active_user', 'db_permission:INSUMO,INSUMO|I
     Route::get('/inputs/{input}/history', [InputController::class, 'history']);
     Route::get('/inputs/{input}/logs', [InputController::class, 'logs']);
     Route::get('/inputs/{input}/quotes', [InputController::class, 'quotes']);
+    Route::get('/inputs/{input}/quotes/unassigned', [InputController::class, 'unassignedQuotes']);
     Route::post('/inputs/{input}/quotes', [InputController::class, 'storeQuote']);
     Route::get('/inputs/{input}/quotes/current', [InputController::class, 'currentQuote']);
     Route::get('/inputs/{input}/quotes/history', [InputController::class, 'quoteHistory']);
