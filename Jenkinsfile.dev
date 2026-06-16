@@ -1,183 +1,220 @@
 pipeline {
-    agent { label 'server_104.64' }
+agent { label 'server_104.64' }
 
-    options {
-        skipDefaultCheckout(true)
-        timestamps()
-    }
-    parameters {
-        booleanParam(
-            name: 'FULL_REBUILD',
-            defaultValue: false,
-            description: 'Eliminar cache Docker, imágenes y recrear completamente frontend/backend'
-        )
-    }
-    environment {
-        DOCKER_COMPOSE_FILE = 'docker-compose-dev.yml'
-        GIT_URL = 'https://github.com/alcaldiacochabamba/sipregamc.cochabamba.bo.git'
-        GIT_CREDENTIALS = 'github-https'
-        GIT_BRANCH = 'dev'
-    }
+options {
+    skipDefaultCheckout(true)
+    timestamps()
+}
 
-    stages {
-        
-        stage('Checkout') {
-            steps {
-                git branch: env.GIT_BRANCH,
-                    credentialsId: env.GIT_CREDENTIALS,
-                    url: env.GIT_URL
-            }
-        }
-        stage('Debug Git') {
-            steps {
-                sh '''
-                    echo "BRANCH:"
-                    git branch --show-current
+parameters {
+    booleanParam(
+        name: 'FULL_REBUILD',
+        defaultValue: false,
+        description: 'Eliminar cache Docker, imágenes y recrear completamente frontend/backend'
+    )
 
-                    echo "COMMIT:"
-                    git rev-parse HEAD
+    booleanParam(
+        name: 'RUN_MIGRATIONS',
+        defaultValue: false,
+        description: 'Ejecutar migraciones Laravel'
+    )
+}
 
-                    echo "LAST COMMIT:"
-                    git log -1 --oneline
-                '''
-            }
-        }
+environment {
+    DOCKER_COMPOSE_FILE = 'docker-compose-dev.yml'
+    GIT_URL = 'https://github.com/alcaldiacochabamba/sipregamc.cochabamba.bo.git'
+    GIT_CREDENTIALS = 'github-https'
+    GIT_BRANCH = 'dev'
+}
 
-        stage('Prepare env files') {
-            steps {
-                sh '''
-                  cp backend/.env.dev backend/.env || true
-                //   cp frontend/.env.dev frontend/.env || true
-                '''
-            }
-        }
+stages {
 
-        // =====================================================
-        // FULL CLEAN
-        // =====================================================
-        stage('Full clean docker') {
-
-            when {
-                expression { params.FULL_REBUILD }
-            }
-
-            steps {
-
-                sh '''
-                  echo "🧹 FULL REBUILD ACTIVADO"
-
-                  docker compose -f ${DOCKER_COMPOSE_FILE} down -v --remove-orphans || true
-
-                  docker rm -f sipregamc-dev sipregamc-frontend-dev || true
-
-                  docker system prune -af --volumes || true
-
-                  docker builder prune -af || true
-                '''
-            }
-        }
-
-        stage('Stop running containers') {
-            steps {
-                sh '''
-                  docker compose -f ${DOCKER_COMPOSE_FILE} down -v --remove-orphans
-                '''
-            }
-        }
-
-        stage('Build & Start containers') {
-            steps {
-                sh '''
-                  docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build
-                '''
-            }
-        }
-
-        stage('Install backend dependencies') {
-            steps {
-                sh '''
-                  docker compose -f ${DOCKER_COMPOSE_FILE} exec backend sh -c '
-                    if [ ! -f vendor/autoload.php ]; then
-                        composer install --no-interaction --prefer-dist --no-progress
-                    fi
-                  '
-                '''
-            }
-        }
-
-        stage('Prepare Laravel storage') {
-            steps {
-                sh '''
-                  docker compose -f ${DOCKER_COMPOSE_FILE} exec backend sh -c '
-                    mkdir -p storage/framework/{cache,sessions,views}
-                    mkdir -p bootstrap/cache
-                  '
-                '''
-            }
-        }
-
-        stage('Fix runtime permissions') {
-            steps {
-                sh '''
-                  docker compose -f ${DOCKER_COMPOSE_FILE} exec backend sh -c '
-                    chmod -R 775 storage bootstrap/cache
-                    find storage -type f -exec chmod 664 {} \\;
-                    find storage -type d -exec chmod 775 {} \\;
-                  '
-                '''
-            }
-        }
-
-        stage('Ensure storage symlink') {
-            steps {
-                sh '''
-                  docker compose -f ${DOCKER_COMPOSE_FILE} exec backend sh -c '
-                    if [ ! -L public/storage ]; then
-                        php artisan storage:link
-                    fi
-                  '
-                '''
-            }
-        }
-
-        stage('Clear Laravel caches') {
-            steps {
-                sh '''
-                  docker compose -f ${DOCKER_COMPOSE_FILE} exec backend sh -c '
-                    php artisan optimize:clear || true
-                  '
-                '''
-            }
-        }
-
-        stage('Debug frontend') {
-            steps {
-                sh '''
-                    docker compose -f ${DOCKER_COMPOSE_FILE} ps
-                    docker compose -f ${DOCKER_COMPOSE_FILE} logs frontend --tail=300
-                '''
-            }
-        }
-
-        // stage('Install frontend dependencies') {
-        //     steps {
-        //         sh '''
-        //           docker compose -f ${DOCKER_COMPOSE_FILE} exec frontend sh -c '
-        //             if [ ! -d node_modules ]; then
-        //                 npm install --no-audit --no-fund
-        //             fi
-        //           '
-        //         '''
-        //     }
-        // }
-    }
-
-    post {
-        success {
-            echo '✅ DEV levantado correctamente (backend + frontend)'
-        }
-        failure {
-            echo '❌ Falló el pipeline DEV'
+    stage('Checkout') {
+        steps {
+            git branch: env.GIT_BRANCH,
+                credentialsId: env.GIT_CREDENTIALS,
+                url: env.GIT_URL
         }
     }
+
+    stage('Debug Git') {
+        steps {
+            sh '''
+                echo "BRANCH:"
+                git branch --show-current
+
+                echo "COMMIT:"
+                git rev-parse HEAD
+
+                echo "LAST COMMIT:"
+                git log -1 --oneline
+            '''
+        }
+    }
+
+    stage('Prepare env files') {
+        steps {
+            sh '''
+              cp backend/.env.dev backend/.env || true
+            #   cp frontend/.env.dev frontend/.env || true
+            '''
+        }
+    }
+
+    // =====================================================
+    // FULL CLEAN
+    // =====================================================
+    stage('Full clean docker') {
+
+        when {
+            expression { params.FULL_REBUILD }
+        }
+
+        steps {
+
+            sh '''
+              echo "🧹 FULL REBUILD ACTIVADO"
+
+              docker compose -f ${DOCKER_COMPOSE_FILE} down -v --remove-orphans || true
+
+              docker rm -f sipregamc-dev sipregamc-frontend-dev || true
+
+              docker system prune -af --volumes || true
+
+              docker builder prune -af || true
+            '''
+        }
+    }
+
+    stage('Stop running containers') {
+        steps {
+            sh '''
+              docker compose -f ${DOCKER_COMPOSE_FILE} down -v --remove-orphans
+            '''
+        }
+    }
+
+    stage('Build & Start containers') {
+        steps {
+            sh '''
+              docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build
+            '''
+        }
+    }
+
+    stage('Install backend dependencies') {
+        steps {
+            sh '''
+              docker compose -f ${DOCKER_COMPOSE_FILE} exec -T backend sh -c '
+                if [ ! -f vendor/autoload.php ]; then
+                    composer install --no-interaction --prefer-dist --no-progress
+                fi
+              '
+            '''
+        }
+    }
+
+    stage('Run Laravel migrations') {
+
+        when {
+            expression { params.RUN_MIGRATIONS }
+        }
+
+        steps {
+            sh '''
+              docker compose -f ${DOCKER_COMPOSE_FILE} exec -T backend sh -c '
+
+                echo "Esperando conexión a la base de datos..."
+
+                until php artisan migrate:status > /dev/null 2>&1
+                do
+                  sleep 5
+                done
+
+                php artisan migrate --force
+              '
+            '''
+        }
+    }
+
+    stage('Prepare Laravel storage') {
+        steps {
+            sh '''
+              docker compose -f ${DOCKER_COMPOSE_FILE} exec -T backend sh -c '
+                mkdir -p storage/framework/cache
+                mkdir -p storage/framework/sessions
+                mkdir -p storage/framework/views
+                mkdir -p bootstrap/cache
+              '
+            '''
+        }
+    }
+
+    stage('Fix runtime permissions') {
+        steps {
+            sh '''
+              docker compose -f ${DOCKER_COMPOSE_FILE} exec -T backend sh -c '
+                chmod -R 775 storage bootstrap/cache
+                find storage -type f -exec chmod 664 {} \\;
+                find storage -type d -exec chmod 775 {} \\;
+              '
+            '''
+        }
+    }
+
+    stage('Ensure storage symlink') {
+        steps {
+            sh '''
+              docker compose -f ${DOCKER_COMPOSE_FILE} exec -T backend sh -c '
+                if [ ! -L public/storage ]; then
+                    php artisan storage:link
+                fi
+              '
+            '''
+        }
+    }
+
+    stage('Clear Laravel caches') {
+        steps {
+            sh '''
+              docker compose -f ${DOCKER_COMPOSE_FILE} exec -T backend sh -c '
+                php artisan optimize:clear || true
+              '
+            '''
+        }
+    }
+
+    stage('Debug frontend') {
+        steps {
+            sh '''
+                docker compose -f ${DOCKER_COMPOSE_FILE} ps
+                docker compose -f ${DOCKER_COMPOSE_FILE} logs frontend --tail=300
+            '''
+        }
+    }
+
+    // stage('Install frontend dependencies') {
+    //     steps {
+    //         sh '''
+    //           docker compose -f ${DOCKER_COMPOSE_FILE} exec frontend sh -c '
+    //             if [ ! -d node_modules ]; then
+    //                 npm install --no-audit --no-fund
+    //             fi
+    //           '
+    //         '''
+    //     }
+    // }
+}
+
+post {
+    success {
+        echo '✅ DEV levantado correctamente (backend + frontend)'
+    }
+
+    failure {
+        echo '❌ Falló el pipeline DEV'
+    }
+}
+
+
 }
