@@ -8,6 +8,7 @@ use App\Http\Requests\Input\IndexInputRequest;
 use App\Http\Requests\Input\StoreInputDeleteAuthorizationRequest;
 use App\Http\Requests\Input\StoreInputQuoteRequest;
 use App\Http\Requests\Input\StoreInputRequest;
+use App\Http\Requests\Input\UpdateInputPriceRequest;
 use App\Http\Requests\Input\UpdateInputRequest;
 use App\Http\Requests\Input\UpdateInputStatusRequest;
 use App\Http\Resources\Input\InputHistoryResource;
@@ -116,6 +117,20 @@ class InputController extends Controller
         ]);
     }
 
+    public function updatePrice(UpdateInputPriceRequest $request, Input $input): JsonResponse
+    {
+        $input = $this->inputCrudService->updatePrice($request, $input, $request->user());
+        $input->load(['type', 'category', 'unitMeasure', 'creator']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Precio del insumo actualizado correctamente.',
+            'data' => [
+                'input' => InputResource::make($input)->resolve(),
+            ],
+        ]);
+    }
+
     public function updateStatus(UpdateInputStatusRequest $request, Input $input): JsonResponse
     {
         $input = $this->inputCrudService->updateStatus(
@@ -195,7 +210,7 @@ class InputController extends Controller
     public function history(Input $input): JsonResponse
     {
         $history = $input->histories()
-            ->with(['user', 'type', 'category', 'unitMeasure'])
+            ->with(['user', 'type', 'category', 'unitMeasure', 'quotes.input', 'quotes.log'])
             ->orderByDesc('id')
             ->get();
 
@@ -233,6 +248,20 @@ class InputController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Cotizaciones del insumo obtenidas correctamente.',
+            'data' => [
+                'input_id' => $input->id_insumo,
+                'items' => InputQuoteResource::collection($quotes)->resolve(),
+            ],
+        ]);
+    }
+
+    public function unassignedQuotes(Input $input): JsonResponse
+    {
+        $quotes = $this->inputQuoteService->unassigned($input);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cotizaciones libres del insumo obtenidas correctamente.',
             'data' => [
                 'input_id' => $input->id_insumo,
                 'items' => InputQuoteResource::collection($quotes)->resolve(),

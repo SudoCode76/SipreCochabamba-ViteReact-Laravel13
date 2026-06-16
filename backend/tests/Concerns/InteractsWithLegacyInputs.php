@@ -66,6 +66,7 @@ trait InteractsWithLegacyInputs
             $table->increments('id');
             $table->string('descripcion', 100)->nullable();
             $table->unsignedInteger('id_insumo')->nullable();
+            $table->unsignedInteger('id_log_insumo')->nullable();
             $table->decimal('precio', 10, 2)->nullable();
             $table->unsignedInteger('tipo')->nullable();
             $table->unsignedInteger('id_categoria')->nullable();
@@ -106,6 +107,7 @@ trait InteractsWithLegacyInputs
             $table->date('fecha')->nullable();
             $table->string('archivo1', 180)->nullable();
             $table->string('archivo2', 180)->nullable();
+            $table->string('archivo3', 180)->nullable();
             $table->integer('id_solicitud')->nullable();
 
             $table->foreign('id_insumo')->references('id_insumo')->on('insumo');
@@ -231,6 +233,7 @@ trait InteractsWithLegacyInputs
             'id' => 1,
             'descripcion' => 'Acero estructural',
             'id_insumo' => 1,
+            'id_log_insumo' => 1,
             'precio' => 15.36,
             'tipo' => 1,
             'id_categoria' => 1,

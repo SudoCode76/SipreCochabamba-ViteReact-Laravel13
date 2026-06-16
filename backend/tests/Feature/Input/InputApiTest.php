@@ -385,7 +385,7 @@ class InputApiTest extends TestCase
         $this->putJson('/api/v1/inputs/'.$inputId, [
             'descripcion' => 'Cemento Portland IP-30',
             'unidad_medida' => 1,
-            'precio' => 70.00,
+            'precio' => 65.50,
             'tipo' => 1,
             'category_id' => 1,
             'estado' => 'DC',
@@ -435,7 +435,7 @@ class InputApiTest extends TestCase
         $this->putJson('/api/v1/inputs/2', [
             'descripcion' => 'ACERO ESTRUCTURAL',
             'unidad_medida' => 1,
-            'precio' => 10,
+            'precio' => 15.36,
             'tipo' => 1,
             'estado' => 'AC',
             'fecha_cotiz' => '2026-05-01',
@@ -463,7 +463,10 @@ class InputApiTest extends TestCase
         $this->getJson('/api/v1/inputs/1/history')
             ->assertOk()
             ->assertJsonPath('data.items.0.accion', 'MODIFICADO')
-            ->assertJsonPath('data.items.0.nombre_tipo', 'MATERIAL');
+            ->assertJsonPath('data.items.0.nombre_tipo', 'MATERIAL')
+            ->assertJsonPath('data.items.0.id_log_insumo', 1)
+            ->assertJsonCount(2, 'data.items.0.quotes')
+            ->assertJsonFragment(['id_cotizacion' => 2]);
 
         $this->getJson('/api/v1/inputs/1/logs')
             ->assertOk()
@@ -526,6 +529,166 @@ class InputApiTest extends TestCase
             'id_log_insumo' => 1,
             'id_solicitud' => 8,
         ]);
+    }
+
+    public function test_standalone_quote_without_log_remains_unassigned(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput();
+        $this->createInputLog();
+
+        $this->postJson('/api/v1/inputs/1/quotes', [
+            'valido' => UploadedFile::fake()->create('quote.pdf', 100, 'application/pdf'),
+        ])->assertCreated()
+            ->assertJsonPath('data.quote.id_log_insumo', null);
+
+        $this->getJson('/api/v1/inputs/1/quotes/unassigned')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id_log_insumo', null);
+    }
+
+    public function test_price_change_requires_quote_support(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput(['precio' => 15.36]);
+
+        $this->putJson('/api/v1/inputs/1', [
+            'descripcion' => 'Acero estructural',
+            'unidad_medida' => 1,
+            'precio' => 20,
+            'tipo' => 1,
+            'estado' => 'AC',
+            'fecha_cotiz' => '2026-05-01',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['precio']);
+
+        $this->postJson('/api/v1/inputs/1/price-update', [
+            'descripcion' => 'Acero estructural',
+            'unidad_medida' => 1,
+            'precio' => 20,
+            'tipo' => 1,
+            'estado' => 'AC',
+            'fecha_cotiz' => '2026-05-01',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['quotes']);
+    }
+
+    public function test_input_history_without_log_returns_empty_quotes(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput();
+        $this->createInputHistory([
+            'id_log_insumo' => null,
+        ]);
+
+        $this->getJson('/api/v1/inputs/1/history')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_log_insumo', null)
+            ->assertJsonCount(0, 'data.items.0.quotes');
+    }
+
+    public function test_price_change_can_attach_unassigned_quote(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput(['precio' => 15.36]);
+        $quote = $this->createInputQuote([
+            'id_cotizacion' => 10,
+            'id_log_insumo' => null,
+            'archivo' => 'public/cotizaciones/cotizacion.pdf',
+        ]);
+
+        $this->postJson('/api/v1/inputs/1/price-update', [
+            'descripcion' => 'Acero estructural',
+            'unidad_medida' => 1,
+            'precio' => 20,
+            'tipo' => 1,
+            'estado' => 'AC',
+            'fecha_cotiz' => '2026-05-01',
+            'quote_ids' => [$quote->id_cotizacion],
+        ])->assertOk()
+            ->assertJsonPath('data.input.precio', 20);
+
+        $logId = \App\Models\InputLog::query()->where('id_insumo', 1)->latest('id_log')->value('id_log');
+
+        $this->assertDatabaseHas('cotizaciones', [
+            'id_cotizacion' => $quote->id_cotizacion,
+            'id_insumo' => 1,
+            'id_log_insumo' => $logId,
+        ]);
+
+        $this->getJson('/api/v1/inputs/1/history')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_log_insumo', $logId)
+            ->assertJsonPath('data.items.0.quotes.0.id_cotizacion', $quote->id_cotizacion);
+    }
+
+    public function test_price_change_rejects_used_or_foreign_quote_ids(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput(['id_insumo' => 1, 'precio' => 15.36]);
+        $this->createInput(['id_insumo' => 2, 'descripcion' => 'Arena fina', 'precio' => 10]);
+        $this->createInputQuote([
+            'id_cotizacion' => 10,
+            'id_insumo' => 1,
+            'id_log_insumo' => 99,
+        ]);
+        $this->createInputQuote([
+            'id_cotizacion' => 11,
+            'id_insumo' => 2,
+            'id_log_insumo' => null,
+        ]);
+
+        foreach ([10, 11] as $quoteId) {
+            $this->postJson('/api/v1/inputs/1/price-update', [
+                'descripcion' => 'Acero estructural',
+                'unidad_medida' => 1,
+                'precio' => 20,
+                'tipo' => 1,
+                'estado' => 'AC',
+                'fecha_cotiz' => '2026-05-01',
+                'quote_ids' => [$quoteId],
+            ])->assertUnprocessable()
+                ->assertJsonValidationErrors(['quote_ids']);
+        }
+    }
+
+    public function test_price_change_can_create_quote_for_new_log(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput(['precio' => 15.36]);
+
+        $this->postJson('/api/v1/inputs/1/price-update', [
+            'descripcion' => 'Acero estructural',
+            'unidad_medida' => 1,
+            'precio' => 20,
+            'tipo' => 1,
+            'estado' => 'AC',
+            'fecha_cotiz' => '2026-05-01',
+            'valido' => UploadedFile::fake()->create('quote.pdf', 100, 'application/pdf'),
+        ])->assertOk()
+            ->assertJsonPath('data.input.precio', 20);
+
+        $logId = \App\Models\InputLog::query()->where('id_insumo', 1)->latest('id_log')->value('id_log');
+
+        $this->assertDatabaseHas('cotizaciones', [
+            'id_insumo' => 1,
+            'id_log_insumo' => $logId,
+            'archivo' => 'archivos/cotizaciones/cotizacion_valida_quote.pdf',
+        ]);
+
+        $this->getJson('/api/v1/inputs/1/history')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id_log_insumo', $logId)
+            ->assertJsonPath('data.items.0.quotes.0.archivo', 'archivos/cotizaciones/cotizacion_valida_quote.pdf');
     }
 
     public function test_quote_upload_requires_pdf_under_legacy_limit_and_at_least_one_file(): void

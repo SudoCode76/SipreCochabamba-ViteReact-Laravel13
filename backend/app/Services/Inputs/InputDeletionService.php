@@ -131,7 +131,7 @@ class InputDeletionService
                 'estado' => 'DP',
             ]);
 
-            InputLog::query()->create([
+            $log = InputLog::query()->create([
                 'descripcion' => $input->descripcion,
                 'id_insumo' => $input->id_insumo,
                 'precio' => $input->precio,
@@ -144,7 +144,7 @@ class InputDeletionService
                 'estado' => 'DP',
             ]);
 
-            $this->registerHistory($input, $user, $request->ip(), 'ELIMINADO');
+            $this->registerHistory($input, $user, $request->ip(), 'ELIMINADO', $log);
 
             $this->registerAudit($user, $request->ip(), 'Eliminacion logica de insumo '.$input->descripcion);
 
@@ -168,7 +168,7 @@ class InputDeletionService
                 'estado' => 'DP',
             ]);
 
-            InputLog::query()->create([
+            $log = InputLog::query()->create([
                 'descripcion' => $input->descripcion,
                 'id_insumo' => $input->id_insumo,
                 'precio' => $input->precio,
@@ -181,7 +181,7 @@ class InputDeletionService
                 'estado' => 'DP',
             ]);
 
-            $this->registerHistory($input, $user, $ip, 'ELIMINADO');
+            $this->registerHistory($input, $user, $ip, 'ELIMINADO', $log);
 
             $this->registerAudit(
                 $user,
@@ -225,11 +225,12 @@ class InputDeletionService
         app(AuditService::class)->record($user, $ip, $process);
     }
 
-    private function registerHistory(Input $input, User $user, ?string $ip, string $action): InputHistory
+    private function registerHistory(Input $input, User $user, ?string $ip, string $action, ?InputLog $log = null): InputHistory
     {
         return InputHistory::query()->create([
             'descripcion' => $input->descripcion,
             'id_insumo' => $input->id_insumo,
+            'id_log_insumo' => $log?->id_log,
             'precio' => $input->precio,
             'tipo' => $input->tipo,
             'id_categoria' => $input->id_categoria,

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InputHistory extends Model
 {
@@ -20,6 +21,7 @@ class InputHistory extends Model
     protected $fillable = [
         'descripcion',
         'id_insumo',
+        'id_log_insumo',
         'precio',
         'tipo',
         'id_categoria',
@@ -36,6 +38,7 @@ class InputHistory extends Model
     {
         return [
             'id_insumo' => 'integer',
+            'id_log_insumo' => 'integer',
             'precio' => 'decimal:2',
             'tipo' => 'integer',
             'id_categoria' => 'integer',
@@ -48,6 +51,16 @@ class InputHistory extends Model
     public function input(): BelongsTo
     {
         return $this->belongsTo(Input::class, 'id_insumo', 'id_insumo');
+    }
+
+    public function log(): BelongsTo
+    {
+        return $this->belongsTo(InputLog::class, 'id_log_insumo', 'id_log');
+    }
+
+    public function quotes(): HasMany
+    {
+        return $this->hasMany(InputQuote::class, 'id_log_insumo', 'id_log_insumo');
     }
 
     public function user(): BelongsTo
