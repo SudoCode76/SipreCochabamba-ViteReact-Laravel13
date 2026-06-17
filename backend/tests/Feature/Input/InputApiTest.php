@@ -146,6 +146,44 @@ class InputApiTest extends TestCase
             ->assertJsonPath('data.meta.total', 0);
     }
 
+    public function test_admin_can_filter_duplicate_inputs_by_normalized_description(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput([
+            'id_insumo' => 1,
+            'descripcion' => 'Aditivo Impermeabilizante',
+            'estado' => 'AC',
+        ]);
+        $this->createInput([
+            'id_insumo' => 2,
+            'descripcion' => '  aditivo   impermeabilizante ',
+            'estado' => 'AC',
+        ]);
+        $this->createInput([
+            'id_insumo' => 3,
+            'descripcion' => 'Aditivo Plastificante',
+            'estado' => 'AC',
+        ]);
+
+        $this->getJson('/api/v1/inputs?duplicates=1&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 2)
+            ->assertJsonPath('data.items.0.id_insumo', 1)
+            ->assertJsonPath('data.items.0.is_duplicate', true)
+            ->assertJsonPath('data.items.0.duplicate_count', 2)
+            ->assertJsonPath('data.items.0.duplicate_key', 'aditivo impermeabilizante')
+            ->assertJsonPath('data.items.1.id_insumo', 2);
+
+        $this->getJson('/api/v1/inputs?duplicates=1&search=impermeabilizante&status=AC&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 2);
+
+        $this->getJson('/api/v1/inputs?duplicates=1&search=plastificante&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 0);
+    }
+
     public function test_inputs_marked_as_deleted_are_hidden_by_default_but_can_be_filtered(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

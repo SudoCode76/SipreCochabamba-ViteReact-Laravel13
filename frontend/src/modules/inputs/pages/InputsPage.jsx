@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Eye, History, Trash2, FileText, X } from "lucide-react";
@@ -76,6 +76,7 @@ export default function InputsPage() {
   const [perPage, setPerPage] = useState(15);
   const [order, setOrder] = useState("legacy");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [duplicatesOnly, setDuplicatesOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -118,8 +119,8 @@ export default function InputsPage() {
   });
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["inputs", { page, perPage, description: search, order, categoryId: categoryFilter }],
-    queryFn: () => inputsService.list({ page, perPage, description: search, order, categoryId: categoryFilter }),
+    queryKey: ["inputs", { page, perPage, description: search, order, categoryId: categoryFilter, duplicates: duplicatesOnly }],
+    queryFn: () => inputsService.list({ page, perPage, description: search, order, categoryId: categoryFilter, duplicates: duplicatesOnly }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -311,6 +312,11 @@ export default function InputsPage() {
 
   const handleOrderChange = (event) => {
     setOrder(event.target.value);
+    setPage(1);
+  };
+
+  const handleDuplicateFilterChange = (event) => {
+    setDuplicatesOnly(event.target.value === "duplicates");
     setPage(1);
   };
 
@@ -700,6 +706,23 @@ export default function InputsPage() {
 
               <div className="flex flex-col gap-2">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Vista
+                </span>
+                <div className="relative">
+                  <select
+                    className="h-12 min-w-40 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20"
+                    value={duplicatesOnly ? "duplicates" : "all"}
+                    onChange={handleDuplicateFilterChange}
+                  >
+                    <option value="all">Todos</option>
+                    <option value="duplicates">Duplicados</option>
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   Orden
                 </span>
                 <div className="relative">
@@ -793,13 +816,40 @@ export default function InputsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item, index) => (
-                      <tr key={item.id_insumo} className={index < items.length - 1 ? "border-b border-border/60" : ""}>
+                    {items.map((item, index) => {
+                      const duplicateCount = item.duplicate_count ?? item.duplicateCount ?? 0;
+                      const isDuplicate = item.is_duplicate || item.isDuplicate;
+                      const duplicateKey = item.duplicate_key ?? item.duplicateKey ?? item.descripcion;
+                      const previousItem = items[index - 1];
+                      const previousDuplicateKey = previousItem?.duplicate_key ?? previousItem?.duplicateKey ?? previousItem?.descripcion;
+                      const shouldRenderDuplicateGroup = duplicatesOnly && isDuplicate && duplicateKey !== previousDuplicateKey;
+                      const rowClassName = [
+                        index < items.length - 1 ? "border-b border-border/60" : "",
+                        isDuplicate ? "bg-amber-50/70" : "",
+                      ].filter(Boolean).join(" ");
+
+                      return (
+                      <Fragment key={item.id_insumo}>
+                      {shouldRenderDuplicateGroup && (
+                        <tr className="border-y border-amber-200 bg-amber-100/80">
+                          <td colSpan={9} className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">
+                            Grupo duplicado: {duplicateKey} · {duplicateCount} registros
+                          </td>
+                        </tr>
+                      )}
+                      <tr className={rowClassName}>
                         <td className="px-5 py-4 align-top text-foreground">
                           {index + 1}
                         </td>
                         <td className="px-5 py-4 align-top text-foreground max-w-[300px]">
-                          <div className="truncate">{item.descripcion}</div>
+                          <div className="flex max-w-[300px] flex-col gap-2">
+                            <div className="truncate">{item.descripcion}</div>
+                            {isDuplicate && (
+                              <Badge className="w-fit rounded-full bg-amber-600 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white hover:bg-amber-600">
+                                DUPLICADO · {duplicateCount} registros
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="px-5 py-4 align-top text-muted-foreground">
                           {item.nombre_tipo}
@@ -864,7 +914,9 @@ export default function InputsPage() {
                           </DropdownMenu>
                         </td>
                       </tr>
-                    ))}
+                      </Fragment>
+                      );
+                    })}
                     {items.length === 0 && (
                       <tr>
                         <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">

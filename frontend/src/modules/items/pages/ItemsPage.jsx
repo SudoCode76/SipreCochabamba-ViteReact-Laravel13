@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircle2, ChevronLeft, ChevronRight, Eye, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -46,7 +46,8 @@ export default function ItemsPage() {
   const [perPage, setPerPage] = useState(10);
   const [order, setOrder] = useState("legacy");
   const [reviewDays, setReviewDays] = useState("");
-  const view = reviewDays ? `review_${reviewDays}` : order;
+  const [duplicatesOnly, setDuplicatesOnly] = useState(false);
+  const view = duplicatesOnly ? "duplicates" : reviewDays ? `review_${reviewDays}` : order;
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightMissingSpecifications, setHighlightMissingSpecifications] = useState(false);
@@ -253,8 +254,8 @@ export default function ItemsPage() {
   };
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["items", { page, perPage, search, order, reviewDays }],
-    queryFn: () => itemsService.list({ page, perPage, search, order, reviewDays }),
+    queryKey: ["items", { page, perPage, search, order, reviewDays, duplicates: duplicatesOnly }],
+    queryFn: () => itemsService.list({ page, perPage, search, order, reviewDays, duplicates: duplicatesOnly }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -454,6 +455,15 @@ export default function ItemsPage() {
   const handleViewChange = (event) => {
     const value = event.target.value;
     setPage(1);
+
+    if (value === "duplicates") {
+      setDuplicatesOnly(true);
+      setOrder("legacy");
+      setReviewDays("");
+      return;
+    }
+
+    setDuplicatesOnly(false);
 
     if (value.startsWith("review_")) {
       setOrder("legacy");
@@ -1308,6 +1318,7 @@ export default function ItemsPage() {
                     <option value="review_120">En revisión menor a 120 días</option>
                     <option value="review_180">En revisión de 180 días o mayor</option>
                     <option value="missing_specifications">Sin especificaciones</option>
+                    <option value="duplicates">Duplicados</option>
                     <option value="recent">Recientes</option>
                     <option value="oldest">Antiguos</option>
                   </select>
@@ -1415,11 +1426,25 @@ export default function ItemsPage() {
                       const rowClassName = [
                         index < items.length - 1 ? "border-b border-border/60" : "",
                         reviewStatus && !(highlightMissingSpecifications && isMissingSpecification) ? reviewStatus.row : "",
+                        item.is_duplicate && !(highlightMissingSpecifications && isMissingSpecification) ? "bg-amber-50/70" : "",
                         highlightMissingSpecifications && isMissingSpecification ? "border-l-4 border-l-rose-500 bg-rose-50/90 [&>td]:!text-rose-950" : "",
                       ].filter(Boolean).join(" ");
+                      const duplicateCount = item.duplicate_count ?? 0;
+                      const duplicateKey = item.duplicate_key ?? item.name ?? "";
+                      const previousItem = items[index - 1];
+                      const previousDuplicateKey = previousItem?.duplicate_key ?? previousItem?.name ?? "";
+                      const shouldRenderDuplicateGroup = duplicatesOnly && item.is_duplicate && duplicateKey !== previousDuplicateKey;
 
                       return (
-                        <tr key={item.id_item} className={rowClassName}>
+                        <Fragment key={item.id_item}>
+                        {shouldRenderDuplicateGroup && (
+                          <tr className="border-y border-amber-200 bg-amber-100/80">
+                            <td colSpan={9} className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">
+                              Grupo duplicado: {duplicateKey} · {duplicateCount} registros
+                            </td>
+                          </tr>
+                        )}
+                        <tr className={rowClassName}>
                         <td className="px-5 py-4 align-top text-foreground">
                           {index + 1}
                         </td>
@@ -1430,7 +1455,14 @@ export default function ItemsPage() {
                           {item.subgroup?.description ?? "-"}
                         </td>
                         <td className="px-5 py-4 align-top text-foreground">
-                          <div className="max-w-[260px] leading-7">{item.name ?? "-"}</div>
+                          <div className="flex max-w-[260px] flex-col gap-2 leading-7">
+                            <span>{item.name ?? "-"}</span>
+                            {item.is_duplicate && (
+                              <Badge className="w-fit rounded-full bg-amber-600 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white hover:bg-amber-600">
+                                DUPLICADO · {duplicateCount} registros
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="px-5 py-4 align-top text-foreground">
                           {item.calculated_price_label ?? item.precio_calculado ?? (item.calculated_price !== null ? Number(item.calculated_price).toFixed(2) : "-")}
@@ -1548,6 +1580,7 @@ export default function ItemsPage() {
                           </DropdownMenu>
                         </td>
                         </tr>
+                        </Fragment>
                       );
                     })}
                     {items.length === 0 && (
