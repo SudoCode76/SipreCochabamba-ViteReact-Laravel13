@@ -29,7 +29,7 @@ export const navigationSections = [
     ],
   },
   {
-    title: "Poyecto",
+    title: "Proyecto",
     icon: FolderKanban,
     children: [
       { title: "Nuevo proyecto", path: "/Nuevo proyecto", icon: Package, accent: "emerald", permission: { className: "PROYECTO", functions: ["REGISTRAR_PROYECTO", "NUEVO_PROYECTO"] } },
