@@ -31,6 +31,6 @@ class ProjectBudgetByGroupPdf extends \TCPDF
         $this->SetY(-15);
         $this->SetFont('helvetica', 'N', 6);
         $this->Cell(0, 10, 'Pagina '.$this->getAliasNumPage().'/'.$this->getAliasNbPages(), 0, false, 'C', 0, '', 0, false, 'T', 'M');
-        $this->Cell(0, 5, date('m/d/Y H\hi:s'), 0, false, 'C', 0, '', 0, false, 'T', 'M');
+        $this->Cell(0, 5, date('d/m/Y H\hi:s'), 0, false, 'C', 0, '', 0, false, 'T', 'M');
     }
 }
