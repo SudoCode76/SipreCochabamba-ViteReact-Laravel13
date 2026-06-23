@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ChevronsUpDown, GitCompare, History, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { openPdfViewer } from "@/lib/utils/pdf";
@@ -869,7 +870,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
         <div className="flex flex-col gap-2">
           <Label htmlFor="project-item-search" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Item</Label>
           <div className="relative">
-            <Input
+            <ClearableSearchInput
               id="project-item-search"
               role="combobox"
               aria-expanded={itemComboboxOpen}
@@ -878,7 +879,15 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
               onChange={(event) => handleItemSearchChange(event.target.value)}
               onFocus={() => setItemComboboxOpen(true)}
               placeholder="Buscar item..."
-              className="h-12 rounded-2xl border-border/80 bg-background/90 pr-11"
+              className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
+              clearButtonClassName="right-10"
+              isLoading={isSearching}
+              loadingIndicatorClassName="right-16"
+              onClear={() => {
+                setSearch("");
+                handleDraftChange("itemId", "");
+                setItemComboboxOpen(true);
+              }}
               disabled={isReadOnly}
             />
             <Button

@@ -9,7 +9,6 @@ import {
   Pencil,
   Plus,
   RefreshCcw,
-  Search,
   SearchCheck,
   Shield,
   UserRound,
@@ -20,6 +19,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import {
   Card,
   CardContent,
@@ -508,19 +508,21 @@ export default function UsersPage() {
               <Label htmlFor="searchName" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                 Búsqueda global
               </Label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="searchName"
-                  placeholder="Buscar por nombre, C.I., usuario, rol o unidad"
-                  className="h-12 rounded-2xl border-border/80 bg-background/90 pl-11"
-                  value={searchTerm}
-                  onChange={(event) => {
-                    setSearchTerm(event.target.value);
-                    setPage(1);
-                  }}
-                />
-              </div>
+              <ClearableSearchInput
+                id="searchName"
+                placeholder="Buscar por nombre, C.I., usuario, rol o unidad"
+                className="h-12 rounded-2xl border-border/80 bg-background/90"
+                value={searchTerm}
+                onChange={(event) => {
+                  setSearchTerm(event.target.value);
+                  setPage(1);
+                }}
+                onClear={() => {
+                  setSearchTerm("");
+                  setPage(1);
+                }}
+                isLoading={usersQuery.isFetching && !usersQuery.isLoading}
+              />
             </div>
 
             <div className="flex flex-col gap-2">

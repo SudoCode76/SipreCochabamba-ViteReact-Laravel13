@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Loader2, TrendingUp, Search, MoreHorizontal, RefreshCw, X, FileDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, TrendingUp, MoreHorizontal, RefreshCw, X, FileDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import {
   Card,
   CardContent,
@@ -189,15 +190,18 @@ export default function ObrasAnalysisPage() {
               <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                 Buscar
               </span>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar item Obras Públicas"
-                  className="h-12 rounded-2xl border-border/80 bg-background/90 pl-11"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                />
-              </div>
+              <ClearableSearchInput
+                placeholder="Buscar item Obras Públicas"
+                className="h-12 rounded-2xl border-border/80 bg-background/90"
+                value={searchQuery}
+                isLoading={isFetching && !isLoading}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onClear={() => {
+                  setSearchQuery("");
+                  setSearch("");
+                  setPage(1);
+                }}
+              />
             </form>
           </div>
 

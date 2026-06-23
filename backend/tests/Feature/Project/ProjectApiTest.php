@@ -841,6 +841,50 @@ class ProjectApiTest extends TestCase
         $this->assertStringStartsWith('PK', $xlsx->getContent());
     }
 
+    public function test_budget_recalculation_rows_are_grouped_by_module_with_subtotals(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        \Illuminate\Support\Facades\DB::table('modulo')->insert([
+            ['id_modulo' => 2, 'nombre_modulo' => 'Modulo A', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
+            ['id_modulo' => 3, 'nombre_modulo' => 'Modulo B', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
+        ]);
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material A']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 1, 'precio' => 20, 'descripcion' => 'Material B']);
+        $this->createInputLog(['id_log' => 1, 'id_insumo' => 1, 'precio' => 8, 'tipo' => 1, 'descripcion' => 'Material A', 'fecha' => '2026-04-01']);
+        $this->createInputLog(['id_log' => 2, 'id_insumo' => 2, 'precio' => 18, 'tipo' => 1, 'descripcion' => 'Material B', 'fecha' => '2026-04-01']);
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM A']);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM B', 'cod' => 'ITM-002']);
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 2, 'id_insumo' => 2, 'cantidad' => 3]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'id_modulo' => 2, 'prioridad' => 2]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'id_modulo' => 3, 'prioridad' => 1]);
+
+        $data = app(\App\Modules\Projects\Services\ProjectBudgetService::class)
+            ->budgetRecalculation(\App\Models\Project::findOrFail(1), \Carbon\Carbon::parse('2026-04-30'));
+
+        $this->assertSame(['Modulo A', 'Modulo B'], array_column($data['items'], 'modulo'));
+        $moduleTotals = collect($data['items'])
+            ->groupBy('modulo')
+            ->map(fn ($rows): float => round((float) $rows->sum('materiales'), 2))
+            ->all();
+        $this->assertSame(16.0, $moduleTotals['Modulo A']);
+        $this->assertSame(54.0, $moduleTotals['Modulo B']);
+
+        $pdf = $this->get('/api/v1/projects/1/budget-recalculation/pdf?fecha=2026-04-30');
+        $pdf->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        $xlsx = $this->get('/api/v1/projects/1/budget-recalculation/xlsx?fecha=2026-04-30');
+        $xlsx->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringStartsWith('PK', $xlsx->getContent());
+    }
+
     public function test_general_budget_pdf_is_valid_when_project_has_no_items(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

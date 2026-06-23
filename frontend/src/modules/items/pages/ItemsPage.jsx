@@ -1,11 +1,12 @@
 import { Fragment, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, ChevronLeft, ChevronRight, Eye, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Eye, Loader2, Package, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import {
   Card,
   CardContent,
@@ -1348,15 +1349,18 @@ export default function ItemsPage() {
                 <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   Buscar
                 </span>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar item"
-                    className="h-12 rounded-2xl border-border/80 bg-background/90 pl-11"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                  />
-                </div>
+                <ClearableSearchInput
+                  placeholder="Buscar item"
+                  className="h-12 rounded-2xl border-border/80 bg-background/90"
+                  value={searchQuery}
+                  isLoading={isFetching && !isLoading}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onClear={() => {
+                    setSearchQuery("");
+                    setSearch("");
+                    setPage(1);
+                  }}
+                />
               </div>
             </form>
           </div>
@@ -1722,14 +1726,20 @@ export default function ItemsPage() {
                         Unidad de medida
                       </Label>
                       <div className="relative">
-                        <Input
+                        <ClearableSearchInput
                           id="create_unit_combobox"
                           placeholder="Buscar y seleccionar unidad"
                           value={unitSearch}
                           onChange={handleUnitSearchChange}
                           onFocus={() => setUnitComboboxOpen(true)}
                           onBlur={() => window.setTimeout(() => setUnitComboboxOpen(false), 120)}
-                          className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                          className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
+                          clearButtonClassName="right-9"
+                          onClear={() => {
+                            setUnitSearch("");
+                            setCreateUnitId("");
+                            setUnitComboboxOpen(true);
+                          }}
                           autoComplete="off"
                           required
                         />
@@ -1900,14 +1910,20 @@ export default function ItemsPage() {
                           Unidad de medida
                         </Label>
                         <div className="relative">
-                          <Input
+                          <ClearableSearchInput
                             id="edit_unit_combobox"
                             placeholder="Buscar y seleccionar unidad"
                             value={editUnitSearch}
                             onChange={handleEditUnitSearchChange}
                             onFocus={() => setEditUnitComboboxOpen(true)}
                             onBlur={() => window.setTimeout(() => setEditUnitComboboxOpen(false), 120)}
-                            className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                            className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
+                            clearButtonClassName="right-9"
+                            onClear={() => {
+                              setEditUnitSearch("");
+                              setEditUnitId("");
+                              setEditUnitComboboxOpen(true);
+                            }}
                             autoComplete="off"
                             role="combobox"
                             aria-expanded={editUnitComboboxOpen}
@@ -2385,14 +2401,22 @@ export default function ItemsPage() {
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="material_combobox" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Material</Label>
                     <div className="relative">
-                      <Input
+                      <ClearableSearchInput
                         id="material_combobox"
                         placeholder="Buscar y seleccionar material"
-                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
                         value={materialSearch}
+                        isLoading={inputOptionsLoading}
+                        loadingIndicatorClassName="right-16"
                         onChange={handleMaterialSearchChange}
                         onFocus={() => setMaterialComboboxOpen(true)}
                         onBlur={() => window.setTimeout(() => setMaterialComboboxOpen(false), 120)}
+                        clearButtonClassName="right-9"
+                        onClear={() => {
+                          setMaterialSearch("");
+                          setSelectedMaterialId("");
+                          setMaterialComboboxOpen(true);
+                        }}
                         autoComplete="off"
                         required
                       />
@@ -2552,14 +2576,22 @@ export default function ItemsPage() {
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="labor_combobox" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Mano de Obra del Item</Label>
                     <div className="relative">
-                      <Input
+                      <ClearableSearchInput
                         id="labor_combobox"
                         placeholder="Buscar y seleccionar mano de obra"
-                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
                         value={laborSearch}
+                        isLoading={laborOptionsLoading}
+                        loadingIndicatorClassName="right-16"
                         onChange={handleLaborSearchChange}
                         onFocus={() => setLaborComboboxOpen(true)}
                         onBlur={() => window.setTimeout(() => setLaborComboboxOpen(false), 120)}
+                        clearButtonClassName="right-9"
+                        onClear={() => {
+                          setLaborSearch("");
+                          setSelectedLaborId("");
+                          setLaborComboboxOpen(true);
+                        }}
                         autoComplete="off"
                         required
                       />
@@ -2719,14 +2751,22 @@ export default function ItemsPage() {
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="machinery_combobox" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Equipos, Maquinaria, Herramientas de Item</Label>
                     <div className="relative">
-                      <Input
+                      <ClearableSearchInput
                         id="machinery_combobox"
                         placeholder="Buscar y seleccionar maquinaria"
-                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
                         value={machinerySearch}
+                        isLoading={machineryOptionsLoading}
+                        loadingIndicatorClassName="right-16"
                         onChange={handleMachinerySearchChange}
                         onFocus={() => setMachineryComboboxOpen(true)}
                         onBlur={() => window.setTimeout(() => setMachineryComboboxOpen(false), 120)}
+                        clearButtonClassName="right-9"
+                        onClear={() => {
+                          setMachinerySearch("");
+                          setSelectedMachineryId("");
+                          setMachineryComboboxOpen(true);
+                        }}
                         autoComplete="off"
                         required
                       />

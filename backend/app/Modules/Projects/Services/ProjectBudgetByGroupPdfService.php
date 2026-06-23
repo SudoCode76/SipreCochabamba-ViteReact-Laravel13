@@ -73,14 +73,32 @@ class ProjectBudgetByGroupPdfService
    </tr>
  ';
 
+        $hasModules = collect($items)->contains(fn (array $item): bool => array_key_exists('modulo', $item));
+        $lastModule = null;
+        $moduleTotals = ['materiales' => 0.0, 'mano_obra' => 0.0, 'herramientas' => 0.0];
         $lastGroupId = null;
         $lastSubgroupId = null;
 
         foreach ($items as $index => $item) {
+            if ($hasModules && $lastModule !== ($item['modulo'] ?? 'General')) {
+                if ($lastModule !== null) {
+                    $html .= $this->moduleSubtotalHtml($lastModule, $moduleTotals);
+                }
+
+                $lastModule = $item['modulo'] ?? 'General';
+                $moduleTotals = ['materiales' => 0.0, 'mano_obra' => 0.0, 'herramientas' => 0.0];
+                $lastGroupId = null;
+                $lastSubgroupId = null;
+                $html .= '
+          <tr bgcolor="#8cb9b5">
+            <td colspan="5"><h4>MÓDULO: '.htmlentities((string) $lastModule).'</h4></td>
+          </tr>';
+            }
+
             if ($lastGroupId !== $item['id_grupo']) {
                 $html .= '
           <tr bgcolor="#99a3a2">
-            <td colspan="6"><h4><font color="#fcfdfd">'.htmlentities((string) $item['grupo']).'</font></h4></td>
+            <td colspan="5"><h4><font color="#fcfdfd">'.htmlentities((string) $item['grupo']).'</font></h4></td>
           </tr>';
                 $lastGroupId = $item['id_grupo'];
             }
@@ -88,10 +106,14 @@ class ProjectBudgetByGroupPdfService
             if ($lastSubgroupId !== $item['id_subgrupo']) {
                 $html .= '
           <tr bgcolor="#55827e">
-            <td colspan="6"><h4><font color="#fcfdfd">'.htmlentities((string) $item['subgrupo']).'</font></h4></td>
+            <td colspan="5"><h4><font color="#fcfdfd">'.htmlentities((string) $item['subgrupo']).'</font></h4></td>
           </tr>';
                 $lastSubgroupId = $item['id_subgrupo'];
             }
+
+            $moduleTotals['materiales'] += (float) ($item['materiales'] ?? 0);
+            $moduleTotals['mano_obra'] += (float) ($item['mano_obra'] ?? 0);
+            $moduleTotals['herramientas'] += (float) ($item['herramientas'] ?? 0);
 
             $html .= '
           <tr nobr="true">
@@ -101,6 +123,10 @@ class ProjectBudgetByGroupPdfService
             <td align="right">'.LegacyPdfFormat::number((float) ($item['mano_obra'] ?? 0), 4).'</td>
             <td align="right">'.LegacyPdfFormat::number((float) ($item['herramientas'] ?? 0), 4).'</td>
           </tr>';
+        }
+
+        if ($hasModules && $lastModule !== null) {
+            $html .= $this->moduleSubtotalHtml($lastModule, $moduleTotals);
         }
 
         $html .= '
@@ -114,6 +140,17 @@ class ProjectBudgetByGroupPdfService
       </table>';
 
         return $html;
+    }
+
+    private function moduleSubtotalHtml(string $module, array $totals): string
+    {
+        return '
+      <tr class="subseccion">
+        <td colspan="2"><b>Subtotal módulo '.htmlentities($module).'</b></td>
+        <td align="right"><b>'.LegacyPdfFormat::number((float) ($totals['materiales'] ?? 0), 4).'</b></td>
+        <td align="right"><b>'.LegacyPdfFormat::number((float) ($totals['mano_obra'] ?? 0), 4).'</b></td>
+        <td align="right"><b>'.LegacyPdfFormat::number((float) ($totals['herramientas'] ?? 0), 4).'</b></td>
+      </tr>';
     }
 
     private function makePdf(): ProjectBudgetByGroupPdf
