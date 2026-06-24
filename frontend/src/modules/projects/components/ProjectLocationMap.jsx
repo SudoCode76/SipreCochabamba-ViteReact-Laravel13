@@ -27,6 +27,8 @@ const DEFAULT_ZOOM = 12;
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 12;
 const NEARBY_RADIUS_METERS = 500;
+const MAP_PROJECT_LIMIT = 500;
+const MAP_REFRESH_DELAY_MS = 450;
 const CRS_CODE = "EPSG:32719";
 const GEOGRAPHIC_CRS = "EPSG:4326";
 const CRS_DEF = "+proj=utm +zone=19 +south +datum=WGS84 +units=m +no_defs";
@@ -56,6 +58,23 @@ function formatLatLng(latlng) {
   }
 
   return `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
+}
+
+function formatBounds(bounds) {
+  if (!bounds) {
+    return "";
+  }
+
+  const south = bounds.getSouth();
+  const west = bounds.getWest();
+  const north = bounds.getNorth();
+  const east = bounds.getEast();
+
+  if (![south, west, north, east].every(Number.isFinite)) {
+    return "";
+  }
+
+  return [south, west, north, east].map((value) => value.toFixed(6)).join(",");
 }
 
 function getFeatureInfoUrl(map, crs, layerUrl, latlng, params) {
@@ -185,37 +204,65 @@ export default function ProjectLocationMap({ value, onChange, showProjects = fal
   const [territorialWarning, setTerritorialWarning] = useState("");
   const [projectsMode, setProjectsMode] = useState("hidden");
   const [selectedLocation, setSelectedLocation] = useState(() => parseLatLng(value) || L.latLng(COCHABAMBA_CENTER));
+  const [mapBounds, setMapBounds] = useState("");
+
+  const mapProjectParams = useMemo(() => {
+    if (!showProjects || projectsMode === "hidden") {
+      return null;
+    }
+
+    if (projectsMode === "nearby" && selectedLocation) {
+      return {
+        lat: selectedLocation.lat.toFixed(6),
+        lng: selectedLocation.lng.toFixed(6),
+        radius: NEARBY_RADIUS_METERS,
+        limit: MAP_PROJECT_LIMIT,
+      };
+    }
+
+    if (projectsMode === "all" && mapBounds) {
+      return {
+        bbox: mapBounds,
+        limit: MAP_PROJECT_LIMIT,
+      };
+    }
+
+    return null;
+  }, [mapBounds, projectsMode, selectedLocation, showProjects]);
 
   const {
     data: mapProjectsData,
     isFetching: projectsLoading,
     isError: projectsError,
   } = useQuery({
-    queryKey: ["projects-map"],
-    queryFn: projectService.mapProjects,
-    enabled: showProjects && projectsMode !== "hidden",
+    queryKey: ["projects-map", projectsMode, mapProjectParams],
+    queryFn: () => projectService.mapProjects(mapProjectParams ?? {}),
+    enabled: Boolean(mapProjectParams),
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 
-  const normalizedProjects = useMemo(
-    () => (mapProjectsData?.data?.items ?? []).map(normalizeProject).filter(Boolean),
-    [mapProjectsData],
-  );
-
-  const nearbyProjects = useMemo(() => {
-    if (!selectedLocation) {
-      return [];
-    }
-
-    return normalizedProjects
+  const visibleProjects = useMemo(
+    () => (mapProjectsData?.data?.items ?? [])
+      .map(normalizeProject)
+      .filter(Boolean)
       .map((project) => ({
         ...project,
-        distance: selectedLocation.distanceTo(L.latLng(project.lat, project.lng)),
+        distance: projectsMode === "nearby"
+          ? Number(project.distance ?? selectedLocation?.distanceTo(L.latLng(project.lat, project.lng)))
+          : null,
       }))
-      .filter((project) => project.distance <= NEARBY_RADIUS_METERS)
-      .sort((left, right) => left.distance - right.distance);
-  }, [normalizedProjects, selectedLocation]);
+      .sort((left, right) => {
+        if (projectsMode === "nearby") {
+          return (left.distance ?? 0) - (right.distance ?? 0);
+        }
+
+        return String(left.name ?? "").localeCompare(String(right.name ?? ""), "es");
+      }),
+    [mapProjectsData, projectsMode, selectedLocation],
+  );
+
+  const mapProjectsMeta = mapProjectsData?.data?.meta ?? {};
 
   useEffect(() => {
     latestOnChangeRef.current = onChange;
@@ -362,15 +409,31 @@ export default function ProjectLocationMap({ value, onChange, showProjects = fal
       const resolution = CRS_RESOLUTIONS[map.getZoom()];
       setScale(Number.isFinite(resolution) ? `1:${Math.round(resolution * 96 * 39.37).toLocaleString("es-BO")}` : "-");
     };
+    const updateBounds = () => {
+      setMapBounds(formatBounds(map.getBounds()));
+    };
+    let boundsTimer = null;
+    const scheduleBoundsUpdate = () => {
+      if (boundsTimer) {
+        window.clearTimeout(boundsTimer);
+      }
+      boundsTimer = window.setTimeout(updateBounds, MAP_REFRESH_DELAY_MS);
+    };
 
     updateScale();
+    updateBounds();
     map.on("zoomend", updateScale);
+    map.on("zoomend", scheduleBoundsUpdate);
+    map.on("moveend", scheduleBoundsUpdate);
     map.on("mousemove", (event) => setMouseLocation(formatLatLng(event.latlng)));
     map.on("click", (event) => createOrMoveMarker(event.latlng, true));
 
     requestAnimationFrame(() => map.invalidateSize());
 
     return () => {
+      if (boundsTimer) {
+        window.clearTimeout(boundsTimer);
+      }
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
@@ -401,7 +464,7 @@ export default function ProjectLocationMap({ value, onChange, showProjects = fal
       return;
     }
 
-    const projects = projectsMode === "nearby" ? nearbyProjects : normalizedProjects;
+    const projects = visibleProjects;
     const cluster = L.markerClusterGroup({
       chunkedLoading: true,
       chunkInterval: 100,
@@ -445,13 +508,12 @@ export default function ProjectLocationMap({ value, onChange, showProjects = fal
       }
     };
   }, [
-    nearbyProjects,
-    normalizedProjects,
     projectsError,
     projectsLoading,
     projectsMode,
     selectedLocation,
     showProjects,
+    visibleProjects,
   ]);
 
   useEffect(() => {
@@ -512,7 +574,7 @@ export default function ProjectLocationMap({ value, onChange, showProjects = fal
               {[
                 ["hidden", "Ocultar proyectos"],
                 ["nearby", "Cercanos (500 m)"],
-                ["all", "Todos los proyectos"],
+                ["all", "Proyectos en esta vista"],
               ].map(([mode, label]) => (
                 <button
                   key={mode}
@@ -532,8 +594,8 @@ export default function ProjectLocationMap({ value, onChange, showProjects = fal
             {projectsMode !== "hidden" && !projectsLoading && !projectsError && (
               <span className="text-sm text-muted-foreground">
                 {projectsMode === "nearby"
-                  ? `${nearbyProjects.length} proyecto(s) a menos de 500 m`
-                  : `${normalizedProjects.length} proyecto(s) georreferenciado(s)`}
+                  ? `Mostrando ${visibleProjects.length} proyecto(s) a menos de 500 m`
+                  : `Mostrando ${visibleProjects.length} proyecto(s) en esta vista`}
               </span>
             )}
           </div>
@@ -544,8 +606,14 @@ export default function ProjectLocationMap({ value, onChange, showProjects = fal
           {projectsError && (
             <p className="text-sm text-red-600">No se pudieron cargar los proyectos del mapa.</p>
           )}
-          {projectsMode === "nearby" && !projectsLoading && !projectsError && nearbyProjects.length === 0 && (
+          {mapProjectsMeta.truncated && !projectsLoading && !projectsError && (
+            <p className="text-sm text-amber-700">Hay más proyectos que el límite de {mapProjectsMeta.limit ?? MAP_PROJECT_LIMIT}. Acércate o mueve el mapa para ver más proyectos.</p>
+          )}
+          {projectsMode === "nearby" && !projectsLoading && !projectsError && visibleProjects.length === 0 && (
             <p className="text-sm text-muted-foreground">No se encontraron proyectos a menos de 500 metros.</p>
+          )}
+          {projectsMode === "all" && !projectsLoading && !projectsError && visibleProjects.length === 0 && (
+            <p className="text-sm text-muted-foreground">No se encontraron proyectos georreferenciados en esta vista.</p>
           )}
         </div>
       )}

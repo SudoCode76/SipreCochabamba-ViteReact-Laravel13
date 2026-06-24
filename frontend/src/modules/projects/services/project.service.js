@@ -14,8 +14,8 @@ export const projectService = {
     return response.data;
   },
 
-  mapProjects: async () => {
-    const response = await apiClient.get("/v1/projects/map");
+  mapProjects: async (params = {}) => {
+    const response = await apiClient.get("/v1/projects/map", { params });
     return response.data;
   },
 

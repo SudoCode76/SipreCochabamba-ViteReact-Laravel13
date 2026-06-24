@@ -278,6 +278,59 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.meta.total', 1);
     }
 
+    public function test_project_map_can_filter_by_visible_bbox(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createProjectRecord([
+            'id_proyecto' => 1,
+            'nombre_proyecto' => 'DENTRO DEL MAPA',
+            'latitud' => '-17.416128',
+            'longitud' => '-66.165436',
+        ]);
+        $this->createProjectRecord([
+            'id_proyecto' => 2,
+            'nombre_proyecto' => 'FUERA DEL MAPA',
+            'latitud' => '-16.500000',
+            'longitud' => '-65.500000',
+        ]);
+
+        $this->getJson('/api/v1/projects/map?bbox=-17.500000,-66.300000,-17.300000,-66.000000')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id', 1)
+            ->assertJsonPath('data.meta.total_returned', 1)
+            ->assertJsonPath('data.meta.truncated', false)
+            ->assertJsonMissing(['name' => 'FUERA DEL MAPA']);
+    }
+
+    public function test_project_map_can_filter_nearby_and_report_limit_truncation(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        foreach ([1, 2, 3] as $id) {
+            $this->createProjectRecord([
+                'id_proyecto' => $id,
+                'nombre_proyecto' => 'PROYECTO '.$id,
+                'latitud' => '-17.41612'.$id,
+                'longitud' => '-66.16543'.$id,
+            ]);
+        }
+        $this->createProjectRecord([
+            'id_proyecto' => 4,
+            'nombre_proyecto' => 'PROYECTO LEJANO',
+            'latitud' => '-17.000000',
+            'longitud' => '-66.000000',
+        ]);
+
+        $this->getJson('/api/v1/projects/map?lat=-17.416128&lng=-66.165436&radius=500&limit=2')
+            ->assertOk()
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.meta.total_returned', 2)
+            ->assertJsonPath('data.meta.limit', 2)
+            ->assertJsonPath('data.meta.truncated', true)
+            ->assertJsonMissing(['name' => 'PROYECTO LEJANO']);
+    }
+
     public function test_cannot_create_duplicate_project_name_even_with_different_case(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
