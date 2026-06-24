@@ -578,30 +578,43 @@ class GeneralAndObrasItemApiTest extends TestCase
                 'item' => 'ANTIGUO CIENTO OCHENTA Y UNO',
                 'fecha_item' => now()->subDays(181)->toDateString(),
             ]);
+            $this->createItemRecord([
+                'id_item' => 8,
+                'item' => 'ANTIGUO CIENTO CINCUENTA',
+                'fecha_item' => now()->subDays(150)->toDateString(),
+            ]);
 
             $this->getJson('/api/v1/items/maintenance-summary')
                 ->assertOk()
-                ->assertJsonPath('data.outdated_count', 4)
+                ->assertJsonPath('data.outdated_count', 5)
                 ->assertJsonPath('data.threshold_days', 90);
 
             $this->getJson('/api/v1/items?freshness=outdated&per_page=10')
                 ->assertOk()
-                ->assertJsonCount(4, 'data.items')
+                ->assertJsonCount(5, 'data.items')
                 ->assertJsonPath('data.items.0.is_outdated', true)
                 ->assertJsonPath('data.items.1.is_outdated', true);
 
             $this->getJson('/api/v1/items?review_days=60&per_page=10')
                 ->assertOk()
-                ->assertJsonCount(1, 'data.items')
-                ->assertJsonPath('data.items.0.name', 'RECIENTE TREINTA');
+                ->assertJsonCount(3, 'data.items')
+                ->assertJsonFragment(['name' => 'VENCIDO'])
+                ->assertJsonFragment(['name' => 'DIA NOVENTA'])
+                ->assertJsonFragment(['name' => 'RECIENTE CIENTO DIECINUEVE'])
+                ->assertJsonMissing(['name' => 'RECIENTE TREINTA']);
 
             $this->getJson('/api/v1/items?review_days=120&per_page=10')
                 ->assertOk()
-                ->assertJsonCount(4, 'data.items');
+                ->assertJsonCount(1, 'data.items')
+                ->assertJsonPath('data.items.0.name', 'ANTIGUO CIENTO CINCUENTA')
+                ->assertJsonMissing(['name' => 'RECIENTE CIENTO DIECINUEVE']);
 
             $this->getJson('/api/v1/items?review_days=180&per_page=10')
                 ->assertOk()
-                ->assertJsonCount(2, 'data.items');
+                ->assertJsonCount(2, 'data.items')
+                ->assertJsonFragment(['name' => 'SIN FECHA'])
+                ->assertJsonFragment(['name' => 'ANTIGUO CIENTO OCHENTA Y UNO'])
+                ->assertJsonMissing(['name' => 'ANTIGUO CIENTO CINCUENTA']);
 
             $this->postJson('/api/v1/items/1/review')
                 ->assertOk()
@@ -611,7 +624,7 @@ class GeneralAndObrasItemApiTest extends TestCase
 
             $this->getJson('/api/v1/items/maintenance-summary')
                 ->assertOk()
-                ->assertJsonPath('data.outdated_count', 3);
+                ->assertJsonPath('data.outdated_count', 4);
         } finally {
             Carbon::setTestNow();
         }

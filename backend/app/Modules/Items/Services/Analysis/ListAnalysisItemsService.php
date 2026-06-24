@@ -245,8 +245,22 @@ class ListAnalysisItemsService
             return;
         }
 
+        if ($days === 60) {
+            $this->applyDuplicateReviewRangeFilter($query, 60, 120, $table);
+
+            return;
+        }
+
+        if ($days === 120) {
+            $this->applyDuplicateReviewRangeFilter($query, 120, 180, $table);
+        }
+    }
+
+    private function applyDuplicateReviewRangeFilter(Builder $query, int $minimumDays, int $exclusiveMaximumDays, string $table): void
+    {
         $query->whereNotNull("{$table}.fecha_item")
-            ->whereDate("{$table}.fecha_item", '>=', today()->subDays($days));
+            ->whereDate("{$table}.fecha_item", '<=', today()->subDays($minimumDays))
+            ->whereDate("{$table}.fecha_item", '>', today()->subDays($exclusiveMaximumDays));
     }
 
     private function normalizedItemExpression(string $column): string

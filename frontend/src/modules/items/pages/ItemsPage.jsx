@@ -1315,9 +1315,9 @@ export default function ItemsPage() {
                     onChange={handleViewChange}
                   >
                     <option value="legacy">Predeterminado</option>
-                    <option value="review_60">En revisión menor a 60 días</option>
-                    <option value="review_120">En revisión menor a 120 días</option>
-                    <option value="review_180">En revisión de 180 días o mayor</option>
+                    <option value="review_60">Sin revisar de 60 a 120 días</option>
+                    <option value="review_120">Sin revisar de 120 a 180 días</option>
+                    <option value="review_180">Sin revisar 180 días o más</option>
                     <option value="missing_specifications">Sin especificaciones</option>
                     <option value="duplicates">Duplicados</option>
                     <option value="recent">Recientes</option>
@@ -1412,19 +1412,19 @@ export default function ItemsPage() {
                               badge: "bg-rose-600",
                               label: "Requiere revisión",
                             }
-                          : daysWithoutUpdate <= 60
+                          : daysWithoutUpdate >= 120
                             ? {
-                                row: "bg-emerald-50/60",
-                                text: "font-medium text-emerald-800",
-                                badge: "bg-emerald-600",
-                                label: "Revisión reciente",
+                                row: "bg-orange-50/70",
+                                text: "font-medium text-orange-800",
+                                badge: "bg-orange-600",
+                                label: "120 a 180 días",
                               }
-                            : daysWithoutUpdate <= 120
+                            : daysWithoutUpdate >= 60
                               ? {
                                   row: "bg-amber-50/60",
                                   text: "font-medium text-amber-800",
                                   badge: "bg-amber-600",
-                                  label: "Revisión intermedia",
+                                  label: "60 a 120 días",
                                 }
                               : null;
                       const rowClassName = [

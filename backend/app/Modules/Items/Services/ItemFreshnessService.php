@@ -36,8 +36,15 @@ class ItemFreshnessService
             });
         }
 
-        return $query->whereNotNull('item.fecha_item')
-            ->whereDate('item.fecha_item', '>=', $this->cutoffDate($days));
+        if ($days === 60) {
+            return $this->applyReviewRangeFilter($query, 60, 120);
+        }
+
+        if ($days === 120) {
+            return $this->applyReviewRangeFilter($query, 120, 180);
+        }
+
+        return $query;
     }
 
     public function outdatedCount(): int
@@ -67,6 +74,13 @@ class ItemFreshnessService
     private function cutoffDate(int $days): Carbon
     {
         return today()->subDays($days);
+    }
+
+    private function applyReviewRangeFilter(Builder $query, int $minimumDays, int $exclusiveMaximumDays): Builder
+    {
+        return $query->whereNotNull('item.fecha_item')
+            ->whereDate('item.fecha_item', '<=', $this->cutoffDate($minimumDays))
+            ->whereDate('item.fecha_item', '>', $this->cutoffDate($exclusiveMaximumDays));
     }
 
     private function normalizeReviewDays(int $days): int
