@@ -75,7 +75,15 @@ class ProjectBudgetService
     {
         $this->snapshotService->ensureForProject($project);
 
-        $rows = $this->activeProjectItemsForLegacyBudgetPdf($project);
+        $rows = $this->activeProjectItemsForLegacyBudgetPdf($project)
+            ->sortBy(fn (ProjectItem $item): array => [
+                $item->module?->nombre_modulo ?? 'General',
+                $item->grupo_snapshot ?? $item->item?->groupCatalog?->nombre_grupo ?? '',
+                $item->subgrupo_snapshot ?? $item->item?->subgroupCatalog?->descripcion ?? '',
+                $item->prioridad,
+                $item->nombre_snapshot ?? $item->item?->item ?? '',
+            ])
+            ->values();
 
         return $this->buildHistoricalBudgetRows($rows, $date);
     }
@@ -240,7 +248,7 @@ class ProjectBudgetService
         $this->snapshotService->ensureForProject($project);
 
         return ProjectItem::query()
-            ->with(['project', 'item.groupCatalog', 'item.subgroupCatalog', 'item.unitMeasure'])
+            ->with(['project', 'module', 'item.groupCatalog', 'item.subgroupCatalog', 'item.unitMeasure'])
             ->where('proyecto_item.id_proyecto', $project->id_proyecto)
             ->where('proyecto_item.estado', 'AC')
             ->whereNotNull('proyecto_item.id_item')
@@ -289,14 +297,16 @@ class ProjectBudgetService
                 'id_proyecto' => $row->id_proyecto,
                 'nombre_proyecto' => $row->project?->nombre_proyecto,
                 'id_item' => $row->id_item,
-                'descripcion' => $row->item?->item,
+                'id_modulo' => $row->id_modulo,
+                'modulo' => $row->module?->nombre_modulo ?: 'General',
+                'descripcion' => $row->nombre_snapshot ?? $row->item?->item,
                 'materiales' => $acc['materiales'],
                 'mano_obra' => $acc['mano_obra'],
                 'herramientas' => $acc['herramientas'],
                 'id_grupo' => $row->item?->groupCatalog?->id_grupo,
-                'grupo' => $row->item?->groupCatalog?->nombre_grupo,
+                'grupo' => $row->grupo_snapshot ?? $row->item?->groupCatalog?->nombre_grupo,
                 'id_subgrupo' => $row->item?->subgroupCatalog?->id_subgrupo,
-                'subgrupo' => $row->item?->subgroupCatalog?->descripcion,
+                'subgrupo' => $row->subgrupo_snapshot ?? $row->item?->subgroupCatalog?->descripcion,
             ];
         })->values();
 

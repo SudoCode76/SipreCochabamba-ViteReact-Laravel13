@@ -41,7 +41,7 @@ export const navigationSections = [
     icon: FolderKanban,
     children: [
       { title: "Insumo", path: "/Insumo", icon: Package, accent: "emerald", permission: { className: "INSUMO", functions: ["INSUMO", "INPUTS", "INPUTS_ADMIN", "LISTA_INSUMO"] } },
-      { title: "Listar solicitud de insumo", path: "/Listar solicitud de Insumo", icon: Package, accent: "emerald", permission: { className: "INSUMO", functions: ["SOLICITUD", "INPUT_QUOTES", "SOLICITUD_INSUMO", "LISTAR_SOLICITUD_INSUMO"] } },
+      { title: "Listar solicitudes de insumo", path: "/Listar solicitud de Insumo", icon: Package, accent: "emerald", permission: { className: "INSUMO", functions: ["SOLICITUD", "INPUT_QUOTES", "SOLICITUD_INSUMO", "LISTAR_SOLICITUD_INSUMO"] } },
       { title: "Crear Solicitud Insumo", path: "/Crear Solicitud Insumo", icon: FolderKanban, accent: "sky", permission: { className: "INSUMO", functions: ["NUEVA_SOLICITUD"] } },
       { title: "Gestionar Solicitud", path: "/Gestionar Solicitud", icon: FolderKanban, accent: "sky", permission: { className: "INSUMO", functions: ["GESTIONAR_SOLICITUD"] } },
 

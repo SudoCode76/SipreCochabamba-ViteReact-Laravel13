@@ -2,12 +2,13 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Search, ChevronLeft, ChevronRight, Loader2, MoreHorizontal, Pencil, File, X } from "lucide-react";
+import { FileText, ChevronLeft, ChevronRight, Loader2, MoreHorizontal, Pencil, File, X } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -139,7 +140,7 @@ export default function InputRequestsPage() {
                 <FileText className="size-5" />
               </div>
               <div>
-                <CardTitle className="text-2xl tracking-[-0.04em]">Listar Solicitud de Insumo</CardTitle>
+                <CardTitle className="text-2xl tracking-[-0.04em]">Listar Solicitudes de Insumo</CardTitle>
               </div>
             </div>
           </div>
@@ -382,17 +383,19 @@ export default function InputRequestsPage() {
 
               <div className="flex w-full max-w-xs flex-col gap-2 self-start lg:self-auto">
                 <span className="text-right text-base text-foreground">Search:</span>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={viewSearch}
-                    onChange={(event) => {
-                      setViewSearch(event.target.value);
-                      setViewPage(1);
-                    }}
-                    className="h-12 rounded-none border-border/80 bg-background/90 pl-11"
-                  />
-                </div>
+                <ClearableSearchInput
+                  value={viewSearch}
+                  onChange={(event) => {
+                    setViewSearch(event.target.value);
+                    setViewPage(1);
+                  }}
+                  onClear={() => {
+                    setViewSearch("");
+                    setViewPage(1);
+                  }}
+                  isLoading={quoteHistoryQuery.isFetching && !quoteHistoryQuery.isLoading}
+                  className="h-12 rounded-none border-border/80 bg-background/90"
+                />
               </div>
             </div>
 

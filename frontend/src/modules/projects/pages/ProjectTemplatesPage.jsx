@@ -1,13 +1,13 @@
 import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Loader2, MoreHorizontal, Power, Search, X } from "lucide-react";
+import { Copy, Loader2, MoreHorizontal, Power } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { projectService } from "../services/project.service";
 
 const statusClass = {
@@ -77,19 +77,15 @@ export default function ProjectTemplatesPage() {
               <CardTitle className="text-2xl tracking-[-0.04em]">Planillas de proyecto</CardTitle>
             </div>
 
-            <div className="relative w-full lg:max-w-sm">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
+            <div className="w-full lg:max-w-sm">
+              <ClearableSearchInput
                 value={search}
+                isLoading={isFetching && !isLoading}
                 onChange={(event) => setSearch(event.target.value)}
+                onClear={() => setSearch("")}
                 placeholder="Buscar planilla"
-                className="h-11 rounded-2xl border-border/80 bg-background/90 pl-10 pr-10"
+                className="h-11 rounded-2xl border-border/80 bg-background/90"
               />
-              {search && (
-                <Button type="button" variant="ghost" size="icon-sm" className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full" onClick={() => setSearch("")}>
-                  <X className="size-4" />
-                </Button>
-              )}
             </div>
           </div>
         </CardHeader>

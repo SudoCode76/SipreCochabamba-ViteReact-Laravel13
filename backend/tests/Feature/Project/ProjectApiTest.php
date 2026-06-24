@@ -278,6 +278,59 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.meta.total', 1);
     }
 
+    public function test_project_map_can_filter_by_visible_bbox(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createProjectRecord([
+            'id_proyecto' => 1,
+            'nombre_proyecto' => 'DENTRO DEL MAPA',
+            'latitud' => '-17.416128',
+            'longitud' => '-66.165436',
+        ]);
+        $this->createProjectRecord([
+            'id_proyecto' => 2,
+            'nombre_proyecto' => 'FUERA DEL MAPA',
+            'latitud' => '-16.500000',
+            'longitud' => '-65.500000',
+        ]);
+
+        $this->getJson('/api/v1/projects/map?bbox=-17.500000,-66.300000,-17.300000,-66.000000')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id', 1)
+            ->assertJsonPath('data.meta.total_returned', 1)
+            ->assertJsonPath('data.meta.truncated', false)
+            ->assertJsonMissing(['name' => 'FUERA DEL MAPA']);
+    }
+
+    public function test_project_map_can_filter_nearby_and_report_limit_truncation(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        foreach ([1, 2, 3] as $id) {
+            $this->createProjectRecord([
+                'id_proyecto' => $id,
+                'nombre_proyecto' => 'PROYECTO '.$id,
+                'latitud' => '-17.41612'.$id,
+                'longitud' => '-66.16543'.$id,
+            ]);
+        }
+        $this->createProjectRecord([
+            'id_proyecto' => 4,
+            'nombre_proyecto' => 'PROYECTO LEJANO',
+            'latitud' => '-17.000000',
+            'longitud' => '-66.000000',
+        ]);
+
+        $this->getJson('/api/v1/projects/map?lat=-17.416128&lng=-66.165436&radius=500&limit=2')
+            ->assertOk()
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.meta.total_returned', 2)
+            ->assertJsonPath('data.meta.limit', 2)
+            ->assertJsonPath('data.meta.truncated', true)
+            ->assertJsonMissing(['name' => 'PROYECTO LEJANO']);
+    }
+
     public function test_cannot_create_duplicate_project_name_even_with_different_case(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
@@ -836,6 +889,50 @@ class ProjectApiTest extends TestCase
         $this->assertStringStartsWith('%PDF', $pdf->getContent());
 
         $xlsx = $this->get('/api/v1/projects/1/general-budget/xlsx?format=PCA');
+        $xlsx->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringStartsWith('PK', $xlsx->getContent());
+    }
+
+    public function test_budget_recalculation_rows_are_grouped_by_module_with_subtotals(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        \Illuminate\Support\Facades\DB::table('modulo')->insert([
+            ['id_modulo' => 2, 'nombre_modulo' => 'Modulo A', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
+            ['id_modulo' => 3, 'nombre_modulo' => 'Modulo B', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
+        ]);
+        $this->createInput(['id_insumo' => 1, 'tipo' => 1, 'precio' => 10, 'descripcion' => 'Material A']);
+        $this->createInput(['id_insumo' => 2, 'tipo' => 1, 'precio' => 20, 'descripcion' => 'Material B']);
+        $this->createInputLog(['id_log' => 1, 'id_insumo' => 1, 'precio' => 8, 'tipo' => 1, 'descripcion' => 'Material A', 'fecha' => '2026-04-01']);
+        $this->createInputLog(['id_log' => 2, 'id_insumo' => 2, 'precio' => 18, 'tipo' => 1, 'descripcion' => 'Material B', 'fecha' => '2026-04-01']);
+        $this->createItemRecord(['id_item' => 1, 'item' => 'ITEM A']);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM B', 'cod' => 'ITM-002']);
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 2, 'id_insumo' => 2, 'cantidad' => 3]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'id_modulo' => 2, 'prioridad' => 2]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'id_modulo' => 3, 'prioridad' => 1]);
+
+        $data = app(\App\Modules\Projects\Services\ProjectBudgetService::class)
+            ->budgetRecalculation(\App\Models\Project::findOrFail(1), \Carbon\Carbon::parse('2026-04-30'));
+
+        $this->assertSame(['Modulo A', 'Modulo B'], array_column($data['items'], 'modulo'));
+        $moduleTotals = collect($data['items'])
+            ->groupBy('modulo')
+            ->map(fn ($rows): float => round((float) $rows->sum('materiales'), 2))
+            ->all();
+        $this->assertSame(16.0, $moduleTotals['Modulo A']);
+        $this->assertSame(54.0, $moduleTotals['Modulo B']);
+
+        $pdf = $this->get('/api/v1/projects/1/budget-recalculation/pdf?fecha=2026-04-30');
+        $pdf->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        $xlsx = $this->get('/api/v1/projects/1/budget-recalculation/xlsx?fecha=2026-04-30');
         $xlsx->assertOk()
             ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         $this->assertStringStartsWith('PK', $xlsx->getContent());

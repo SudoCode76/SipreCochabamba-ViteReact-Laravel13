@@ -306,10 +306,31 @@ class ProjectBudgetXlsxService
         }
 
         $rows[] = ['type' => 'spacer'];
+        $hasModules = collect($budget['items'] ?? [])->contains(fn (array $item): bool => array_key_exists('modulo', $item));
+        $lastModule = null;
+        $moduleTotals = ['materiales' => 0.0, 'mano_obra' => 0.0, 'herramientas' => 0.0];
         $lastGroupId = null;
         $lastSubgroupId = null;
 
         foreach (($budget['items'] ?? []) as $index => $item) {
+            if ($hasModules && $lastModule !== ($item['modulo'] ?? 'General')) {
+                if ($lastModule !== null) {
+                    $rows[] = ['type' => 'subtotal', 'values' => [
+                        'Subtotal módulo '.$lastModule,
+                        '',
+                        round($moduleTotals['materiales'], 4),
+                        round($moduleTotals['mano_obra'], 4),
+                        round($moduleTotals['herramientas'], 4),
+                    ]];
+                }
+
+                $lastModule = $item['modulo'] ?? 'General';
+                $moduleTotals = ['materiales' => 0.0, 'mano_obra' => 0.0, 'herramientas' => 0.0];
+                $lastGroupId = null;
+                $lastSubgroupId = null;
+                $rows[] = ['type' => 'module', 'values' => ['MÓDULO: '.$lastModule]];
+            }
+
             if ($lastGroupId !== ($item['id_grupo'] ?? null)) {
                 $rows[] = ['type' => 'group', 'values' => [$item['grupo'] ?? '']];
                 $lastGroupId = $item['id_grupo'] ?? null;
@@ -320,12 +341,26 @@ class ProjectBudgetXlsxService
                 $lastSubgroupId = $item['id_subgrupo'] ?? null;
             }
 
+            $moduleTotals['materiales'] += (float) ($item['materiales'] ?? 0);
+            $moduleTotals['mano_obra'] += (float) ($item['mano_obra'] ?? 0);
+            $moduleTotals['herramientas'] += (float) ($item['herramientas'] ?? 0);
+
             $rows[] = ['type' => 'data', 'values' => [
                 $index + 1,
                 $item['descripcion'] ?? '',
                 (float) ($item['materiales'] ?? 0),
                 (float) ($item['mano_obra'] ?? 0),
                 (float) ($item['herramientas'] ?? 0),
+            ]];
+        }
+
+        if ($hasModules && $lastModule !== null) {
+            $rows[] = ['type' => 'subtotal', 'values' => [
+                'Subtotal módulo '.$lastModule,
+                '',
+                round($moduleTotals['materiales'], 4),
+                round($moduleTotals['mano_obra'], 4),
+                round($moduleTotals['herramientas'], 4),
             ]];
         }
 

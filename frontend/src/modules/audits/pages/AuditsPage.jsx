@@ -1,10 +1,11 @@
 import { useDeferredValue, useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, Filter, Loader2, RefreshCcw, Search, ShieldCheck } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Filter, Loader2, RefreshCcw, ShieldCheck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn, formatDateTime } from "@/lib/utils";
@@ -68,15 +69,28 @@ export default function AuditsPage() {
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_repeat(2,minmax(0,0.45fr))] xl:items-end">
             <div className="flex flex-col gap-2">
               <Label htmlFor="auditSearch" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Accion</Label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input id="auditSearch" value={searchTerm} onChange={(event) => { setSearchTerm(event.target.value); setPage(1); }} placeholder="Buscar por texto de auditoria" className="h-12 rounded-2xl border-border/80 bg-background/90 pl-11" />
-              </div>
+              <ClearableSearchInput
+                id="auditSearch"
+                value={searchTerm}
+                onChange={(event) => { setSearchTerm(event.target.value); setPage(1); }}
+                onClear={() => { setSearchTerm(""); setPage(1); }}
+                placeholder="Buscar por texto de auditoria"
+                className="h-12 rounded-2xl border-border/80 bg-background/90"
+                isLoading={auditsQuery.isFetching && !auditsQuery.isLoading}
+              />
             </div>
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="auditUser" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Usuario</Label>
-              <Input id="auditUser" value={userTerm} onChange={(event) => { setUserTerm(event.target.value); setPage(1); }} placeholder="Buscar usuario" className="h-12 rounded-2xl border-border/80 bg-background/90" />
+              <ClearableSearchInput
+                id="auditUser"
+                value={userTerm}
+                onChange={(event) => { setUserTerm(event.target.value); setPage(1); }}
+                onClear={() => { setUserTerm(""); setPage(1); }}
+                placeholder="Buscar usuario"
+                className="h-12 rounded-2xl border-border/80 bg-background/90"
+                isLoading={auditsQuery.isFetching && !auditsQuery.isLoading}
+              />
             </div>
 
             <div className="flex flex-col gap-2">

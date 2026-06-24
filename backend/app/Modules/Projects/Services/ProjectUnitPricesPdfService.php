@@ -97,7 +97,7 @@ class LegacyProjectUnitPricesPdf extends TCPDF
         $this->SetTextColor(0, 0, 0);
         $this->Cell(120, 4, 'GOBIERNO AUTONOMO MUNICIPAL DE COCHABAMBA', 0, 0, 'L', 0, '', 3);
         $this->Cell(30, 4, 'FECHA IMPRESION:', 0, 0, 'L', 0, '', 3);
-        $this->Cell(30, 4, date('m/d/Y H:i:s'), 0, 1, 'C', 0, '', 0, false, 'T', 'M');
+        $this->Cell(30, 4, date('d/m/Y H:i:s'), 0, 1, 'C', 0, '', 0, false, 'T', 'M');
         $this->Cell(180, 4, 'SECRETARIA DE PLANIFICACION', 0, 1, 'L', 0, '', 3);
         $this->Cell(180, 4, 'DIRECCION DE PROYECTOS', 0, 1, 'L', 0, '', 3);
         $this->Cell(180, 4, 'COCHABAMBA-BOLIVIA', 0, 1, 'L', 0, '', 3);

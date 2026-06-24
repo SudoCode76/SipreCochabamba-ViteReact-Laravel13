@@ -110,10 +110,18 @@ class ProjectController extends Controller
             return $response;
         }
 
+        $filters = $request->validate([
+            'bbox' => ['nullable', 'string'],
+            'lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'lng' => ['nullable', 'numeric', 'between:-180,180'],
+            'radius' => ['nullable', 'numeric', 'min:1', 'max:5000'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
+        ]);
+
         return response()->json([
             'success' => true,
             'message' => 'Proyectos del mapa obtenidos correctamente.',
-            'data' => $this->projectMapService->execute(),
+            'data' => $this->projectMapService->execute($filters),
         ]);
     }
 

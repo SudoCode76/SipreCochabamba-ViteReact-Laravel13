@@ -1,17 +1,17 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Package, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Package } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { formatDate } from "@/lib/utils";
 import { inputsService } from "@/modules/dashboard/services/inputs.service";
@@ -108,15 +108,18 @@ export default function DashboardPage() {
               <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                 Buscar
               </span>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar insumo"
-                  className="h-12 rounded-2xl border-border/80 bg-background/90 pl-11"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
+              <ClearableSearchInput
+                placeholder="Buscar insumo"
+                className="h-12 rounded-2xl border-border/80 bg-background/90"
+                value={search}
+                isLoading={isFetching && !isLoading}
+                onChange={(event) => setSearch(event.target.value)}
+                onClear={() => {
+                  setSearch("");
+                  setDescription("");
+                  setPage(1);
+                }}
+              />
             </form>
           </div>
 

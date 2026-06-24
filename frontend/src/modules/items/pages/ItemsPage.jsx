@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, ChevronLeft, ChevronRight, Eye, Loader2, Package, Search, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Eye, Loader2, Package, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import {
   Card,
   CardContent,
@@ -46,7 +47,8 @@ export default function ItemsPage() {
   const [perPage, setPerPage] = useState(10);
   const [order, setOrder] = useState("legacy");
   const [reviewDays, setReviewDays] = useState("");
-  const view = reviewDays ? `review_${reviewDays}` : order;
+  const [duplicatesOnly, setDuplicatesOnly] = useState(false);
+  const view = duplicatesOnly ? "duplicates" : reviewDays ? `review_${reviewDays}` : order;
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightMissingSpecifications, setHighlightMissingSpecifications] = useState(false);
@@ -253,8 +255,8 @@ export default function ItemsPage() {
   };
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["items", { page, perPage, search, order, reviewDays }],
-    queryFn: () => itemsService.list({ page, perPage, search, order, reviewDays }),
+    queryKey: ["items", { page, perPage, search, order, reviewDays, duplicates: duplicatesOnly }],
+    queryFn: () => itemsService.list({ page, perPage, search, order, reviewDays, duplicates: duplicatesOnly }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -454,6 +456,15 @@ export default function ItemsPage() {
   const handleViewChange = (event) => {
     const value = event.target.value;
     setPage(1);
+
+    if (value === "duplicates") {
+      setDuplicatesOnly(true);
+      setOrder("legacy");
+      setReviewDays("");
+      return;
+    }
+
+    setDuplicatesOnly(false);
 
     if (value.startsWith("review_")) {
       setOrder("legacy");
@@ -1308,6 +1319,7 @@ export default function ItemsPage() {
                     <option value="review_120">En revisión menor a 120 días</option>
                     <option value="review_180">En revisión de 180 días o mayor</option>
                     <option value="missing_specifications">Sin especificaciones</option>
+                    <option value="duplicates">Duplicados</option>
                     <option value="recent">Recientes</option>
                     <option value="oldest">Antiguos</option>
                   </select>
@@ -1337,15 +1349,18 @@ export default function ItemsPage() {
                 <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   Buscar
                 </span>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar item"
-                    className="h-12 rounded-2xl border-border/80 bg-background/90 pl-11"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                  />
-                </div>
+                <ClearableSearchInput
+                  placeholder="Buscar item"
+                  className="h-12 rounded-2xl border-border/80 bg-background/90"
+                  value={searchQuery}
+                  isLoading={isFetching && !isLoading}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onClear={() => {
+                    setSearchQuery("");
+                    setSearch("");
+                    setPage(1);
+                  }}
+                />
               </div>
             </form>
           </div>
@@ -1415,11 +1430,25 @@ export default function ItemsPage() {
                       const rowClassName = [
                         index < items.length - 1 ? "border-b border-border/60" : "",
                         reviewStatus && !(highlightMissingSpecifications && isMissingSpecification) ? reviewStatus.row : "",
+                        item.is_duplicate && !(highlightMissingSpecifications && isMissingSpecification) ? "bg-amber-50/70" : "",
                         highlightMissingSpecifications && isMissingSpecification ? "border-l-4 border-l-rose-500 bg-rose-50/90 [&>td]:!text-rose-950" : "",
                       ].filter(Boolean).join(" ");
+                      const duplicateCount = item.duplicate_count ?? 0;
+                      const duplicateKey = item.duplicate_key ?? item.name ?? "";
+                      const previousItem = items[index - 1];
+                      const previousDuplicateKey = previousItem?.duplicate_key ?? previousItem?.name ?? "";
+                      const shouldRenderDuplicateGroup = duplicatesOnly && item.is_duplicate && duplicateKey !== previousDuplicateKey;
 
                       return (
-                        <tr key={item.id_item} className={rowClassName}>
+                        <Fragment key={item.id_item}>
+                        {shouldRenderDuplicateGroup && (
+                          <tr className="border-y border-amber-200 bg-amber-100/80">
+                            <td colSpan={9} className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">
+                              Grupo duplicado: {duplicateKey} · {duplicateCount} registros
+                            </td>
+                          </tr>
+                        )}
+                        <tr className={rowClassName}>
                         <td className="px-5 py-4 align-top text-foreground">
                           {index + 1}
                         </td>
@@ -1430,7 +1459,14 @@ export default function ItemsPage() {
                           {item.subgroup?.description ?? "-"}
                         </td>
                         <td className="px-5 py-4 align-top text-foreground">
-                          <div className="max-w-[260px] leading-7">{item.name ?? "-"}</div>
+                          <div className="flex max-w-[260px] flex-col gap-2 leading-7">
+                            <span>{item.name ?? "-"}</span>
+                            {item.is_duplicate && (
+                              <Badge className="w-fit rounded-full bg-amber-600 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white hover:bg-amber-600">
+                                DUPLICADO · {duplicateCount} registros
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="px-5 py-4 align-top text-foreground">
                           {item.calculated_price_label ?? item.precio_calculado ?? (item.calculated_price !== null ? Number(item.calculated_price).toFixed(2) : "-")}
@@ -1548,6 +1584,7 @@ export default function ItemsPage() {
                           </DropdownMenu>
                         </td>
                         </tr>
+                        </Fragment>
                       );
                     })}
                     {items.length === 0 && (
@@ -1689,14 +1726,20 @@ export default function ItemsPage() {
                         Unidad de medida
                       </Label>
                       <div className="relative">
-                        <Input
+                        <ClearableSearchInput
                           id="create_unit_combobox"
                           placeholder="Buscar y seleccionar unidad"
                           value={unitSearch}
                           onChange={handleUnitSearchChange}
                           onFocus={() => setUnitComboboxOpen(true)}
                           onBlur={() => window.setTimeout(() => setUnitComboboxOpen(false), 120)}
-                          className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                          className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
+                          clearButtonClassName="right-9"
+                          onClear={() => {
+                            setUnitSearch("");
+                            setCreateUnitId("");
+                            setUnitComboboxOpen(true);
+                          }}
                           autoComplete="off"
                           required
                         />
@@ -1867,14 +1910,20 @@ export default function ItemsPage() {
                           Unidad de medida
                         </Label>
                         <div className="relative">
-                          <Input
+                          <ClearableSearchInput
                             id="edit_unit_combobox"
                             placeholder="Buscar y seleccionar unidad"
                             value={editUnitSearch}
                             onChange={handleEditUnitSearchChange}
                             onFocus={() => setEditUnitComboboxOpen(true)}
                             onBlur={() => window.setTimeout(() => setEditUnitComboboxOpen(false), 120)}
-                            className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                            className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
+                            clearButtonClassName="right-9"
+                            onClear={() => {
+                              setEditUnitSearch("");
+                              setEditUnitId("");
+                              setEditUnitComboboxOpen(true);
+                            }}
                             autoComplete="off"
                             role="combobox"
                             aria-expanded={editUnitComboboxOpen}
@@ -2352,14 +2401,22 @@ export default function ItemsPage() {
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="material_combobox" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Material</Label>
                     <div className="relative">
-                      <Input
+                      <ClearableSearchInput
                         id="material_combobox"
                         placeholder="Buscar y seleccionar material"
-                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
                         value={materialSearch}
+                        isLoading={inputOptionsLoading}
+                        loadingIndicatorClassName="right-16"
                         onChange={handleMaterialSearchChange}
                         onFocus={() => setMaterialComboboxOpen(true)}
                         onBlur={() => window.setTimeout(() => setMaterialComboboxOpen(false), 120)}
+                        clearButtonClassName="right-9"
+                        onClear={() => {
+                          setMaterialSearch("");
+                          setSelectedMaterialId("");
+                          setMaterialComboboxOpen(true);
+                        }}
                         autoComplete="off"
                         required
                       />
@@ -2519,14 +2576,22 @@ export default function ItemsPage() {
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="labor_combobox" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Mano de Obra del Item</Label>
                     <div className="relative">
-                      <Input
+                      <ClearableSearchInput
                         id="labor_combobox"
                         placeholder="Buscar y seleccionar mano de obra"
-                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
                         value={laborSearch}
+                        isLoading={laborOptionsLoading}
+                        loadingIndicatorClassName="right-16"
                         onChange={handleLaborSearchChange}
                         onFocus={() => setLaborComboboxOpen(true)}
                         onBlur={() => window.setTimeout(() => setLaborComboboxOpen(false), 120)}
+                        clearButtonClassName="right-9"
+                        onClear={() => {
+                          setLaborSearch("");
+                          setSelectedLaborId("");
+                          setLaborComboboxOpen(true);
+                        }}
                         autoComplete="off"
                         required
                       />
@@ -2686,14 +2751,22 @@ export default function ItemsPage() {
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="machinery_combobox" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Equipos, Maquinaria, Herramientas de Item</Label>
                     <div className="relative">
-                      <Input
+                      <ClearableSearchInput
                         id="machinery_combobox"
                         placeholder="Buscar y seleccionar maquinaria"
-                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-12"
+                        className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
                         value={machinerySearch}
+                        isLoading={machineryOptionsLoading}
+                        loadingIndicatorClassName="right-16"
                         onChange={handleMachinerySearchChange}
                         onFocus={() => setMachineryComboboxOpen(true)}
                         onBlur={() => window.setTimeout(() => setMachineryComboboxOpen(false), 120)}
+                        clearButtonClassName="right-9"
+                        onClear={() => {
+                          setMachinerySearch("");
+                          setSelectedMachineryId("");
+                          setMachineryComboboxOpen(true);
+                        }}
                         autoComplete="off"
                         required
                       />

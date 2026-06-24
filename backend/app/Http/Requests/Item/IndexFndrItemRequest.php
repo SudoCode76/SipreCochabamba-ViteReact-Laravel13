@@ -21,6 +21,7 @@ class IndexFndrItemRequest extends FormRequest
             'freshness' => ['nullable', 'string', 'in:outdated'],
             'review_days' => ['nullable', 'integer', 'in:60,120,180'],
             'order' => ['nullable', 'string', 'in:legacy,recent,oldest,missing_specifications'],
+            'duplicates' => ['nullable', 'boolean'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];

@@ -7,6 +7,7 @@ use App\Modules\Items\Services\Analysis\ItemPriceAnalysisService;
 use App\Support\Pdf\LegacyPdfFormat;
 use App\Support\Xlsx\MunicipalXlsxHeader;
 use App\Support\Xlsx\SimpleXlsxResponse;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Response;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -250,7 +251,7 @@ class ItemBudgetXlsxService
             ['Análisis de Precios Unitarios'],
             ['Item', $analysis['item']['name'] ?? '', '', 'Unidad', $analysis['item']['unit_measure']['description'] ?? $analysis['item']['unit_measure']['abbreviation'] ?? ''],
             ['Modo', $analysis['meta']['mode'] ?? ''],
-            ['Fecha de referencia', $analysis['meta']['reference_date'] ?? ''],
+            ['Fecha de referencia', $this->displayDate($analysis['meta']['reference_date'] ?? null)],
             [],
             ['Nº P', 'Insumo/Parametro', 'Unid.', 'Cant.', 'Unit.(Bs)', 'Parcial(Bs)'],
             ['A', 'MATERIALES'],
@@ -386,6 +387,23 @@ class ItemBudgetXlsxService
         return rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.').'%';
     }
 
+    private function displayDate(mixed $date): string
+    {
+        if ($date === null || $date === '') {
+            return '';
+        }
+
+        if ($date instanceof CarbonInterface) {
+            return $date->format('d/m/Y');
+        }
+
+        try {
+            return CarbonImmutable::parse((string) $date)->format('d/m/Y');
+        } catch (\Throwable) {
+            return (string) $date;
+        }
+    }
+
     public function currentBreakdown(Item $item, int $type): Response
     {
         $rows = [
@@ -427,7 +445,7 @@ class ItemBudgetXlsxService
         $rows = [
             ['Item', $item->item],
             ['Tipo', $this->typeLabel($typeId)],
-            ['Fecha de referencia', $date->toDateString()],
+            ['Fecha de referencia', $date->format('d/m/Y')],
             [],
             ['Nro', 'Insumo/Parametro', 'Unidad', 'Cantidad', 'Unitario', 'Parcial'],
         ];
@@ -462,7 +480,7 @@ class ItemBudgetXlsxService
         $rows = [
             ['Item', $analysis['item']['name'] ?? ''],
             ['Modo', $analysis['meta']['mode'] ?? ''],
-            ['Fecha de referencia', $analysis['meta']['reference_date'] ?? ''],
+            ['Fecha de referencia', $this->displayDate($analysis['meta']['reference_date'] ?? null)],
             [],
             ['Tipo', 'Nro', 'Descripcion', 'Unidad', 'Cantidad', 'Unitario', 'Parcial'],
         ];

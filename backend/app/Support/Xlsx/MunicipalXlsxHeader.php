@@ -11,7 +11,7 @@ class MunicipalXlsxHeader
     {
         $columnCount = max($columnCount, 6);
         $lastColumn = self::columnName($columnCount);
-        $printedAt = now('America/La_Paz')->format('m/d/Y H:i:s');
+        $printedAt = now('America/La_Paz')->format('d/m/Y H:i:s');
 
         $sheet->mergeCells('A1:D1');
         $sheet->setCellValue('A1', 'GOBIERNO AUTONOMO MUNICIPAL DE COCHABAMBA');

@@ -148,6 +148,49 @@ class FndrItemApiTest extends TestCase
             ->assertJsonPath('data.meta.total', 0);
     }
 
+    public function test_fndr_list_can_filter_duplicate_items_by_normalized_name(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->seedFndrPercentages();
+
+        $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'Cubierta Panel Tipo Sandwich Inc/Est',
+            'estado' => 'AC',
+        ]);
+        $this->createItemRecord([
+            'id_item' => 2,
+            'item' => ' cubierta   panel tipo sandwich inc/est ',
+            'estado' => 'AC',
+        ]);
+        $this->createItemRecord([
+            'id_item' => 3,
+            'item' => 'Cubierta Calamina',
+            'estado' => 'AC',
+        ]);
+
+        $this->getJson('/api/v1/items/fndr?duplicates=1&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 2)
+            ->assertJsonPath('data.items.0.id_item', 1)
+            ->assertJsonPath('data.items.0.is_duplicate', true)
+            ->assertJsonPath('data.items.0.duplicate_count', 2)
+            ->assertJsonPath('data.items.0.duplicate_key', 'cubierta panel tipo sandwich inc/est')
+            ->assertJsonPath('data.items.1.id_item', 2);
+
+        $this->getJson('/api/v1/items/fndr?duplicates=1&search=sandwich&status=AC&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 2);
+
+        $this->getJson('/api/v1/items/fndr?duplicates=1&search=calamina&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 0);
+    }
+
     public function test_fndr_list_calculated_price_matches_legacy_list_rules_with_log_join_multiplication(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

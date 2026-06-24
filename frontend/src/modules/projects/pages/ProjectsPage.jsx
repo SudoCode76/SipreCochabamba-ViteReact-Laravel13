@@ -2,12 +2,13 @@ import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Package, Search, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, ClipboardList, X, Loader2, History, Copy, FileDown } from "lucide-react";
+import { AlertTriangle, Package, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, ClipboardList, X, Loader2, History, Copy, FileDown } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -905,23 +906,15 @@ export default function ProjectsPage() {
             <div className="flex items-end gap-3">
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-medium text-muted-foreground">Buscar</label>
-                <div className="flex gap-2">
-                  <Input
+                <div className="w-64">
+                  <ClearableSearchInput
                     placeholder="Buscar proyecto..."
                     className="h-9 w-64 rounded-xl border-border/80"
                     value={search}
+                    isLoading={isFetching && !isLoading}
                     onChange={handleSearchChange}
+                    onClear={clearSearch}
                   />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 rounded-xl"
-                    onClick={clearSearch}
-                    disabled={!search}
-                  >
-                    {search ? <X className="size-4" /> : <Search className="size-4" />}
-                  </Button>
                 </div>
               </div>
             </div>
