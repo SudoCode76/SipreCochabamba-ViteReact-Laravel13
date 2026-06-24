@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { fndrCalculationPercentagesService } from "@/modules/calculation-percentages/services/fndr-calculation-percentages.service";
 
@@ -67,6 +68,7 @@ function buildRowKey(item, index) {
 
 export default function FndrCalculationPercentagesPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -149,6 +151,7 @@ export default function FndrCalculationPercentagesPage() {
     mutationFn: fndrCalculationPercentagesService.create,
     onSuccess: () => {
       setFeedback({ type: "success", message: "Porcentaje FNDR creado correctamente." });
+      toast.success("Porcentaje FNDR creado correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["fndr-calculation-percentages"] });
     },
@@ -167,6 +170,7 @@ export default function FndrCalculationPercentagesPage() {
     mutationFn: ({ id, payload }) => fndrCalculationPercentagesService.update(id, payload),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Porcentaje FNDR actualizado correctamente." });
+      toast.success("Porcentaje FNDR actualizado correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["fndr-calculation-percentages"] });
       queryClient.invalidateQueries({ queryKey: ["fndr-calculation-detail"] });

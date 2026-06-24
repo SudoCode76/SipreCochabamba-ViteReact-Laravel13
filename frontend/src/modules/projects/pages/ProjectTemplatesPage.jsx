@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/components/ui/toast";
 import { projectService } from "../services/project.service";
 
 const statusClass = {
@@ -17,6 +18,7 @@ const statusClass = {
 
 export default function ProjectTemplatesPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [search, setSearch] = useState("");
   const [feedback, setFeedback] = useState(null);
   const deferredSearch = useDeferredValue(search.trim());
@@ -34,6 +36,7 @@ export default function ProjectTemplatesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project-templates"] });
       setFeedback({ type: "success", message: "La planilla se actualizó correctamente." });
+      toast.success("La planilla se actualizó correctamente.");
     },
     onError: (mutationError) => {
       setFeedback({

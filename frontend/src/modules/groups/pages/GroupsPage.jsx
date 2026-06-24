@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { groupsService } from "@/modules/groups/services/groups.service";
 
 const statusClass = {
@@ -20,6 +21,7 @@ const statusClass = {
 
 export default function GroupsPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState(null);
@@ -33,6 +35,7 @@ export default function GroupsPage() {
     mutationFn: groupsService.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["groups"] });
+      toast.success("Grupo creado correctamente.");
       closeForm();
     },
   });
@@ -41,6 +44,7 @@ export default function GroupsPage() {
     mutationFn: groupsService.update,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["groups"] });
+      toast.success("Grupo actualizado correctamente.");
       closeForm();
     },
   });
@@ -49,6 +53,7 @@ export default function GroupsPage() {
     mutationFn: groupsService.remove,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["groups"] });
+      toast.success("Grupo eliminado correctamente.");
       closeDelete();
     },
   });

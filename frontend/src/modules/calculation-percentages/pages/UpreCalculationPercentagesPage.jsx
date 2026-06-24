@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { upreCalculationPercentagesService } from "@/modules/calculation-percentages/services/upre-calculation-percentages.service";
 
@@ -75,6 +76,7 @@ function buildRowKey(item, index) {
 
 export default function UpreCalculationPercentagesPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -156,6 +158,7 @@ export default function UpreCalculationPercentagesPage() {
     mutationFn: upreCalculationPercentagesService.create,
     onSuccess: () => {
       setFeedback({ type: "success", message: "Porcentaje UPRE creado correctamente." });
+      toast.success("Porcentaje UPRE creado correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["upre-calculation-percentages"] });
     },
@@ -174,6 +177,7 @@ export default function UpreCalculationPercentagesPage() {
     mutationFn: ({ id, payload }) => upreCalculationPercentagesService.update(id, payload),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Porcentaje UPRE actualizado correctamente." });
+      toast.success("Porcentaje UPRE actualizado correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["upre-calculation-percentages"] });
       queryClient.invalidateQueries({ queryKey: ["upre-calculation-detail"] });

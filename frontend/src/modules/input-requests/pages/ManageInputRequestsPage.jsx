@@ -28,6 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { authService } from "@/modules/auth/services/auth.service";
 import { manageInputRequestsService } from "@/modules/input-requests/services/manage-input-requests.service";
 import { cn, formatDate } from "@/lib/utils";
@@ -98,6 +99,7 @@ function buildManageForm(detail) {
 
 export default function ManageInputRequestsPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -216,6 +218,7 @@ export default function ManageInputRequestsPage() {
     mutationFn: ({ id, payload }) => manageInputRequestsService.manage(id, payload),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Solicitud gestionada correctamente." });
+      toast.success("Solicitud gestionada correctamente.");
       closeManageModal();
       queryClient.invalidateQueries({ queryKey: ["manage-input-requests"] });
     },
@@ -232,6 +235,7 @@ export default function ManageInputRequestsPage() {
     mutationFn: ({ id, payload }) => manageInputRequestsService.revert(id, payload),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Solicitud revertida correctamente." });
+      toast.success("Solicitud revertida correctamente.");
       closeRevertModal();
       queryClient.invalidateQueries({ queryKey: ["manage-input-requests"] });
     },

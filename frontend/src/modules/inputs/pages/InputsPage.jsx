@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DialogFooter } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,6 +75,7 @@ const formatMoney = (value) => {
 
 export default function InputsPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [perPage, setPerPage] = useState(15);
   const [order, setOrder] = useState("legacy");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -232,6 +234,7 @@ export default function InputsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inputs"] });
+      toast.success("Insumo creado correctamente.");
       closeCreate();
     },
   });
@@ -243,6 +246,7 @@ export default function InputsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inputs"] });
+      toast.success("Insumo actualizado correctamente.");
       closeEdit();
     },
   });
@@ -260,6 +264,7 @@ export default function InputsPage() {
       queryClient.invalidateQueries({ queryKey: ["input-quote-history", variables.id] });
       queryClient.invalidateQueries({ queryKey: ["input-current-quote", variables.id] });
       queryClient.invalidateQueries({ queryKey: ["input-unassigned-quotes", variables.id] });
+      toast.success("Precio actualizado correctamente.");
       closeEdit();
     },
   });
@@ -275,6 +280,7 @@ export default function InputsPage() {
       queryClient.invalidateQueries({ queryKey: ["input-current-quote", variables.id] });
       setQuoteError(null);
       setQuoteSuccess("Cotización registrada correctamente.");
+      toast.success("Cotización registrada correctamente.");
     },
   });
 
@@ -283,7 +289,7 @@ export default function InputsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inputs"] });
       closeDelete();
-      alert("Solicitud de autorizacion enviada correctamente.");
+      toast.success("Solicitud de autorización enviada correctamente.");
     },
   });
 

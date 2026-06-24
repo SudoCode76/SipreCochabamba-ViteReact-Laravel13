@@ -37,6 +37,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { functionsService } from "@/modules/functions/services/functions.service";
 
@@ -63,6 +64,7 @@ function buildFormFromFunction(item) {
 
 export default function FunctionsPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -168,6 +170,7 @@ export default function FunctionsPage() {
     mutationFn: functionsService.create,
     onSuccess: () => {
       setFeedback({ type: "success", message: "Función creada correctamente." });
+      toast.success("Función creada correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["functions"] });
       queryClient.invalidateQueries({ queryKey: ["functions-context"] });
@@ -187,6 +190,7 @@ export default function FunctionsPage() {
     mutationFn: ({ functionId, payload }) => functionsService.update(functionId, payload),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Función actualizada correctamente." });
+      toast.success("Función actualizada correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["functions"] });
       queryClient.invalidateQueries({ queryKey: ["function-detail"] });
@@ -207,6 +211,7 @@ export default function FunctionsPage() {
     mutationFn: ({ functionId, payload }) => functionsService.updateStatus(functionId, payload),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Estado actualizado correctamente." });
+      toast.success("Estado actualizado correctamente.");
       queryClient.invalidateQueries({ queryKey: ["functions"] });
     },
     onError: (error) => {

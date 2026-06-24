@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { getProjectApprovalLabel } from "../lib/project-status";
 import { projectService } from "../services/project.service";
 
@@ -82,6 +83,7 @@ function ensureSelectedOption(options, value, label) {
 
 const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCancel, onSuccess }, ref) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [selectedProjectId, setSelectedProjectId] = useState(projectId);
   const [draftFormData, setFormData] = useState(null);
   const [error, setError] = useState(null);
@@ -213,6 +215,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
 
       queryClient.setQueryData(["project", selectedProjectId], response);
       queryClient.invalidateQueries({ queryKey: ["project-versions", projectId] });
+      toast.success("Proyecto actualizado correctamente.");
       onSuccess?.();
     } catch (err) {
       const fieldErrors = err.response?.data?.errors;
@@ -244,6 +247,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
         queryClient.setQueryData(["project", nextProject.id_proyecto], response);
         setSelectedProjectId(nextProject.id_proyecto);
       }
+      toast.success("Versión actualizada creada correctamente.");
     } catch (err) {
       const fieldErrors = err.response?.data?.errors;
       const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
@@ -267,6 +271,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
         queryClient.invalidateQueries({ queryKey: ["projects"] }),
       ]);
       setFormData(null);
+      toast.success("Versión finalizada correctamente.");
       onSuccess?.();
     } catch (err) {
       const fieldErrors = err.response?.data?.errors;

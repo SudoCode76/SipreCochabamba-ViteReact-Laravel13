@@ -31,6 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { cn, formatDate } from "@/lib/utils";
 import { authorizationsService } from "@/modules/authorizations/services/authorizations.service";
 
@@ -64,6 +65,7 @@ function buildProcessSuccessMessage(response) {
 
 export default function AuthorizationsPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -178,7 +180,9 @@ export default function AuthorizationsPage() {
   const processMutation = useMutation({
     mutationFn: ({ authorizationId, payload }) => authorizationsService.updateStatus(authorizationId, payload),
     onSuccess: (response) => {
-      setFeedback({ type: "success", message: buildProcessSuccessMessage(response) });
+      const message = buildProcessSuccessMessage(response);
+      setFeedback({ type: "success", message });
+      toast.success(message);
       closeProcess();
       queryClient.invalidateQueries({ queryKey: ["authorizations"] });
       queryClient.invalidateQueries({ queryKey: ["authorization-detail"] });

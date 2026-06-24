@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { subgroupsService } from "@/modules/groups/services/subgroups.service";
 import { groupsService } from "@/modules/groups/services/groups.service";
 
@@ -28,6 +29,7 @@ const getGroupOptionName = (group) => group?.nombre_grupo ?? group?.name ?? grou
 
 export default function SubgroupsPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -46,6 +48,7 @@ export default function SubgroupsPage() {
     mutationFn: subgroupsService.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subgroups"] });
+      toast.success("Subgrupo creado correctamente.");
       closeForm();
     },
   });
@@ -54,6 +57,7 @@ export default function SubgroupsPage() {
     mutationFn: subgroupsService.update,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subgroups"] });
+      toast.success("Subgrupo actualizado correctamente.");
       closeForm();
     },
   });
@@ -62,6 +66,7 @@ export default function SubgroupsPage() {
     mutationFn: subgroupsService.remove,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subgroups"] });
+      toast.success("Subgrupo eliminado correctamente.");
       closeDelete();
     },
   });

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +26,7 @@ const statusClass = {
 
 export default function UnitMeasuresPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -38,6 +40,7 @@ export default function UnitMeasuresPage() {
     mutationFn: unitMeasuresService.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["unit-measures"] });
+      toast.success("Unidad de medida creada correctamente.");
       closeEdit();
     },
     onError: (err) => {
@@ -49,6 +52,7 @@ export default function UnitMeasuresPage() {
     mutationFn: unitMeasuresService.update,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["unit-measures"] });
+      toast.success("Unidad de medida actualizada correctamente.");
       closeEdit();
     },
     onError: (err) => {
@@ -60,6 +64,7 @@ export default function UnitMeasuresPage() {
     mutationFn: unitMeasuresService.remove,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["unit-measures"] });
+      toast.success("Unidad de medida eliminada correctamente.");
       closeDelete();
     },
     onError: (err) => {

@@ -14,7 +14,7 @@ class SyncItemCompositionInputsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'items' => ['required', 'array'],
+            'items' => ['present', 'array'],
             'items.*.id_insumo' => ['required', 'integer', 'exists:insumo,id_insumo'],
             'items.*.cantidad' => ['required', 'numeric', 'gt:0'],
             'deleted_input_ids' => ['sometimes', 'array'],

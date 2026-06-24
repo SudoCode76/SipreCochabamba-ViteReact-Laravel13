@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { downloadUrl, openPdfViewer } from "@/lib/utils/pdf";
@@ -255,6 +256,7 @@ const renderHistoryMetadata = (entry) => {
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const editFormRef = useRef(null);
   const [perPage, setPerPage] = useState(15);
   const [order, setOrder] = useState("legacy");
@@ -544,6 +546,7 @@ export default function ProjectsPage() {
         type: "success",
         message: "La planilla del proyecto se creó correctamente.",
       });
+      toast.success("La planilla del proyecto se creó correctamente.");
       closeTemplateModal();
     } catch (templateError) {
       const fieldErrors = templateError?.response?.data?.errors;

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/toast";
 import { openPdfViewer } from "@/lib/utils/pdf";
 import { modulesService } from "@/modules/modules/services/modules.service";
 import { getProjectApprovalLabel } from "../lib/project-status";
@@ -138,6 +139,7 @@ function buildRow(detail, draft, module) {
 const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, projectName, onCancel, onSuccess }, ref) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [format, setFormat] = useState("PCA");
   const [draft, setDraft] = useState(emptyDraft);
   const [rows, setRows] = useState([]);
@@ -265,6 +267,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
         };
       });
 
+      toast.success("Ítems del proyecto guardados correctamente.");
       onSuccess?.();
     },
     onError: (mutationError) => {
@@ -281,6 +284,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
       queryClient.invalidateQueries({ queryKey: ["project-report-warnings", projectId] });
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast.success("Insumo excluido de esta versión.");
     },
     onError: (mutationError) => {
       setError(mutationError.response?.data?.message || "No se pudo excluir el insumo de esta versión.");
@@ -500,8 +504,10 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
       setRows([]);
       setRowsDirty(false);
       if (afterFinalize) {
+        toast.success("Versión finalizada correctamente.");
         afterFinalize();
       } else {
+        toast.success("Versión finalizada correctamente.");
         onSuccess?.();
       }
       return true;

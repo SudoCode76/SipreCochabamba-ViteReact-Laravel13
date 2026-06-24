@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { inputCategoriesService } from "@/modules/input-types/services/input-categories.service";
 
 const statusClass = {
@@ -19,6 +20,7 @@ const statusClass = {
 
 export default function InputCategoriesPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [editOpen, setEditOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
@@ -33,6 +35,7 @@ export default function InputCategoriesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["input-categories"] });
       queryClient.invalidateQueries({ queryKey: ["inputs-context"] });
+      toast.success("Categoría creada correctamente.");
       closeEdit();
     },
     onError: (err) => {
@@ -45,6 +48,7 @@ export default function InputCategoriesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["input-categories"] });
       queryClient.invalidateQueries({ queryKey: ["inputs-context"] });
+      toast.success("Categoría actualizada correctamente.");
       closeEdit();
     },
     onError: (err) => {

@@ -7,12 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/toast";
 import { projectService } from "../services/project.service";
 
 const ProjectLocationMap = lazy(() => import("../components/ProjectLocationMap"));
 
 export default function NewProjectPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [formData, setFormData] = useState({
     nombre_proyecto: "",
     ubicacion: "",
@@ -115,6 +117,7 @@ export default function NewProjectPage() {
         await projectService.create(payload);
       }
 
+      toast.success("Proyecto creado correctamente.");
       navigate("/Proyecto");
     } catch (err) {
       const fieldErrors = err.response?.data?.errors;

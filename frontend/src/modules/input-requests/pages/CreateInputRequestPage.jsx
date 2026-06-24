@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/toast";
 import { authService } from "@/modules/auth/services/auth.service";
 import apiClient from "@/lib/api/client";
 
@@ -26,6 +27,7 @@ function getCurrentUserId(profile) {
 
 export default function CreateInputRequestPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [formData, setFormData] = useState({
     descripcion: "",
     precio: "",
@@ -129,6 +131,7 @@ export default function CreateInputRequestPage() {
 
       await apiClient.post("/v1/input-requests", formDataToSend);
 
+      toast.success("Solicitud creada correctamente.");
       navigate("/Listar Solicitud de Insumo");
     } catch (err) {
       const firstFieldError = err.response?.data?.errors

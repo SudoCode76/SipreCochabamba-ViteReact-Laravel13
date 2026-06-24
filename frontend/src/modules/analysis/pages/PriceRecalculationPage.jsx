@@ -14,12 +14,14 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/toast";
 import apiClient from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 export default function PriceRecalculationPage() {
   const { itemId } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const searchParams = new URLSearchParams(window.location.search);
   const mode = searchParams.get("mode") || "fndr";
 
@@ -36,6 +38,7 @@ export default function PriceRecalculationPage() {
     },
     onSuccess: () => {
       setStatus({ type: "success", message: "Precio recalculado correctamente." });
+      toast.success("Precio recalculado correctamente.");
       setTimeout(() => {
         navigate(-1);
       }, 2000);

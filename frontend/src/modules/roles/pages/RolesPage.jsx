@@ -37,6 +37,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { rolesService } from "@/modules/roles/services/roles.service";
 
@@ -54,6 +55,7 @@ function buildRoleForm(role) {
 
 export default function RolesPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -201,6 +203,7 @@ export default function RolesPage() {
     mutationFn: rolesService.create,
     onSuccess: () => {
       setFeedback({ type: "success", message: "Rol creado correctamente." });
+      toast.success("Rol creado correctamente.");
       closeRoleForm();
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       queryClient.invalidateQueries({ queryKey: ["roles-context"] });
@@ -220,6 +223,7 @@ export default function RolesPage() {
     mutationFn: ({ roleId, payload }) => rolesService.update(roleId, payload),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Rol actualizado correctamente." });
+      toast.success("Rol actualizado correctamente.");
       closeRoleForm();
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       queryClient.invalidateQueries({ queryKey: ["role-detail"] });
@@ -239,6 +243,7 @@ export default function RolesPage() {
     mutationFn: ({ roleId, payload }) => rolesService.updateStatus(roleId, payload),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Estado actualizado correctamente." });
+      toast.success("Estado actualizado correctamente.");
       queryClient.invalidateQueries({ queryKey: ["roles"] });
     },
     onError: (error) => {
@@ -255,6 +260,7 @@ export default function RolesPage() {
     mutationFn: ({ roleId, functionId }) => rolesService.attachFunction(roleId, functionId),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Función asignada correctamente al rol." });
+      toast.success("Función asignada correctamente al rol.");
       setSelectedFunctionId("");
       setSelectedFunctionLabel("");
       queryClient.invalidateQueries({ queryKey: ["role-permissions-context", selectedRoleId] });
@@ -272,6 +278,7 @@ export default function RolesPage() {
     mutationFn: ({ roleId, functionId }) => rolesService.detachFunction(roleId, functionId),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Función quitada correctamente del rol." });
+      toast.success("Función quitada correctamente del rol.");
       queryClient.invalidateQueries({ queryKey: ["role-permissions-context", selectedRoleId] });
       queryClient.invalidateQueries({ queryKey: ["role-permissions"] });
     },

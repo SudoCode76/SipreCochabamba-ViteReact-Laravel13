@@ -37,6 +37,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { usersService } from "@/modules/users/services/users.service";
 
@@ -108,6 +109,7 @@ function buildFormFromUser(user) {
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -255,6 +257,7 @@ export default function UsersPage() {
     mutationFn: usersService.create,
     onSuccess: () => {
       setFeedback({ type: "success", message: "Usuario creado correctamente." });
+      toast.success("Usuario creado correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
@@ -273,6 +276,7 @@ export default function UsersPage() {
     mutationFn: ({ userId, payload }) => usersService.update(userId, payload),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Usuario actualizado correctamente." });
+      toast.success("Usuario actualizado correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["user-detail"] });
@@ -292,6 +296,7 @@ export default function UsersPage() {
     mutationFn: ({ userId, status }) => usersService.updateStatus(userId, status),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Estado actualizado correctamente." });
+      toast.success("Estado actualizado correctamente.");
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (error) => {

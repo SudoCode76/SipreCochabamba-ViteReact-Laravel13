@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { calculationPercentagesService } from "@/modules/calculation-percentages/services/calculation-percentages.service";
 
 const statusClass = {
@@ -20,6 +21,7 @@ const statusClass = {
 
 export default function CalculationPercentagesPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -33,6 +35,7 @@ export default function CalculationPercentagesPage() {
     mutationFn: calculationPercentagesService.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calculation-percentages"] });
+      toast.success("Porcentaje creado correctamente.");
       closeForm();
     },
   });
@@ -41,6 +44,7 @@ export default function CalculationPercentagesPage() {
     mutationFn: calculationPercentagesService.update,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calculation-percentages"] });
+      toast.success("Porcentaje actualizado correctamente.");
       closeForm();
     },
   });
@@ -49,6 +53,7 @@ export default function CalculationPercentagesPage() {
     mutationFn: calculationPercentagesService.remove,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calculation-percentages"] });
+      toast.success("Porcentaje eliminado correctamente.");
       closeDelete();
     },
   });

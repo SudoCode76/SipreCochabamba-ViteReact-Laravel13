@@ -205,6 +205,62 @@ class ItemCompositionApiTest extends TestCase
             ->assertJsonPath('message', 'El insumo seleccionado no corresponde al bloque solicitado.');
     }
 
+    public function test_can_sync_empty_materials_and_clear_item_price(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput(['id_insumo' => 1, 'descripcion' => 'Material 1', 'tipo' => 1, 'precio' => 10]);
+        $this->createInput(['id_insumo' => 2, 'descripcion' => 'Material 2', 'tipo' => 1, 'precio' => 5]);
+        $this->createItemRecord(['precio' => 25]);
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 1, 'estado' => 'AC']);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 3, 'estado' => 'AC']);
+
+        $this->postJson('/api/v1/items/1/materials/sync', [
+            'items' => [],
+            'deleted_input_ids' => [1, 2],
+        ])->assertOk()
+            ->assertJsonCount(0, 'data.items')
+            ->assertJsonPath('data.totals.block', 0)
+            ->assertJsonPath('data.item.price', 0);
+
+        $this->assertDatabaseHas('item_insumo', [
+            'id_item' => 1,
+            'id_insumo' => 1,
+            'estado' => 'DC',
+        ]);
+        $this->assertDatabaseHas('item_insumo', [
+            'id_item' => 1,
+            'id_insumo' => 2,
+            'estado' => 'DC',
+        ]);
+        $this->assertDatabaseHas('item', [
+            'id_item' => 1,
+            'precio' => 0,
+        ]);
+    }
+
+    public function test_sync_rejects_invalid_rows_even_when_empty_payloads_are_allowed(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInput(['id_insumo' => 1, 'descripcion' => 'Material 1', 'tipo' => 1, 'precio' => 10]);
+        $this->createItemRecord();
+
+        $this->postJson('/api/v1/items/1/materials/sync', [
+            'items' => [
+                ['id_insumo' => 1, 'cantidad' => 0],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['items.0.cantidad']);
+
+        $this->postJson('/api/v1/items/1/materials/sync', [
+            'items' => [
+                ['id_insumo' => 999, 'cantidad' => 1],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['items.0.id_insumo']);
+    }
+
     public function test_can_sync_labor_as_legacy_batch_flow(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
@@ -225,6 +281,29 @@ class ItemCompositionApiTest extends TestCase
             ->assertJsonPath('data.totals.block', 15);
     }
 
+    public function test_can_sync_empty_labor_block(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInputType(['id_tipo' => 2, 'descripcion' => 'MANO DE OBRA', 'estado' => 'AC']);
+        $this->createInput(['id_insumo' => 1, 'descripcion' => 'Albanil', 'tipo' => 2, 'precio' => 25.2]);
+        $this->createItemRecord();
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_insumo' => 1, 'cantidad' => 0.3, 'tipo' => 2]);
+
+        $this->postJson('/api/v1/items/1/labor/sync', [
+            'items' => [],
+            'deleted_input_ids' => [1],
+        ])->assertOk()
+            ->assertJsonCount(0, 'data.items')
+            ->assertJsonPath('data.totals.block', 0);
+
+        $this->assertDatabaseHas('item_insumo', [
+            'id_item' => 1,
+            'id_insumo' => 1,
+            'estado' => 'DC',
+        ]);
+    }
+
     public function test_can_sync_machinery_as_legacy_batch_flow(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
@@ -243,6 +322,29 @@ class ItemCompositionApiTest extends TestCase
         ])->assertOk()
             ->assertJsonCount(2, 'data.items')
             ->assertJsonPath('data.totals.block', 85);
+    }
+
+    public function test_can_sync_empty_machinery_block(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createInputType(['id_tipo' => 3, 'descripcion' => 'HERRAMIENTA', 'estado' => 'AC']);
+        $this->createInput(['id_insumo' => 1, 'descripcion' => 'Equipo de soldadura', 'tipo' => 3, 'precio' => 50]);
+        $this->createItemRecord();
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_insumo' => 1, 'cantidad' => 0.5, 'tipo' => 3]);
+
+        $this->postJson('/api/v1/items/1/machinery/sync', [
+            'items' => [],
+            'deleted_input_ids' => [1],
+        ])->assertOk()
+            ->assertJsonCount(0, 'data.items')
+            ->assertJsonPath('data.totals.block', 0);
+
+        $this->assertDatabaseHas('item_insumo', [
+            'id_item' => 1,
+            'id_insumo' => 1,
+            'estado' => 'DC',
+        ]);
     }
 
     public function test_input_search_supports_type_filter_and_general_analysis_aliases(): void

@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { obrasCalculationPercentagesService } from "@/modules/calculation-percentages/services/obras-calculation-percentages.service";
 
@@ -67,6 +68,7 @@ function buildRowKey(item, index) {
 
 export default function ObrasCalculationPercentagesPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -149,6 +151,7 @@ export default function ObrasCalculationPercentagesPage() {
     mutationFn: obrasCalculationPercentagesService.create,
     onSuccess: () => {
       setFeedback({ type: "success", message: "Porcentaje OBRAS PUBLICAS creado correctamente." });
+      toast.success("Porcentaje OBRAS PUBLICAS creado correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["obras-calculation-percentages"] });
     },
@@ -167,6 +170,7 @@ export default function ObrasCalculationPercentagesPage() {
     mutationFn: ({ id, payload }) => obrasCalculationPercentagesService.update(id, payload),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Porcentaje OBRAS PUBLICAS actualizado correctamente." });
+      toast.success("Porcentaje OBRAS PUBLICAS actualizado correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["obras-calculation-percentages"] });
       queryClient.invalidateQueries({ queryKey: ["obras-calculation-detail"] });

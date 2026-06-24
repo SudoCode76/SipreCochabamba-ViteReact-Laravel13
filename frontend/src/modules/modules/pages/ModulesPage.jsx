@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { modulesService } from "../services/modules.service";
 
 const statusClass = {
@@ -20,6 +21,7 @@ const statusClass = {
 
 export default function ModulesPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedModule, setSelectedModule] = useState(null);
@@ -33,6 +35,7 @@ export default function ModulesPage() {
     mutationFn: modulesService.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["modules"] });
+      toast.success("Módulo creado correctamente.");
       closeForm();
     },
   });
@@ -41,6 +44,7 @@ export default function ModulesPage() {
     mutationFn: modulesService.update,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["modules"] });
+      toast.success("Módulo actualizado correctamente.");
       closeForm();
     },
   });
@@ -49,6 +53,7 @@ export default function ModulesPage() {
     mutationFn: modulesService.remove,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["modules"] });
+      toast.success("Módulo eliminado correctamente.");
       closeDelete();
     },
   });

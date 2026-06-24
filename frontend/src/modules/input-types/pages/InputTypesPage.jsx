@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 
 import { inputTypesService } from "@/modules/input-types/services/input-types.service";
 
@@ -20,6 +21,7 @@ const statusClass = {
 
 export default function InputTypesPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [perPage, setPerPage] = useState(15);
   const [page, setPage] = useState(1);
   const [editOpen, setEditOpen] = useState(false);
@@ -36,6 +38,7 @@ export default function InputTypesPage() {
     mutationFn: inputTypesService.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["input-types"] });
+      toast.success("Tipo de insumo creado correctamente.");
       closeEdit();
     },
     onError: (err) => {
@@ -47,6 +50,7 @@ export default function InputTypesPage() {
     mutationFn: inputTypesService.update,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["input-types"] });
+      toast.success("Tipo de insumo actualizado correctamente.");
       closeEdit();
     },
     onError: (err) => {
@@ -58,6 +62,7 @@ export default function InputTypesPage() {
     mutationFn: inputTypesService.remove,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["input-types"] });
+      toast.success("Tipo de insumo eliminado correctamente.");
       closeDelete();
     },
     onError: (err) => {

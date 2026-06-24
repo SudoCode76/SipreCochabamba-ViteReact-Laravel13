@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/components/ui/toast";
 import apiClient from "@/lib/api/client";
 import { storageUrl } from "@/modules/input-requests/utils/storage-url";
 
@@ -56,6 +57,7 @@ function QuoteCard({ title, file, replacementName, onChange }) {
 
 export default function EditInputRequestPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const { requestId } = useParams();
   const [draftFormData, setFormData] = useState(null);
   const [replaceQuotes, setReplaceQuotes] = useState(false);
@@ -108,6 +110,7 @@ export default function EditInputRequestPage() {
       return apiClient.put(`/v1/input-requests/${requestId}`, payload);
     },
     onSuccess: () => {
+      toast.success("Solicitud actualizada correctamente.");
       navigate("/Listar Solicitud de Insumo");
     },
     onError: (err) => {

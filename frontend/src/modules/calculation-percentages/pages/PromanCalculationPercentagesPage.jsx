@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { promanCalculationPercentagesService } from "@/modules/calculation-percentages/services/proman-calculation-percentages.service";
 
@@ -67,6 +68,7 @@ function buildRowKey(item, index) {
 
 export default function PromanCalculationPercentagesPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -149,6 +151,7 @@ export default function PromanCalculationPercentagesPage() {
     mutationFn: promanCalculationPercentagesService.create,
     onSuccess: () => {
       setFeedback({ type: "success", message: "Porcentaje PROMAN creado correctamente." });
+      toast.success("Porcentaje PROMAN creado correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["proman-calculation-percentages"] });
     },
@@ -167,6 +170,7 @@ export default function PromanCalculationPercentagesPage() {
     mutationFn: ({ id, payload }) => promanCalculationPercentagesService.update(id, payload),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Porcentaje PROMAN actualizado correctamente." });
+      toast.success("Porcentaje PROMAN actualizado correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["proman-calculation-percentages"] });
       queryClient.invalidateQueries({ queryKey: ["proman-calculation-detail"] });

@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { fpsCalculationPercentagesService } from "@/modules/calculation-percentages/services/fps-calculation-percentages.service";
 
@@ -75,6 +76,7 @@ function buildRowKey(item, index) {
 
 export default function FpsCalculationPercentagesPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -157,6 +159,7 @@ export default function FpsCalculationPercentagesPage() {
     mutationFn: fpsCalculationPercentagesService.create,
     onSuccess: () => {
       setFeedback({ type: "success", message: "Porcentaje FPS creado correctamente." });
+      toast.success("Porcentaje FPS creado correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["fps-calculation-percentages"] });
     },
@@ -175,6 +178,7 @@ export default function FpsCalculationPercentagesPage() {
     mutationFn: ({ id, payload }) => fpsCalculationPercentagesService.update(id, payload),
     onSuccess: () => {
       setFeedback({ type: "success", message: "Porcentaje FPS actualizado correctamente." });
+      toast.success("Porcentaje FPS actualizado correctamente.");
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["fps-calculation-percentages"] });
       queryClient.invalidateQueries({ queryKey: ["fps-calculation-detail"] });

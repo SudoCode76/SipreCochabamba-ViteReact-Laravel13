@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/toast";
 import { downloadUrl, openPdfViewer } from "@/lib/utils/pdf";
 import { itemsService } from "@/modules/dashboard/services/items.service";
 import {
@@ -44,6 +45,7 @@ const collectValidationMessages = (error, fallback) => {
 
 export default function ItemsPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [perPage, setPerPage] = useState(10);
   const [order, setOrder] = useState("legacy");
   const [reviewDays, setReviewDays] = useState("");
@@ -280,6 +282,7 @@ export default function ItemsPage() {
     mutationFn: itemsService.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["items"] });
+      toast.success("Item creado correctamente.");
       closeCreate();
     },
   });
@@ -291,13 +294,17 @@ export default function ItemsPage() {
 
   const reviewMutation = useMutation({
     mutationFn: itemsService.review,
-    onSuccess: invalidateFreshnessQueries,
+    onSuccess: () => {
+      invalidateFreshnessQueries();
+      toast.success("Item marcado como revisado.");
+    },
   });
 
   const updateMutation = useMutation({
     mutationFn: itemsService.update,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["items"] });
+      toast.success("Item actualizado correctamente.");
       closeEdit();
     },
   });
@@ -325,6 +332,7 @@ export default function ItemsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["item-materials", materialsItem?.id_item] });
       invalidateFreshnessQueries();
+      toast.success("Materiales guardados correctamente.");
       closeMaterials();
     },
   });
@@ -352,6 +360,7 @@ export default function ItemsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["item-labor", laborItem?.id_item] });
       invalidateFreshnessQueries();
+      toast.success("Mano de obra guardada correctamente.");
       closeLabor();
     },
   });
@@ -379,6 +388,7 @@ export default function ItemsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["item-machinery", machineryItem?.id_item] });
       invalidateFreshnessQueries();
+      toast.success("Maquinaria guardada correctamente.");
       closeMachinery();
     },
   });
@@ -387,6 +397,7 @@ export default function ItemsPage() {
     mutationFn: itemsService.updateFiles,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["items"] });
+      toast.success("Archivos guardados correctamente.");
       closeFiles();
     },
   });
@@ -917,7 +928,7 @@ export default function ItemsPage() {
         },
       });
     } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudieron guardar los materiales.");
+      alert(collectValidationMessages(mutationError, "No se pudieron guardar los materiales.").join("\n"));
     }
   };
 
@@ -1000,7 +1011,7 @@ export default function ItemsPage() {
         },
       });
     } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudo guardar la mano de obra.");
+      alert(collectValidationMessages(mutationError, "No se pudo guardar la mano de obra.").join("\n"));
     }
   };
 
@@ -1083,7 +1094,7 @@ export default function ItemsPage() {
         },
       });
     } catch (mutationError) {
-      alert(mutationError?.response?.data?.message || "No se pudo guardar maquinaria.");
+      alert(collectValidationMessages(mutationError, "No se pudo guardar maquinaria.").join("\n"));
     }
   };
 
