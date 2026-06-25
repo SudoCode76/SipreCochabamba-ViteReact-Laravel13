@@ -1,13 +1,15 @@
-import { forwardRef, Fragment, useImperativeHandle, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { forwardRef, Fragment, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChevronsUpDown, GitCompare, History, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronsUpDown, GitCompare, History, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
+import apiClient from "@/lib/api/client";
 import { openPdfViewer } from "@/lib/utils/pdf";
 import { modulesService } from "@/modules/modules/services/modules.service";
 import { getProjectApprovalLabel } from "../lib/project-status";
@@ -66,6 +68,53 @@ function versionBadgeClass(project) {
   }
 
   return "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
+function reportFilesSessionKey(projectId) {
+  return `project-report-missing-files:${projectId}`;
+}
+
+function readReportFilesSession(projectId) {
+  try {
+    const raw = window.sessionStorage.getItem(reportFilesSessionKey(projectId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeReportFilesSession(projectId, payload) {
+  try {
+    window.sessionStorage.setItem(reportFilesSessionKey(projectId), JSON.stringify(payload));
+  } catch {
+    // Session storage is best-effort UI state only.
+  }
+}
+
+async function extractReportErrorPayload(error, fallback) {
+  const data = error?.response?.data;
+
+  if (data instanceof Blob) {
+    try {
+      const text = await data.text();
+      const payload = JSON.parse(text);
+      const firstFieldError = payload.errors ? Object.values(payload.errors).flat().find(Boolean) : null;
+
+      return {
+        message: firstFieldError || payload.message || fallback,
+        items: Array.isArray(payload.items) ? payload.items : [],
+      };
+    } catch {
+      return { message: fallback, items: [] };
+    }
+  }
+
+  const firstFieldError = data?.errors ? Object.values(data.errors).flat().find(Boolean) : null;
+
+  return {
+    message: firstFieldError || data?.message || error?.message || fallback,
+    items: Array.isArray(data?.items) ? data.items : [],
+  };
 }
 
 function compareRowClass(type) {
@@ -138,6 +187,7 @@ function buildRow(detail, draft, module) {
 
 const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, projectName, onCancel, onSuccess }, ref) {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const toast = useToast();
   const [format, setFormat] = useState("PCA");
@@ -152,6 +202,8 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [error, setError] = useState(null);
   const [finalizingVersion, setFinalizingVersion] = useState(false);
+  const [loadingReport, setLoadingReport] = useState(null);
+  const [reportErrorDialog, setReportErrorDialog] = useState(null);
 
   const { data: projectData } = useQuery({
     queryKey: ["project", projectId],
@@ -315,6 +367,40 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   );
   const comparison = comparisonData?.data;
   const comparisonRows = (comparison?.items ?? []).filter((item) => showUnchanged || item.change_type !== "unchanged");
+  const uploadedReportItemIds = reportErrorDialog?.uploadedItemIds ?? [];
+  const allReportItemsUploaded = Boolean(reportErrorDialog?.items?.length)
+    && reportErrorDialog.items.every((item) => uploadedReportItemIds.includes(Number(item.id_item)));
+
+  useEffect(() => {
+    const uploadedItemId = location.state?.uploaded_item_id;
+    const returnProjectId = location.state?.return_project_id;
+
+    if (!uploadedItemId || String(returnProjectId) !== String(projectId)) {
+      return;
+    }
+
+    const stored = readReportFilesSession(projectId);
+
+    if (!stored?.items?.length) {
+      return;
+    }
+
+    const nextUploadedIds = Array.from(new Set([
+      ...(stored.uploadedItemIds ?? []).map(Number),
+      Number(uploadedItemId),
+    ]));
+    const nextDialog = {
+      ...stored,
+      uploadedItemIds: nextUploadedIds,
+    };
+
+    queueMicrotask(() => {
+      writeReportFilesSession(projectId, nextDialog);
+      setReportErrorDialog(nextDialog);
+      setError(stored.message ?? null);
+      navigate(location.pathname, { replace: true, state: null });
+    });
+  }, [location.pathname, location.state, navigate, projectId]);
 
   const total = useMemo(
     () => effectiveRows.reduce((acc, row) => acc + (Number(row.cantidad || 0) * Number(row.precio || 0)), 0),
@@ -432,23 +518,90 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     }
   };
 
+  const validateAndOpenPdf = async (url, viewerOptions, fallbackMessage, reportKey) => {
+    setLoadingReport(reportKey);
+
+    try {
+      const validationUrl = new URL(url);
+      validationUrl.searchParams.set("validate_only", "1");
+
+      await apiClient.get(validationUrl.toString(), {
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      openPdfViewer(url, viewerOptions);
+    } catch (reportError) {
+      const payload = await extractReportErrorPayload(reportError, fallbackMessage);
+      const message = payload.message;
+      const dialogPayload = {
+        message,
+        items: payload.items,
+        uploadedItemIds: [],
+        reportKey,
+      };
+
+      setError(message);
+      if (payload.items.length > 0) {
+        writeReportFilesSession(projectId, dialogPayload);
+      }
+      setReportErrorDialog(dialogPayload);
+    } finally {
+      setLoadingReport(null);
+    }
+  };
+
+  const handleGoToItemFiles = (item) => {
+    if (reportErrorDialog?.items?.length) {
+      writeReportFilesSession(projectId, reportErrorDialog);
+    }
+
+    const query = new URLSearchParams();
+    query.set("search", item.name || "");
+    query.set("open_files_for", String(item.id_item ?? ""));
+    query.set("return_to", `/Proyecto/${projectId}/items`);
+    query.set("return_project_id", String(projectId));
+    navigate(`/items?${query.toString()}`, {
+      state: {
+        return_to: `/Proyecto/${projectId}/items`,
+        return_project_id: projectId,
+        source: "project-report-missing-files",
+      },
+    });
+  };
+
+  const handleCloseReportErrorDialog = () => {
+    try {
+      window.sessionStorage.removeItem(reportFilesSessionKey(projectId));
+    } catch {
+      // Session storage is best-effort UI state only.
+    }
+
+    setReportErrorDialog(null);
+  };
+
   const handlePrintUnitPrices = () => {
     setError(null);
     runWithReportWarning(() => {
-      openPdfViewer(projectService.unitPricesPdfUrl(projectId, format), {
+      const url = projectService.unitPricesPdfUrl(projectId, format);
+
+      void validateAndOpenPdf(url, {
         chrome: false,
         errorMessage: "No se pudo generar el PDF de precios unitarios.",
-      });
+      }, "No se pudo generar el PDF de precios unitarios.", "unit-prices");
     });
   };
 
   const handlePrintSpecifications = () => {
     setError(null);
     runWithReportWarning(() => {
-      openPdfViewer(projectService.specificationsPdfUrl(projectId), {
+      const url = projectService.specificationsPdfUrl(projectId);
+
+      void validateAndOpenPdf(url, {
         title: "Especificaciones del proyecto",
         errorMessage: "No se pudo generar el PDF de especificaciones del proyecto.",
-      });
+      }, "No se pudo generar el PDF de especificaciones del proyecto.", "specifications");
     });
   };
 
@@ -614,6 +767,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   }
 
   return (
+    <>
     <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
       {error && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -985,14 +1139,16 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Button type="button" variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700" onClick={handlePrintUnitPrices} disabled={!hasSavedRows}>
-            Imprimir Precios Unitarios
+          <Button type="button" variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700" onClick={handlePrintUnitPrices} disabled={!hasSavedRows || Boolean(loadingReport)}>
+            {loadingReport === "unit-prices" && <Loader2 className="mr-2 size-4 animate-spin" />}
+            {loadingReport === "unit-prices" ? "Validando..." : "Imprimir Precios Unitarios"}
           </Button>
           <Button type="button" variant="outline" className="rounded-full border-slate-300 bg-slate-100 text-slate-700" onClick={handleOrder} disabled={isReadOnly}>
             Ordenar
           </Button>
-          <Button type="button" variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700" onClick={handlePrintSpecifications} disabled={!hasSavedRows}>
-            Imprimir Todas Las Especificaciones
+          <Button type="button" variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700" onClick={handlePrintSpecifications} disabled={!hasSavedRows || Boolean(loadingReport)}>
+            {loadingReport === "specifications" && <Loader2 className="mr-2 size-4 animate-spin" />}
+            {loadingReport === "specifications" ? "Validando..." : "Imprimir Todas Las Especificaciones"}
           </Button>
         </div>
         {rowsDirty && (
@@ -1130,6 +1286,66 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
         )}
       </div>
     </form>
+
+    <Dialog open={Boolean(reportErrorDialog)}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>No se pudo generar el reporte</DialogTitle>
+          <DialogDescription>
+            {reportErrorDialog?.message || "Revisa los datos pendientes antes de volver a generar el reporte."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {reportErrorDialog?.items?.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {allReportItemsUploaded && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                Todos los archivos pendientes fueron cargados. Vuelve a generar el reporte.
+              </div>
+            )}
+
+            <div className="max-h-80 overflow-y-auto rounded-2xl border border-border/70">
+            {reportErrorDialog.items.map((item, index) => {
+              const isUploaded = uploadedReportItemIds.includes(Number(item.id_item));
+
+              return (
+              <div key={`${item.id_item ?? item.name ?? "item"}-${index}`} className="flex flex-col gap-3 border-b border-border/60 p-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-foreground">{item.name || "Ítem sin nombre"}</p>
+                    {isUploaded && (
+                      <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                        Archivo cargado
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">{item.reason || "Tiene datos pendientes para generar el reporte."}</p>
+                </div>
+                {isUploaded ? (
+                  <div className="inline-flex shrink-0 items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                    <CheckCircle2 className="size-4" />
+                    Listo
+                  </div>
+                ) : (
+                <Button type="button" className="shrink-0 rounded-full" onClick={() => handleGoToItemFiles(item)}>
+                  Cargar archivo
+                </Button>
+                )}
+              </div>
+              );
+            })}
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="justify-end">
+          <Button type="button" className="rounded-full" onClick={handleCloseReportErrorDialog}>
+            Aceptar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 });
 

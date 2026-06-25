@@ -634,6 +634,15 @@ class ProjectController extends Controller
             return $response;
         }
 
+        if ($request->boolean('validate_only')) {
+            $this->projectUnitPricesPdfService->validate($project, $request->validated('format'));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'El reporte de precios unitarios puede generarse correctamente.',
+            ]);
+        }
+
         $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Análisis de precios unitarios del proyecto', [
             'format' => $request->validated('format'),
         ]);
@@ -645,6 +654,15 @@ class ProjectController extends Controller
     {
         if ($response = $this->denyIfMissingPermission($request->user(), 'can_view', 'No tiene permisos para ver especificaciones del proyecto.')) {
             return $response;
+        }
+
+        if ($request->boolean('validate_only')) {
+            $this->projectSpecificationsPdfMergeService->validate($project);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'El reporte de especificaciones puede generarse correctamente.',
+            ]);
         }
 
         $this->projectHistoryService->recordPdfGenerated($project, $request->user(), $request->ip(), 'Especificaciones técnicas del proyecto');

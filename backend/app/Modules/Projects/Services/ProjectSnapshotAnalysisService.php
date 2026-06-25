@@ -30,11 +30,12 @@ class ProjectSnapshotAnalysisService
         $materials = $this->mapComponents($components->where('tipo', 1)->values());
         $labor = $this->mapComponents($components->where('tipo', 2)->values());
         $tools = $this->mapComponents($components->where('tipo', 3)->values());
+        $itemName = $projectItem->nombre_snapshot ?? $projectItem->item?->item ?? 'Item no disponible';
 
         return [
             'item' => [
                 'id_item' => $projectItem->id_item,
-                'name' => $projectItem->nombre_snapshot ?? $projectItem->item?->item ?? 'Item no disponible',
+                'name' => $itemName,
                 'status' => $projectItem->estado_catalogo_snapshot ?? $projectItem->item?->estado,
                 'date' => $projectItem->fecha?->toDateString(),
                 'price' => $projectItem->precio,

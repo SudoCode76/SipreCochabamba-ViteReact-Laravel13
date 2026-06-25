@@ -1,7 +1,8 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircle2, ChevronLeft, ChevronRight, Eye, Loader2, Package, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -44,15 +45,22 @@ const collectValidationMessages = (error, fallback) => {
 };
 
 export default function ItemsPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const guidedFilesItemId = searchParams.get("open_files_for");
+  const guidedSearch = searchParams.get("search") ?? "";
+  const guidedReturnTo = searchParams.get("return_to") || location.state?.return_to || "";
+  const guidedReturnProjectId = searchParams.get("return_project_id") || location.state?.return_project_id || "";
   const [perPage, setPerPage] = useState(10);
   const [order, setOrder] = useState("legacy");
   const [reviewDays, setReviewDays] = useState("");
   const [duplicatesOnly, setDuplicatesOnly] = useState(false);
   const view = duplicatesOnly ? "duplicates" : reviewDays ? `review_${reviewDays}` : order;
-  const [search, setSearch] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [search, setSearch] = useState(guidedSearch);
+  const [searchQuery, setSearchQuery] = useState(guidedSearch);
   const [highlightMissingSpecifications, setHighlightMissingSpecifications] = useState(false);
   const [page, setPage] = useState(1);
   const [reportLoadingItemId, setReportLoadingItemId] = useState(null);
@@ -100,6 +108,7 @@ export default function ItemsPage() {
   const [deletedMachineryInputIds, setDeletedMachineryInputIds] = useState([]);
   const [filesOpen, setFilesOpen] = useState(false);
   const [filesItem, setFilesItem] = useState(null);
+  const [guidedFilesOpenedFor, setGuidedFilesOpenedFor] = useState(null);
   const [recalculateOpen, setRecalculateOpen] = useState(false);
   const [recalculateItem, setRecalculateItem] = useState(null);
   const [recalculateDate, setRecalculateDate] = useState("");
@@ -262,6 +271,12 @@ export default function ItemsPage() {
     placeholderData: (previousData) => previousData,
   });
 
+  const { data: guidedFilesItemData } = useQuery({
+    queryKey: ["guided-item-files", guidedFilesItemId],
+    queryFn: () => itemsService.getById(guidedFilesItemId),
+    enabled: Boolean(guidedFilesItemId),
+  });
+
   const { data: contextData, isLoading: contextLoading } = useQuery({
     queryKey: ["items-context"],
     queryFn: itemsService.context,
@@ -398,6 +413,19 @@ export default function ItemsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["items"] });
       toast.success("Archivos guardados correctamente.");
+
+      if (guidedReturnTo && filesItem?.id_item) {
+        navigate(guidedReturnTo, {
+          state: {
+            uploaded_item_id: filesItem.id_item,
+            uploaded_item_name: filesItem.name,
+            return_project_id: guidedReturnProjectId,
+          },
+          replace: true,
+        });
+        return;
+      }
+
       closeFiles();
     },
   });
@@ -407,6 +435,19 @@ export default function ItemsPage() {
     queryFn: () => itemsService.getById(filesItem.id_item),
     enabled: filesOpen && Boolean(filesItem?.id_item),
   });
+
+  useEffect(() => {
+    const guidedItem = guidedFilesItemData?.data?.item;
+
+    if (!guidedFilesItemId || !guidedItem?.id_item || String(guidedFilesOpenedFor) === String(guidedFilesItemId)) {
+      return;
+    }
+
+    queueMicrotask(() => {
+      openFiles(guidedItem);
+      setGuidedFilesOpenedFor(guidedFilesItemId);
+    });
+  }, [guidedFilesItemData, guidedFilesItemId, guidedFilesOpenedFor]);
 
   const items = data?.data?.items ?? [];
   const context = contextData?.data ?? {};
