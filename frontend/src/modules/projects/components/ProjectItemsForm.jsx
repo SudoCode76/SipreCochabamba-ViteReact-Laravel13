@@ -239,7 +239,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     queryFn: () => projectService.searchItems(search.trim()),
   });
 
-  const { data: selectedItemData, isFetching: isLoadingItem } = useQuery({
+  const { data: selectedItemData, isFetching: isLoadingItem, isError: selectedItemFailed, error: selectedItemError } = useQuery({
     queryKey: ["project-item-detail", draft.itemId, format],
     queryFn: () => projectService.itemIncidencePrice(draft.itemId, format),
     enabled: Boolean(draft.itemId),
@@ -343,7 +343,9 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     },
   });
 
-  const itemOptions = searchData?.data?.items ?? [];
+  const itemOptions = (searchData?.data?.items ?? []).filter((option) => (
+    !option.estado || String(option.estado).trim().toUpperCase() === "AC"
+  ));
   const selectedDetail = selectedItemData?.data?.item ?? null;
   const currentProject = projectData?.data?.project;
   const versions = versionsData?.data?.items ?? [];
@@ -401,6 +403,22 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
       navigate(location.pathname, { replace: true, state: null });
     });
   }, [location.pathname, location.state, navigate, projectId]);
+
+  useEffect(() => {
+    if (!selectedItemFailed || !draft.itemId) {
+      return;
+    }
+
+    const message = selectedItemError?.response?.data?.message
+      || Object.values(selectedItemError?.response?.data?.errors ?? {}).flat().find(Boolean)
+      || "El ítem seleccionado no está activo.";
+
+    queueMicrotask(() => {
+      handleDraftChange("itemId", "");
+      setSearch("");
+      setError(message);
+    });
+  }, [draft.itemId, selectedItemError, selectedItemFailed]);
 
   const total = useMemo(
     () => effectiveRows.reduce((acc, row) => acc + (Number(row.cantidad || 0) * Number(row.precio || 0)), 0),

@@ -370,6 +370,16 @@ class ProjectController extends Controller
             return $response;
         }
 
+        if (strtoupper(trim((string) $item->estado)) !== 'AC') {
+            return response()->json([
+                'success' => false,
+                'message' => 'El ítem seleccionado no está activo.',
+                'errors' => [
+                    'item' => ['El ítem seleccionado no está activo.'],
+                ],
+            ], 422);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Precio por incidencia del item obtenido correctamente.',

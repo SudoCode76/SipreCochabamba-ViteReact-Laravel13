@@ -370,6 +370,7 @@ class ProjectApiTest extends TestCase
         $this->createInput(['id_insumo' => 3, 'tipo' => 3, 'precio' => 4, 'descripcion' => 'Herramienta 1']);
         $this->createItemRecord();
         $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM DOS']);
+        $this->createItemRecord(['id_item' => 3, 'item' => 'ITEM INACTIVO', 'estado' => 'DC']);
 
         $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 2]);
         $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 3]);
@@ -403,7 +404,20 @@ class ProjectApiTest extends TestCase
 
         $this->getJson('/api/v1/search/items?search=ITEM')
             ->assertOk()
-            ->assertJsonCount(2, 'data.items');
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonMissingPath('data.items.2');
+
+        $this->getJson('/api/v1/projects/items/3/incidence-price?format=PCA')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'El ítem seleccionado no está activo.');
+
+        $this->postJson('/api/v1/projects/1/items/sync', [
+            'items' => [
+                ['id_item' => 3, 'precio' => 10, 'cantidad' => 1, 'prioridad' => 1],
+            ],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('items.0.id_item');
     }
 
     public function test_project_items_can_be_grouped_by_module_and_repeated(): void

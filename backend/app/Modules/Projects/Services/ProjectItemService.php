@@ -10,6 +10,7 @@ use App\Modules\Parameters\Services\ModuleService;
 use App\Services\Files\PublicFileService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ProjectItemService
 {
@@ -27,6 +28,8 @@ class ProjectItemService
     public function sync(Project $project, array $items, User $user, ?string $ip = null): Project
     {
         $this->projectVersionService->assertEditable($project);
+        $this->assertItemsAreActive($items);
+
         $historySummary = [
             'added' => [],
             'updated' => [],
@@ -184,6 +187,12 @@ class ProjectItemService
 
     public function incidenceItemDetail(Item $item, string $format): array
     {
+        if (! $this->isActiveItem($item)) {
+            throw ValidationException::withMessages([
+                'item' => 'El ítem seleccionado no está activo.',
+            ]);
+        }
+
         $item->load(['groupCatalog', 'subgroupCatalog', 'unitMeasure']);
 
         return [
@@ -205,17 +214,49 @@ class ProjectItemService
     public function searchItems(string $search): array
     {
         return Item::query()
-            ->where('estado', 'AC')
+            ->whereRaw("UPPER(TRIM(estado)) = 'AC'")
             ->whereRaw('LOWER(TRIM(item)) LIKE ?', ['%'.mb_strtolower(trim($search)).'%'])
             ->orderBy('item')
             ->limit(20)
-            ->get(['id_item', 'item'])
+            ->get(['id_item', 'item', 'estado'])
             ->map(fn (Item $item): array => [
                 'id' => $item->id_item,
                 'text' => $item->item,
+                'estado' => $item->estado,
             ])
             ->values()
             ->all();
+    }
+
+    private function assertItemsAreActive(array $items): void
+    {
+        $itemIds = collect($items)
+            ->pluck('id_item')
+            ->filter()
+            ->map(fn (int|string $id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($itemIds->isEmpty()) {
+            return;
+        }
+
+        $activeItemIds = Item::query()
+            ->whereIn('id_item', $itemIds->all())
+            ->whereRaw("UPPER(TRIM(estado)) = 'AC'")
+            ->pluck('id_item')
+            ->map(fn (int|string $id): int => (int) $id);
+
+        if ($activeItemIds->count() !== $itemIds->count()) {
+            throw ValidationException::withMessages([
+                'items' => 'El ítem seleccionado no está activo.',
+            ]);
+        }
+    }
+
+    private function isActiveItem(Item $item): bool
+    {
+        return strtoupper(trim((string) $item->estado)) === 'AC';
     }
 
     private function trackUpdatedProjectItem(array &$summary, ProjectItem $existingItem, array $payload): void
