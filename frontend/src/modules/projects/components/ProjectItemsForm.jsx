@@ -1,4 +1,4 @@
-import { forwardRef, Fragment, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { forwardRef, Fragment, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, ChevronsUpDown, GitCompare, History, Loader2, Plus, Save, Trash2, X } from "lucide-react";
@@ -14,6 +14,7 @@ import { openPdfViewer } from "@/lib/utils/pdf";
 import { modulesService } from "@/modules/modules/services/modules.service";
 import { getProjectApprovalLabel } from "../lib/project-status";
 import { projectService } from "../services/project.service";
+import { UpdatedProjectExitDialog } from "./UpdatedProjectExitDialog";
 
 const formatOptions = [
   { value: "PC_OBRAS", label: "OBRAS PUBLICAS" },
@@ -204,6 +205,8 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const [finalizingVersion, setFinalizingVersion] = useState(false);
   const [loadingReport, setLoadingReport] = useState(null);
   const [reportErrorDialog, setReportErrorDialog] = useState(null);
+  const [updatedExitDialog, setUpdatedExitDialog] = useState(null);
+  const updatedExitResolverRef = useRef(null);
 
   const { data: projectData } = useQuery({
     queryKey: ["project", projectId],
@@ -692,6 +695,39 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     }
   };
 
+  const requestUpdatedExitDecision = ({ proceed } = {}) => new Promise((resolve) => {
+    updatedExitResolverRef.current = resolve;
+    setUpdatedExitDialog({ proceed });
+  });
+
+  const closeUpdatedExitDialog = (result = false) => {
+    setUpdatedExitDialog(null);
+    updatedExitResolverRef.current?.(result);
+    updatedExitResolverRef.current = null;
+  };
+
+  const handleKeepUpdatedVersionActive = () => {
+    const proceed = updatedExitDialog?.proceed;
+
+    proceed?.();
+    if (!proceed) {
+      onCancel?.();
+    }
+    closeUpdatedExitDialog(true);
+  };
+
+  const handleFinalizeFromUpdatedExit = async () => {
+    const proceed = updatedExitDialog?.proceed;
+    const finalized = await handleFinalizeUpdatedVersion({
+      skipDirtyConfirmation: true,
+      afterFinalize: proceed ?? onSuccess,
+    });
+
+    if (finalized) {
+      closeUpdatedExitDialog(true);
+    }
+  };
+
   const handleCancel = async ({ proceed } = {}) => {
     if (rowsDirty) {
       const confirmed = window.confirm("Hay cambios sin guardar. Si sales se perderán los cambios temporales de esta pantalla. ¿Deseas continuar?");
@@ -709,22 +745,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
       return true;
     }
 
-    const shouldFinalize = window.confirm(
-      "Esta versión está ACTUALIZADA y seguirá tomando precios, composiciones y porcentajes actuales mientras no se finalice.\n\nAceptar: finalizar y congelar esta versión ahora.\nCancelar: salir sin finalizar.",
-    );
-
-    if (!shouldFinalize) {
-      proceed?.();
-      if (!proceed) {
-        onCancel?.();
-      }
-      return true;
-    }
-
-    return handleFinalizeUpdatedVersion({
-      skipDirtyConfirmation: true,
-      afterFinalize: proceed ?? onSuccess,
-    });
+    return requestUpdatedExitDecision({ proceed });
   };
 
   useImperativeHandle(ref, () => ({
@@ -1363,6 +1384,14 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <UpdatedProjectExitDialog
+      open={Boolean(updatedExitDialog)}
+      isFinalizing={finalizingVersion}
+      onCancel={() => closeUpdatedExitDialog(false)}
+      onFinalize={handleFinalizeFromUpdatedExit}
+      onKeepActive={handleKeepUpdatedVersionActive}
+    />
     </>
   );
 });

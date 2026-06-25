@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { History, Loader2, Lock, MapPin, RefreshCw, Save } from "lucide-react";
 
@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/toast";
 import { getProjectApprovalLabel } from "../lib/project-status";
 import { projectService } from "../services/project.service";
+import { UpdatedProjectExitDialog } from "./UpdatedProjectExitDialog";
 
 const emptyForm = {
   nombre_proyecto: "",
@@ -90,6 +91,8 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
   const [saving, setSaving] = useState(false);
   const [versioning, setVersioning] = useState(false);
   const [finalizingVersion, setFinalizingVersion] = useState(false);
+  const [updatedExitDialogOpen, setUpdatedExitDialogOpen] = useState(false);
+  const updatedExitResolverRef = useRef(null);
 
   const { data: contextData, isLoading: contextLoading } = useQuery({
     queryKey: ["project-context"],
@@ -273,12 +276,38 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
       setFormData(null);
       toast.success("Versión finalizada correctamente.");
       onSuccess?.();
+      return true;
     } catch (err) {
       const fieldErrors = err.response?.data?.errors;
       const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
       setError(firstFieldError || err.response?.data?.message || "No se pudo finalizar la versión.");
+      return false;
     } finally {
       setFinalizingVersion(false);
+    }
+  };
+
+  const requestUpdatedExitDecision = () => new Promise((resolve) => {
+    updatedExitResolverRef.current = resolve;
+    setUpdatedExitDialogOpen(true);
+  });
+
+  const closeUpdatedExitDialog = (result = false) => {
+    setUpdatedExitDialogOpen(false);
+    updatedExitResolverRef.current?.(result);
+    updatedExitResolverRef.current = null;
+  };
+
+  const handleKeepUpdatedVersionActive = () => {
+    onCancel?.();
+    closeUpdatedExitDialog(true);
+  };
+
+  const handleFinalizeFromUpdatedExit = async () => {
+    const finalized = await handleFinalizeUpdatedVersion();
+
+    if (finalized) {
+      closeUpdatedExitDialog(true);
     }
   };
 
@@ -288,16 +317,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
       return;
     }
 
-    const shouldFinalize = window.confirm(
-      "Esta versión está ACTUALIZADA y seguirá tomando precios, composiciones y porcentajes actuales mientras no se finalice.\n\nAceptar: finalizar y congelar esta versión ahora.\nCancelar: salir sin finalizar.",
-    );
-
-    if (!shouldFinalize) {
-      onCancel?.();
-      return;
-    }
-
-    await handleFinalizeUpdatedVersion();
+    return requestUpdatedExitDecision();
   };
 
   useImperativeHandle(ref, () => ({
@@ -321,6 +341,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
   }
 
   return (
+    <>
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       {error && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -500,6 +521,14 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
         )}
       </div>
     </form>
+    <UpdatedProjectExitDialog
+      open={updatedExitDialogOpen}
+      isFinalizing={finalizingVersion}
+      onCancel={() => closeUpdatedExitDialog(false)}
+      onFinalize={handleFinalizeFromUpdatedExit}
+      onKeepActive={handleKeepUpdatedVersionActive}
+    />
+    </>
   );
 });
 
