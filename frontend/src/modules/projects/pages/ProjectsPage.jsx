@@ -906,50 +906,69 @@ export default function ProjectsPage() {
             </Alert>
           )}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="flex items-end gap-3">
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-medium text-muted-foreground">Buscar</label>
-                <div className="w-64">
-                  <ClearableSearchInput
-                    placeholder="Buscar proyecto..."
-                    className="h-9 w-64 rounded-xl border-border/80"
-                    value={search}
-                    isLoading={isFetching && !isLoading}
-                    onChange={handleSearchChange}
-                    onClear={clearSearch}
-                  />
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end lg:w-auto">
+              <div className="flex w-full flex-col gap-2 sm:w-auto">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Mostrar
+                </span>
+                <div className="relative">
+                  <select
+                    value={perPage}
+                    onChange={handlePerPageChange}
+                    className="h-12 w-full min-w-32 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20 sm:w-auto"
+                  >
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
+                </div>
+              </div>
+
+              <div className="flex w-full flex-col gap-2 sm:w-auto">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Orden
+                </span>
+                <div className="relative">
+                  <select
+                    value={order}
+                    onChange={handleOrderChange}
+                    className="h-12 w-full min-w-56 appearance-none rounded-2xl border border-border/80 bg-background/90 px-4 pr-10 text-sm text-foreground outline-none transition focus:border-foreground/20 sm:w-auto"
+                  >
+                    <option value="legacy">Predeterminado</option>
+                    <option value="recent">Recientes</option>
+                    <option value="oldest">Antiguos</option>
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground">▾</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <label className="text-xs font-medium text-muted-foreground">Mostrar</label>
-              <select
-                value={perPage}
-                onChange={handlePerPageChange}
-                className="h-9 rounded-xl border border-border/80 px-3 text-sm"
-              >
-                <option value={10}>10</option>
-                <option value={15}>15</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-              <label className="text-xs font-medium text-muted-foreground">Orden</label>
-              <select
-                value={order}
-                onChange={handleOrderChange}
-                className="h-9 rounded-xl border border-border/80 px-3 text-sm"
-              >
-                <option value="legacy">Predeterminado</option>
-                <option value="recent">Recientes</option>
-                <option value="oldest">Antiguos</option>
-              </select>
+            <div className="flex w-full max-w-sm flex-col gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Buscar
+              </span>
+              <ClearableSearchInput
+                placeholder="Buscar proyecto..."
+                className="h-12 rounded-2xl border-border/80 bg-background/90"
+                value={search}
+                isLoading={isFetching && !isLoading}
+                onChange={handleSearchChange}
+                onClear={clearSearch}
+              />
             </div>
           </div>
 
+          {isFetching && !isLoading && (
+            <div className="flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+              <Loader2 className="mr-2 size-4 animate-spin" /> Actualizando resultados...
+            </div>
+          )}
+
           {isLoading && (
             <div className="flex items-center justify-center rounded-2xl border border-border/70 bg-background/70 p-8 text-muted-foreground">
-              Cargando proyectos...
+              <Loader2 className="mr-2 size-4 animate-spin" /> Cargando proyectos...
             </div>
           )}
 

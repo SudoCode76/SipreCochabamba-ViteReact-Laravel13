@@ -1417,6 +1417,12 @@ export default function ItemsPage() {
             </form>
           </div>
 
+          {isFetching && !isLoading && (
+            <div className="flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+              <Loader2 className="mr-2 size-4 animate-spin" /> Actualizando resultados...
+            </div>
+          )}
+
           {isLoading && (
             <div className="flex items-center justify-center rounded-2xl border border-border/70 bg-background/70 p-8 text-muted-foreground">
               <Loader2 className="mr-2 size-4 animate-spin" /> Cargando items...
@@ -1782,6 +1788,8 @@ export default function ItemsPage() {
                           id="create_unit_combobox"
                           placeholder="Buscar y seleccionar unidad"
                           value={unitSearch}
+                          isLoading={contextLoading}
+                          loadingIndicatorClassName="right-16"
                           onChange={handleUnitSearchChange}
                           onFocus={() => setUnitComboboxOpen(true)}
                           onBlur={() => window.setTimeout(() => setUnitComboboxOpen(false), 120)}
@@ -1966,6 +1974,8 @@ export default function ItemsPage() {
                             id="edit_unit_combobox"
                             placeholder="Buscar y seleccionar unidad"
                             value={editUnitSearch}
+                            isLoading={contextLoading}
+                            loadingIndicatorClassName="right-16"
                             onChange={handleEditUnitSearchChange}
                             onFocus={() => setEditUnitComboboxOpen(true)}
                             onBlur={() => window.setTimeout(() => setEditUnitComboboxOpen(false), 120)}
