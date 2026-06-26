@@ -12,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\Concerns\InteractsWithLegacyAuth;
 use Tests\Concerns\InteractsWithLegacyInputs;
 use Tests\Concerns\InteractsWithLegacyItems;
@@ -906,6 +907,19 @@ class ProjectApiTest extends TestCase
         $xlsx->assertOk()
             ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         $this->assertStringStartsWith('PK', $xlsx->getContent());
+        $xlsxPath = tempnam(sys_get_temp_dir(), 'general-budget-').'.xlsx';
+        file_put_contents($xlsxPath, $xlsx->getContent());
+        $sheetValues = collect(IOFactory::load($xlsxPath)->getActiveSheet()->toArray())
+            ->flatten()
+            ->filter(fn ($value): bool => $value !== null && $value !== '')
+            ->values()
+            ->all();
+        @unlink($xlsxPath);
+
+        $this->assertContains('MÓDULO: Modulo A', $sheetValues);
+        $this->assertContains('SUBTOTAL MÓDULO Modulo A', $sheetValues);
+        $this->assertNotContains('OBRAS PRELIMINARES', $sheetValues);
+        $this->assertNotContains('PRELIMINARES', $sheetValues);
     }
 
     public function test_budget_recalculation_rows_are_grouped_by_module_with_subtotals(): void

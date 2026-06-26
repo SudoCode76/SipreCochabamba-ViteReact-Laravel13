@@ -36,8 +36,6 @@ class ProjectGeneralBudgetPdfService
         $total = 0.0;
         $moduleTotal = 0.0;
         $lastModule = null;
-        $lastGroup = null;
-        $lastSubgroup = null;
         $html = '
 <style>
 .subseccion{background-color:#C8EFE6;font-size:10px;font-style:bold;}
@@ -76,21 +74,7 @@ class ProjectGeneralBudgetPdfService
                 $html .= '
 <tr nobr="true" bgcolor="#8cb9b5"><td width="680" colspan="6"><h4>MÓDULO: '.htmlentities((string) $item['modulo']).'</h4></td></tr>';
                 $lastModule = $item['modulo'];
-                $lastGroup = null;
-                $lastSubgroup = null;
                 $moduleTotal = 0.0;
-            }
-
-            if ($lastGroup !== $item['nombre_grupo']) {
-                $html .= '
-<tr nobr="true" bgcolor="#99a3a2"><td width="680" colspan="6"><h4><font color="#fcfdfd">'.htmlentities((string) $item['nombre_grupo']).'</font></h4></td></tr>';
-                $lastGroup = $item['nombre_grupo'];
-            }
-
-            if ($lastSubgroup !== $item['nombre_subgrupo']) {
-                $html .= '
-<tr nobr="true" bgcolor="#55827e"><td width="680" colspan="6"><h4><font color="#fcfdfd">'.htmlentities((string) $item['nombre_subgrupo']).'</font></h4></td></tr>';
-                $lastSubgroup = $item['nombre_subgrupo'];
             }
 
             $price = round((float) $item['precio'], 2);

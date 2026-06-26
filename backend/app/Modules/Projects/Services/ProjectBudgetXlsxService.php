@@ -112,8 +112,6 @@ class ProjectBudgetXlsxService
         $total = 0.0;
         $moduleTotal = 0.0;
         $lastModule = null;
-        $lastGroup = null;
-        $lastSubgroup = null;
 
         foreach ($items as $index => $item) {
             if ($lastModule !== $item['modulo']) {
@@ -123,19 +121,7 @@ class ProjectBudgetXlsxService
 
                 $rows[] = ['type' => 'module', 'values' => ['MÓDULO: '.$item['modulo']]];
                 $lastModule = $item['modulo'];
-                $lastGroup = null;
-                $lastSubgroup = null;
                 $moduleTotal = 0.0;
-            }
-
-            if ($lastGroup !== $item['nombre_grupo']) {
-                $rows[] = ['type' => 'group', 'values' => [$item['nombre_grupo'] ?? '']];
-                $lastGroup = $item['nombre_grupo'];
-            }
-
-            if ($lastSubgroup !== $item['nombre_subgrupo']) {
-                $rows[] = ['type' => 'subgroup', 'values' => [$item['nombre_subgrupo'] ?? '']];
-                $lastSubgroup = $item['nombre_subgrupo'];
             }
 
             $price = round((float) $item['precio'], 2);
