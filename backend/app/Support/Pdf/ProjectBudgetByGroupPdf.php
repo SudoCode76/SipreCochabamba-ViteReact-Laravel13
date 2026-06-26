@@ -14,8 +14,6 @@ class ProjectBudgetByGroupPdf extends \TCPDF
         $this->SetFont('helvetica', 'B', 9, '', true);
         $this->SetTextColor(0, 0, 0);
         $this->Cell($titleWidth, 4, 'GOBIERNO AUTONOMO MUNICIPAL DE COCHABAMBA', 0, 1, 'L', 0, '', 3);
-        $this->Cell($titleWidth, 4, 'SECRETARIA DE PLANIFICACION', 0, 1, 'L', 0, '', 3);
-        $this->Cell($titleWidth, 4, 'DIRECCION DE PROYECTOS', 0, 1, 'L', 0, '', 3);
         $this->Cell($titleWidth, 4, 'COCHABAMBA-BOLIVIA', 0, 1, 'L', 0, '', 3);
         $this->SetFont('helvetica', 'B', 11, '', true);
         $this->Cell($titleWidth, 8, 'Presupuesto por rubros', 0, 1, 'C', 0, '', 3);

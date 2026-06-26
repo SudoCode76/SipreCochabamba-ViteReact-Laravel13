@@ -22,21 +22,17 @@ class MunicipalXlsxHeader
         $sheet->setCellValue('F1', $printedAt);
 
         $sheet->mergeCells('A2:'.$lastColumn.'2');
-        $sheet->setCellValue('A2', 'SECRETARIA DE PLANIFICACION');
+        $sheet->setCellValue('A2', 'COCHABAMBA-BOLIVIA');
         $sheet->mergeCells('A3:'.$lastColumn.'3');
-        $sheet->setCellValue('A3', 'DIRECCION DE PROYECTOS');
-        $sheet->mergeCells('A4:'.$lastColumn.'4');
-        $sheet->setCellValue('A4', 'COCHABAMBA-BOLIVIA');
-        $sheet->mergeCells('A5:'.$lastColumn.'5');
-        $sheet->setCellValue('A5', $title);
+        $sheet->setCellValue('A3', $title);
 
-        $sheet->getStyle('A1:'.$lastColumn.'4')->getFont()->setBold(true)->setSize(9);
-        $sheet->getStyle('A5:'.$lastColumn.'5')->getFont()->setBold(true)->setSize(12);
-        $sheet->getStyle('A5:'.$lastColumn.'5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A1:'.$lastColumn.'2')->getFont()->setBold(true)->setSize(9);
+        $sheet->getStyle('A3:'.$lastColumn.'3')->getFont()->setBold(true)->setSize(12);
+        $sheet->getStyle('A3:'.$lastColumn.'3')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('E1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
         $sheet->getStyle('F1:'.$lastColumn.'1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        return 7;
+        return 5;
     }
 
     public static function columnName(int $column): string
