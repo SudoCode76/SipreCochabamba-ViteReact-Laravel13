@@ -186,7 +186,13 @@ class ItemController extends Controller
         }
 
         try {
-            $items = $this->listAnalysisItemsService->execute($request->validated(), 'general');
+            $filters = $request->validated();
+
+            if (empty($filters['status']) && ! filter_var($filters['duplicates'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                $filters['status'] = 'AC';
+            }
+
+            $items = $this->listAnalysisItemsService->execute($filters, 'general');
         } catch (InvalidArgumentException $exception) {
             return $this->validationFailureResponse($exception->getMessage());
         }

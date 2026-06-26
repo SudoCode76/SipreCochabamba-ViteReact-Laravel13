@@ -58,7 +58,8 @@ export default function ItemsPage() {
   const [order, setOrder] = useState("legacy");
   const [reviewDays, setReviewDays] = useState("");
   const [duplicatesOnly, setDuplicatesOnly] = useState(false);
-  const view = duplicatesOnly ? "duplicates" : reviewDays ? `review_${reviewDays}` : order;
+  const [statusFilter, setStatusFilter] = useState("AC");
+  const view = duplicatesOnly ? "duplicates" : statusFilter === "DC" ? "inactive" : reviewDays ? `review_${reviewDays}` : order;
   const [search, setSearch] = useState(guidedSearch);
   const [searchQuery, setSearchQuery] = useState(guidedSearch);
   const [highlightMissingSpecifications, setHighlightMissingSpecifications] = useState(false);
@@ -266,8 +267,8 @@ export default function ItemsPage() {
   };
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["items", { page, perPage, search, order, reviewDays, duplicates: duplicatesOnly }],
-    queryFn: () => itemsService.list({ page, perPage, search, order, reviewDays, duplicates: duplicatesOnly }),
+    queryKey: ["items", { page, perPage, search, order, reviewDays, duplicates: duplicatesOnly, status: statusFilter }],
+    queryFn: () => itemsService.list({ page, perPage, search, order, reviewDays, duplicates: duplicatesOnly, status: duplicatesOnly ? "" : statusFilter }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -511,12 +512,22 @@ export default function ItemsPage() {
 
     if (value === "duplicates") {
       setDuplicatesOnly(true);
+      setStatusFilter("");
       setOrder("legacy");
       setReviewDays("");
       return;
     }
 
     setDuplicatesOnly(false);
+
+    if (value === "inactive") {
+      setStatusFilter("DC");
+      setOrder("legacy");
+      setReviewDays("");
+      return;
+    }
+
+    setStatusFilter("AC");
 
     if (value.startsWith("review_")) {
       setOrder("legacy");
@@ -1371,6 +1382,7 @@ export default function ItemsPage() {
                     <option value="review_120">Sin revisar de 120 a 180 días</option>
                     <option value="review_180">Sin revisar 180 días o más</option>
                     <option value="missing_specifications">Sin especificaciones</option>
+                    <option value="inactive">Inactivos</option>
                     <option value="duplicates">Duplicados</option>
                     <option value="recent">Recientes</option>
                     <option value="oldest">Antiguos</option>
