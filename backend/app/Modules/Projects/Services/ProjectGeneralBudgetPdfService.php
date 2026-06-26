@@ -22,13 +22,25 @@ class ProjectGeneralBudgetPdfService
         if ($items === []) {
             $pdf->writeHTML('<div><h1 style="color:red" align="center">No existen registros!</h1></div>', true, false, true, false, '');
         } else {
-            $pdf->writeHTML($this->buildHtml($project, $items), true, false, true, false, '');
+            $this->writeCenteredBudgetHtml($pdf, $this->buildHtml($project, $items));
         }
 
         return response($pdf->Output('presupuesto_general.pdf', 'S'), 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="presupuesto_general.pdf"',
         ]);
+    }
+
+    private function writeCenteredBudgetHtml(ProjectGeneralBudgetPdf $pdf, string $html): void
+    {
+        $margins = $pdf->getMargins();
+        $tableWidth = $pdf->pixelsToUnits(680);
+        $leftMargin = max(0, ($pdf->getPageWidth() - $tableWidth) / 2);
+
+        $pdf->SetLeftMargin($leftMargin);
+        $pdf->SetX($leftMargin);
+        $pdf->writeHTML($html, true, false, true, false, '');
+        $pdf->SetMargins($margins['left'], $margins['top'], $margins['right']);
     }
 
     private function buildHtml(Project $project, array $items): string
