@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, FileText, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, FileSignature, FileText, Loader2, RefreshCw } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 import { apiOrigin } from "@/lib/api/client";
+import { projectService } from "@/modules/projects/services/project.service";
 
 const DEFAULT_ERROR_MESSAGE = "No se pudo generar el PDF.";
+const SIGNATURE_SESSION_KEY = "sipre:ciudadania-digital:signature";
 
 function parseMessageFromPayload(payload) {
   if (!payload || typeof payload !== "object") {
@@ -50,6 +52,32 @@ async function readErrorMessage(response) {
   }
 }
 
+function parseJsonParam(value) {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function readApiError(error, fallback) {
+  const payload = error?.response?.data;
+  const firstFieldError = payload?.errors ? Object.values(payload.errors).flat().find(Boolean) : "";
+  const traceId = payload?.trace_id ?? payload?.data?.trace_id;
+  const message = firstFieldError || payload?.message || error?.message || fallback;
+
+  if (traceId && !String(message).includes(traceId)) {
+    return `${message} Código de seguimiento: ${traceId}`;
+  }
+
+  return message;
+}
+
 function resolveAllowedPdfUrl(rawUrl) {
   if (!rawUrl) {
     return null;
@@ -74,10 +102,29 @@ export default function PdfViewerPage() {
   const title = searchParams.get("title") || "Documento PDF";
   const fallbackMessage = searchParams.get("message") || DEFAULT_ERROR_MESSAGE;
   const showChrome = searchParams.get("chrome") !== "0";
+  const signatureProjectId = searchParams.get("sign_project");
+  const signatureReportKey = searchParams.get("sign_report");
+  const signatureParametersRaw = searchParams.get("sign_params") || "{}";
+  const signatureParameters = useMemo(() => parseJsonParam(signatureParametersRaw), [signatureParametersRaw]);
+  const hasSignatureContext = Boolean(signatureProjectId && signatureReportKey);
   const [blobUrl, setBlobUrl] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
+  const [signatureStatus, setSignatureStatus] = useState(null);
+  const [signatureLoading, setSignatureLoading] = useState(false);
+  const [signatureError, setSignatureError] = useState("");
+  const [signing, setSigning] = useState(false);
+
+  const canSignPdf = Boolean(
+    !loading
+      && !error
+      && blobUrl
+      && hasSignatureContext
+      && signatureStatus?.project_is_finalized
+      && signatureStatus?.report?.is_enabled
+      && signatureStatus?.report?.can_sign,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -155,6 +202,85 @@ export default function PdfViewerPage() {
     };
   }, [fallbackMessage, pdfUrl, reloadKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSignatureStatus() {
+      if (!hasSignatureContext) {
+        setSignatureStatus(null);
+        setSignatureError("");
+        return;
+      }
+
+      setSignatureLoading(true);
+      setSignatureError("");
+
+      try {
+        const response = await projectService.signatureStatus(signatureProjectId, {
+          report_key: signatureReportKey,
+          ...signatureParameters,
+        });
+
+        if (!cancelled) {
+          setSignatureStatus(response?.data ?? null);
+        }
+      } catch (statusError) {
+        if (!cancelled) {
+          setSignatureStatus(null);
+          setSignatureError(readApiError(statusError, "No se pudo validar si este PDF puede firmarse."));
+        }
+      } finally {
+        if (!cancelled) {
+          setSignatureLoading(false);
+        }
+      }
+    }
+
+    void loadSignatureStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasSignatureContext, signatureParameters, signatureProjectId, signatureReportKey]);
+
+  const handleSignPdf = async () => {
+    if (!canSignPdf || signing) {
+      return;
+    }
+
+    setSigning(true);
+    setSignatureError("");
+
+    try {
+      const response = await projectService.signReport(signatureProjectId, signatureReportKey, signatureParameters);
+      const redirectUrl = response?.data?.redirect_url || response?.data?.signature?.redirect_url;
+      const signature = response?.data?.signature;
+
+      if (!redirectUrl) {
+        throw new Error("Ciudadanía Digital no devolvió una URL de firma.");
+      }
+
+      if (signature?.id) {
+        const pendingSignature = JSON.stringify({
+          id: signature.id,
+          trace_id: signature.trace_id,
+          project_id: signature.project_id,
+          report_key: signature.report_key,
+          parameters: signature.parameters || signatureParameters || {},
+        });
+
+        sessionStorage.setItem(SIGNATURE_SESSION_KEY, pendingSignature);
+        localStorage.setItem(SIGNATURE_SESSION_KEY, pendingSignature);
+      }
+
+      window.location.assign(redirectUrl);
+    } catch (signError) {
+      setSignatureError(readApiError(signError, "No se pudo iniciar la firma digital."));
+    } finally {
+      setSigning(false);
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col bg-slate-100 text-slate-950">
       {showChrome ? (
@@ -168,16 +294,38 @@ export default function PdfViewerPage() {
               <p className="text-sm text-slate-500">SIPRE</p>
             </div>
           </div>
-          {error ? (
-            <button
-              type="button"
-              onClick={() => setReloadKey((value) => value + 1)}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Reintentar
-            </button>
-          ) : null}
+          <div className="flex items-center gap-3">
+            {signatureLoading && !error ? (
+              <span className="inline-flex items-center gap-2 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Validando firma
+              </span>
+            ) : null}
+            {!error && signatureError ? (
+              <span className="max-w-sm text-right text-xs leading-5 text-red-600">{signatureError}</span>
+            ) : null}
+            {canSignPdf ? (
+              <button
+                type="button"
+                onClick={handleSignPdf}
+                disabled={signing}
+                className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
+                Firmar este PDF
+              </button>
+            ) : null}
+            {error ? (
+              <button
+                type="button"
+                onClick={() => setReloadKey((value) => value + 1)}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Reintentar
+              </button>
+            ) : null}
+          </div>
         </header>
       ) : null}
 

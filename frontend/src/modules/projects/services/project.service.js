@@ -80,6 +80,33 @@ export const projectService = {
     return response.data;
   },
 
+  signableReports: async () => {
+    const response = await apiClient.get("/v1/signable-project-reports");
+    return response.data;
+  },
+
+  updateSignableReport: async ({ reportKey, payload }) => {
+    const response = await apiClient.patch(`/v1/signable-project-reports/${reportKey}`, payload);
+    return response.data;
+  },
+
+  signReport: async (projectId, reportKey, payload = {}) => {
+    const response = await apiClient.post(`/v1/projects/${projectId}/reports/${reportKey}/sign`, payload);
+    return response.data;
+  },
+
+  signatureStatus: async (projectId, params = {}) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/signature-status`, { params });
+    return response.data;
+  },
+
+  reportSignatures: async (projectId, reportKey) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/reports/${reportKey}/signatures`);
+    return response.data;
+  },
+
+  latestSignedReportUrl: (projectId, reportKey, params = {}) => buildApiUrl(`/v1/projects/${projectId}/reports/${reportKey}/signed/latest`, params),
+
   update: async (projectId, payload) => {
     const response = await apiClient.put(`/v1/projects/${projectId}`, payload);
     return response.data;

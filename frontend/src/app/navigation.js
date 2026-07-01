@@ -8,6 +8,7 @@ import {
   SquareChartGantt,
   UsersRound,
   ClipboardClock,
+  FileSignature,
 } from "lucide-react";
 
 export const navigationSections = [
@@ -75,6 +76,7 @@ export const navigationSections = [
       { title: "Roles", path: "/administracion/roles", icon: ShieldCheck, accent: "violet", permission: { className: "ADMINISTRADOR", functions: ["ROLES"] } },
       { title: "Autorizaciones", path: "/administracion/autorizaciones", icon: KeyRound, accent: "amber", permission: { className: "ADMINISTRADOR", functions: ["AUTORIZACION", "AUTORIZACIONES"] } },
       { title: "Auditoría", path: "/administracion/auditoria", icon: ClipboardClock, accent: "rose", permission: { className: "ADMINISTRADOR", functions: ["AUDITORIA"] } },
+      { title: "Reportes firmables", path: "/administracion/reportes-firmables", icon: FileSignature, accent: "sky", permission: { className: "ADMINISTRADOR", functions: ["FIRMAS_DIGITALES", "REPORTES_FIRMABLES"] } },
     ],
   },
 ];

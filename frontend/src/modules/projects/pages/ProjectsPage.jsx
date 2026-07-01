@@ -312,7 +312,6 @@ export default function ProjectsPage() {
     queryFn: projectService.context,
     retry: false,
   });
-
   const projects = data?.data?.items ?? [];
   const permissions = contextData?.data?.permissions ?? {};
   const canEditProject = Boolean(permissions.can_edit);
@@ -528,6 +527,18 @@ export default function ProjectsPage() {
     );
   };
 
+  const signatureOptions = (reportKey, parameters = {}) => {
+    if (!resolvedReportProjectId || !reportKey) {
+      return undefined;
+    }
+
+    return {
+      projectId: resolvedReportProjectId,
+      reportKey,
+      parameters,
+    };
+  };
+
   const handleTemplateSubmit = async (event) => {
     event.preventDefault();
 
@@ -591,6 +602,7 @@ export default function ProjectsPage() {
         openPdfViewer(projectService.budgetRecalculationPdfUrl(resolvedReportProjectId, recalculateDate), {
           title: "Presupuesto recalculado del proyecto",
           errorMessage: "No se pudo generar el presupuesto recalculado del proyecto.",
+          signature: signatureOptions("budget_recalculation", { fecha: recalculateDate }),
         });
         closeRecalculate();
       });
@@ -664,6 +676,7 @@ export default function ProjectsPage() {
       title: "Presupuesto por rubros",
       description: project.nombre_proyecto,
       projectId: project.id_proyecto,
+      reportKey: "budget_by_group",
       pdfUrlBuilder: projectService.budgetByGroupPdfUrl,
       xlsxUrlBuilder: projectService.budgetByGroupXlsxUrl,
       errorMessage: "No se pudo generar el presupuesto por rubros.",
@@ -678,6 +691,7 @@ export default function ProjectsPage() {
       title: "Reporte de insumos del proyecto",
       description: project.nombre_proyecto,
       projectId: project.id_proyecto,
+      reportKey: "inputs_report",
       pdfUrlBuilder: projectService.inputsReportPdfUrl,
       xlsxUrlBuilder: projectService.inputsReportXlsxUrl,
       errorMessage: "No se pudo generar el reporte de insumos del proyecto.",
@@ -692,6 +706,7 @@ export default function ProjectsPage() {
       title: "Proyecto agrupado por insumos",
       description: project.nombre_proyecto,
       projectId: project.id_proyecto,
+      reportKey: "grouped_inputs_report",
       pdfUrlBuilder: projectService.groupedInputsReportPdfUrl,
       xlsxUrlBuilder: projectService.groupedInputsReportXlsxUrl,
       errorMessage: "No se pudo generar el reporte de proyecto agrupado por insumos.",
@@ -706,6 +721,7 @@ export default function ProjectsPage() {
         openPdfViewer(exportChoice.pdfUrlBuilder(resolvedReportProjectId), {
           title: exportChoice.title,
           errorMessage: exportChoice.errorMessage,
+          signature: signatureOptions(exportChoice.reportKey),
         });
         closeExportChoice();
       });
@@ -755,6 +771,7 @@ export default function ProjectsPage() {
         openPdfViewer(projectService.incidenceSummaryPdfUrl(resolvedReportProjectId, incidenceFormat), {
           title: "Resumen por incidencia",
           errorMessage: "No se pudo generar el resumen por incidencia.",
+          signature: signatureOptions("incidence_summary", { format: incidenceFormat }),
         });
         closeIncidenceSummary();
       });
@@ -804,6 +821,7 @@ export default function ProjectsPage() {
         openPdfViewer(projectService.generalBudgetPdfUrl(resolvedReportProjectId, generalBudgetFormat), {
           title: "Presupuesto general",
           errorMessage: "No se pudo generar el presupuesto general.",
+          signature: signatureOptions("general_budget", { format: generalBudgetFormat }),
         });
         closeGeneralBudget();
       });
@@ -853,6 +871,7 @@ export default function ProjectsPage() {
         openPdfViewer(projectService.inputBreakdownPdfUrl(resolvedReportProjectId, inputBreakdownType), {
           title: "Desglose de insumos del proyecto",
           errorMessage: "No se pudo generar el desglose de insumos del proyecto.",
+          signature: signatureOptions("input_breakdown", { type: inputBreakdownType }),
         });
         closeInputBreakdown();
       });

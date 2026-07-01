@@ -30,6 +30,7 @@ export function openUrlInNewTab(url) {
 
 export function openPdfViewer(url, options = {}) {
   const viewerUrl = new URL("/pdf-viewer", window.location.origin);
+  const signature = options.signature;
 
   viewerUrl.searchParams.set("url", url);
 
@@ -43,6 +44,15 @@ export function openPdfViewer(url, options = {}) {
 
   if (options.chrome === false) {
     viewerUrl.searchParams.set("chrome", "0");
+  }
+
+  if (signature?.projectId && signature?.reportKey) {
+    viewerUrl.searchParams.set("sign_project", String(signature.projectId));
+    viewerUrl.searchParams.set("sign_report", signature.reportKey);
+
+    if (signature.parameters && Object.keys(signature.parameters).length > 0) {
+      viewerUrl.searchParams.set("sign_params", JSON.stringify(signature.parameters));
+    }
   }
 
   return openUrlInNewTab(viewerUrl.toString());

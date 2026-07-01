@@ -35,4 +35,17 @@ return [
         ],
     ],
 
+    'ciudadania_digital' => [
+        'base_url' => env('CIUDADANIA_DIGITAL_BASE_URL'),
+        'prefix' => env('CIUDADANIA_DIGITAL_PREFIX', ''),
+        'client_id' => env('CIUDADANIA_DIGITAL_CLIENT_ID'),
+        'secret_id' => env('CIUDADANIA_DIGITAL_SECRET_ID'),
+        'redirect_uri' => env('CIUDADANIA_DIGITAL_REDIRECT_URI'),
+        'login_redirect_uri' => env('CIUDADANIA_DIGITAL_LOGIN_REDIRECT_URI'),
+        'approval_redirect_uri' => env('CIUDADANIA_DIGITAL_APPROVAL_REDIRECT_URI'),
+        'logout_redirect_uri' => env('CIUDADANIA_DIGITAL_LOGOUT_REDIRECT_URI'),
+        'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
+        'timeout' => env('CIUDADANIA_DIGITAL_TIMEOUT', 30),
+    ],
+
 ];

@@ -26,6 +26,8 @@ class ProjectPermissionService
                 'can_view_inputs_report' => true,
                 'can_view_unit_prices' => true,
                 'can_manage_templates' => true,
+                'can_sign_reports' => true,
+                'can_manage_signable_reports' => true,
             ];
         }
 
@@ -41,11 +43,16 @@ class ProjectPermissionService
             'can_view_input_breakdown' => ['DESGLOSE_ITEMS', 'CALCULAR_DESGLOSE'],
             'can_view_inputs_report' => ['REPORTE_INSUMOS', 'DESGLOSE_ITEMS'],
             'can_view_unit_prices' => ['PRECIOS_UNITARIOS', 'IMPRIMIR_PRECIOS_UNITARIOS', 'PRESUPUESTO_RUBRO'],
+            'can_sign_reports' => ['FIRMAR_REPORTES', 'FIRMAR_PRESUPUESTO_GENERAL', 'FIRMAS_DIGITALES'],
+            'can_manage_signable_reports' => ['CONFIGURAR_FIRMAS', 'FIRMAS_DIGITALES'],
         ]);
 
         $resolved['can_manage_templates'] = $this->permissions->allows($user, 'PARAMETROS', ['PLANILLAS_PROYECTO'])
             || $resolved['can_create']
             || $resolved['can_edit'];
+
+        $resolved['can_manage_signable_reports'] = $resolved['can_manage_signable_reports']
+            || $this->permissions->allows($user, 'ADMINISTRADOR', ['FIRMAS_DIGITALES', 'REPORTES_FIRMABLES']);
 
         $resolved['can_view_reports'] = $resolved['can_view_budget_by_group']
             || $resolved['can_view_incidence_summary']

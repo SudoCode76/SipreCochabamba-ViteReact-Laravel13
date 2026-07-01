@@ -33,12 +33,14 @@ const loadObrasAnalysisPage = () => import("@/modules/analysis/obras/pages/Obras
 const loadObrasCalculationPercentagesPage = () => import("@/modules/calculation-percentages/pages/ObrasCalculationPercentagesPage");
 const loadPriceRecalculationPage = () => import("@/modules/analysis/pages/PriceRecalculationPage");
 const loadPdfViewerPage = () => import("@/modules/pdf/pages/PdfViewerPage");
+const loadCitizenshipSignatureCallbackPage = () => import("@/modules/pdf/pages/CitizenshipSignatureCallbackPage");
 const loadProjectItemsPage = () => import("@/modules/projects/pages/ProjectItemsPage");
 const loadProjectTemplatesPage = () => import("@/modules/projects/pages/ProjectTemplatesPage");
 const loadProjectsPage = () => import("@/modules/projects/pages/ProjectsPage");
 const loadPromanAnalysisPage = () => import("@/modules/analysis/proman/pages/PromanAnalysisPage");
 const loadPromanCalculationPercentagesPage = () => import("@/modules/calculation-percentages/pages/PromanCalculationPercentagesPage");
 const loadRolesPage = () => import("@/modules/roles/pages/RolesPage");
+const loadSignableProjectReportsPage = () => import("@/modules/projects/pages/SignableProjectReportsPage");
 const loadSubgroupsPage = () => import("@/modules/groups/pages/SubgroupsPage");
 const loadUnitMeasuresPage = () => import("@/modules/input-types/pages/UnitMeasuresPage");
 const loadUpreAnalysisPage = () => import("@/modules/analysis/upre/pages/UpreAnalysisPage");
@@ -71,12 +73,14 @@ const ObrasAnalysisPage = lazy(loadObrasAnalysisPage);
 const ObrasCalculationPercentagesPage = lazy(loadObrasCalculationPercentagesPage);
 const PriceRecalculationPage = lazy(loadPriceRecalculationPage);
 const PdfViewerPage = lazy(loadPdfViewerPage);
+const CitizenshipSignatureCallbackPage = lazy(loadCitizenshipSignatureCallbackPage);
 const ProjectItemsPage = lazy(loadProjectItemsPage);
 const ProjectTemplatesPage = lazy(loadProjectTemplatesPage);
 const ProjectsPage = lazy(loadProjectsPage);
 const PromanAnalysisPage = lazy(loadPromanAnalysisPage);
 const PromanCalculationPercentagesPage = lazy(loadPromanCalculationPercentagesPage);
 const RolesPage = lazy(loadRolesPage);
+const SignableProjectReportsPage = lazy(loadSignableProjectReportsPage);
 const SubgroupsPage = lazy(loadSubgroupsPage);
 const UnitMeasuresPage = lazy(loadUnitMeasuresPage);
 const UpreAnalysisPage = lazy(loadUpreAnalysisPage);
@@ -119,6 +123,22 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     element: <LoginPage />,
+  },
+  {
+    path: "/ciudadania-digital/firma/callback",
+    element: routeElement(<CitizenshipSignatureCallbackPage phase="login" />),
+  },
+  {
+    path: "/ciudadania-digital/login/callback",
+    element: routeElement(<CitizenshipSignatureCallbackPage phase="login" />),
+  },
+  {
+    path: "/ciudadania-digital/aprobacion/callback",
+    element: routeElement(<CitizenshipSignatureCallbackPage phase="approval" />),
+  },
+  {
+    path: "/ciudadania-digital/logout/callback",
+    element: routeElement(<CitizenshipSignatureCallbackPage phase="logout" />),
   },
   {
     element: <ProtectedRoute />,
@@ -365,6 +385,10 @@ export const router = createBrowserRouter([
           {
             path: "/administracion/auditoria",
             element: routeElement(<AuditsPage />),
+          },
+          {
+            path: "/administracion/reportes-firmables",
+            element: routeElement(<SignableProjectReportsPage />),
           },
           {
             path: "/perfil",

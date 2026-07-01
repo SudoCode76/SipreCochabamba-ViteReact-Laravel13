@@ -4,6 +4,7 @@ namespace Tests\Feature\Project;
 
 use App\Models\Permission;
 use App\Models\ProjectItem;
+use App\Models\ProjectSignableReport;
 use App\Models\Role;
 use App\Models\SystemFunction;
 use App\Models\Unit;
@@ -147,6 +148,33 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.items.1.action', 'version_finalized')
             ->assertJsonPath('data.items.2.action', 'created')
             ->assertJsonPath('data.meta.total', 3);
+    }
+
+    public function test_admin_can_configure_signable_project_reports(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->getJson('/api/v1/signable-project-reports')
+            ->assertOk()
+            ->assertJsonPath('data.permissions.can_manage', true)
+            ->assertJsonPath('data.items.0.is_enabled', false);
+
+        $this->patchJson('/api/v1/signable-project-reports/general_budget', [
+            'is_enabled' => true,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.report.report_key', 'general_budget')
+            ->assertJsonPath('data.report.is_enabled', true);
+
+        $this->assertTrue(ProjectSignableReport::query()
+            ->where('report_key', 'general_budget')
+            ->value('is_enabled'));
+
+        Sanctum::actingAs($this->createProjectUserWithPermissions(['INDEX']));
+
+        $this->patchJson('/api/v1/signable-project-reports/general_budget', [
+            'is_enabled' => false,
+        ])->assertForbidden();
     }
 
     public function test_can_sort_projects_by_recent_and_oldest_registration(): void

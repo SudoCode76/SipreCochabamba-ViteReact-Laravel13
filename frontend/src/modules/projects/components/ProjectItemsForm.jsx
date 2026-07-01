@@ -608,8 +608,13 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
       const url = projectService.unitPricesPdfUrl(projectId, format);
 
       void validateAndOpenPdf(url, {
-        chrome: false,
+        title: "Precios unitarios",
         errorMessage: "No se pudo generar el PDF de precios unitarios.",
+        signature: {
+          projectId,
+          reportKey: "unit_prices",
+          parameters: { format },
+        },
       }, "No se pudo generar el PDF de precios unitarios.", "unit-prices");
     });
   };
@@ -622,6 +627,10 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
       void validateAndOpenPdf(url, {
         title: "Especificaciones del proyecto",
         errorMessage: "No se pudo generar el PDF de especificaciones del proyecto.",
+        signature: {
+          projectId,
+          reportKey: "specifications",
+        },
       }, "No se pudo generar el PDF de especificaciones del proyecto.", "specifications");
     });
   };
