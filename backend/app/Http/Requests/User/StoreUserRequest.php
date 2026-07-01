@@ -4,7 +4,6 @@ namespace App\Http\Requests\User;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 
 class StoreUserRequest extends FormRequest
 {
@@ -32,7 +31,7 @@ class StoreUserRequest extends FormRequest
             'funcionario' => ['required', 'string', 'max:80'],
             'ci' => ['required', 'string', 'max:30', Rule::unique('usuario', 'ci')],
             'username' => ['required', 'string', 'max:50', Rule::unique('usuario', 'username')],
-            'password' => ['required', 'string', 'confirmed', 'max:100', Password::min(8)],
+            'password' => ['required', 'string', 'confirmed', 'min:8', 'max:100'],
             'estado' => ['required', 'string', 'size:2', 'in:AC,DC'],
             'role_id' => ['required', 'integer', 'exists:rol,id_rol'],
             'unit_id' => ['nullable', 'integer', 'exists:unidad,id_unidad'],
@@ -41,6 +40,18 @@ class StoreUserRequest extends FormRequest
             'unidad.descripcion' => ['nullable', 'string', 'max:255'],
             'item' => ['nullable', 'integer'],
             'subalcaldia' => ['nullable', 'integer'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'password.required' => 'La contrasena es obligatoria.',
+            'password.confirmed' => 'La confirmacion no coincide.',
+            'password.min' => 'La contrasena debe tener al menos 8 caracteres.',
+            'password.max' => 'La contrasena no debe superar los 100 caracteres.',
+            'ci.unique' => 'Ya existe un usuario registrado con ese C.I.',
+            'username.unique' => 'Ya existe un usuario con ese nombre de usuario.',
         ];
     }
 }

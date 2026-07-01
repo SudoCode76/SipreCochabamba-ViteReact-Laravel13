@@ -9,11 +9,13 @@ use App\Models\ProjectSignableReport;
 use App\Modules\Projects\Services\ProjectReportSignatureService;
 use App\Modules\Projects\Services\ProjectSignableReportService;
 use App\Support\ApiResponse;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class ProjectReportSignatureController extends Controller
@@ -42,14 +44,17 @@ class ProjectReportSignatureController extends Controller
         }
 
         $validated = $request->validate([
-            'is_enabled' => ['required', 'boolean'],
+            'is_enabled' => ['required_without:requires_finalized_project', 'boolean'],
+            'requires_finalized_project' => ['required_without:is_enabled', 'boolean'],
         ]);
 
         $report = ProjectSignableReport::query()
             ->where('report_key', $reportKey)
             ->firstOrFail();
 
-        $report->forceFill(['is_enabled' => (bool) $validated['is_enabled']])->save();
+        $report->forceFill(collect($validated)
+            ->map(fn ($value): bool => (bool) $value)
+            ->all())->save();
 
         return ApiResponse::success([
             'report' => [
@@ -57,6 +62,7 @@ class ProjectReportSignatureController extends Controller
                 'name' => $report->name,
                 'description' => $report->description,
                 'is_enabled' => (bool) $report->is_enabled,
+                'requires_finalized_project' => (bool) $report->requires_finalized_project,
             ],
         ], 'Configuración de firma actualizada correctamente.');
     }
@@ -77,23 +83,44 @@ class ProjectReportSignatureController extends Controller
         if ($reportKey !== '') {
             $parameters = $this->signatureService->normalizeParameters($request->query());
             $hash = $this->signatureService->parametersHash($parameters);
-            $latest = $this->signatureService->latestSigned($project, $reportKey, $hash);
+            $latest = $this->signatureService->latest($project, $reportKey, $hash);
+            $latestSigned = $this->signatureService->latestSigned($project, $reportKey, $hash);
+            $report = $reports->firstWhere('report_key', $reportKey);
+            $projectIsFinalized = $project->isFrozen();
 
             return ApiResponse::success([
-                'project_is_finalized' => $project->isFrozen(),
-                'report' => $reports->firstWhere('report_key', $reportKey),
-                'latest_signed' => $latest ? $this->signatureService->serialize($latest) : null,
+                'project_is_finalized' => $projectIsFinalized,
+                'project_status_allows_signing' => $report
+                    ? (! ($report['requires_finalized_project'] ?? true) || $projectIsFinalized)
+                    : false,
+                'report' => $report,
+                'latest_signature' => $latest ? $this->signatureService->serialize($latest) : null,
+                'latest_signed' => $latestSigned ? $this->signatureService->serialize($latestSigned) : null,
             ], 'Estado de firma obtenido correctamente.');
         }
 
+        $projectIsFinalized = $project->isFrozen();
+
         return ApiResponse::success([
-            'project_is_finalized' => $project->isFrozen(),
+            'project_is_finalized' => $projectIsFinalized,
             'reports' => $reports,
         ], 'Estado de firma obtenido correctamente.');
     }
 
     public function sign(Request $request, Project $project, string $reportKey): JsonResponse
     {
+        if (! array_key_exists($reportKey, ProjectSignableReportService::REPORTS)) {
+            return ApiResponse::error('El reporte solicitado no existe.', [
+                'report_key' => ['El reporte solicitado no existe.'],
+            ], 404);
+        }
+
+        if (! $this->signableReportService->canSign($request->user(), $reportKey)) {
+            return ApiResponse::error('No tiene permisos para firmar este reporte.', [
+                'authorization' => ['No tiene permisos para firmar este reporte.'],
+            ], 403);
+        }
+
         $validated = $request->validate([
             'format' => ['nullable', 'string', 'in:PCA,PC_FPS,PC_UPRE,PC_FNDR,PC_OBRAS'],
             'type' => ['nullable', 'integer', 'in:1,2,3'],
@@ -102,7 +129,20 @@ class ProjectReportSignatureController extends Controller
             'acces_token' => ['nullable', 'string'],
         ]);
 
-        $signature = $this->signatureService->start($project, $reportKey, $validated, $request->user());
+        try {
+            $signature = $this->signatureService->start($project, $reportKey, $validated, $request->user());
+        } catch (AuthorizationException $exception) {
+            return ApiResponse::error($exception->getMessage() ?: 'No tiene permisos para firmar este reporte.', [
+                'authorization' => [$exception->getMessage() ?: 'No tiene permisos para firmar este reporte.'],
+            ], 403);
+        } catch (ValidationException $exception) {
+            $errors = $exception->errors();
+            $firstMessage = collect($errors)->flatten()->first()
+                ?: $exception->getMessage()
+                ?: 'No se pudo crear la solicitud de firma.';
+
+            return ApiResponse::error($firstMessage, $errors, 422);
+        }
 
         $serializedSignature = $this->signatureService->serialize($signature);
 
@@ -120,8 +160,16 @@ class ProjectReportSignatureController extends Controller
             ], 404);
         }
 
+        $validated = $request->validate([
+            'format' => ['nullable', 'string'],
+            'type' => ['nullable', 'integer'],
+            'fecha' => ['nullable', 'date'],
+        ]);
+        $parameters = $this->signatureService->normalizeParameters($validated);
+        $hash = $this->signatureService->parametersHash($parameters);
+
         return ApiResponse::success([
-            'items' => $this->signatureService->history($project, $reportKey),
+            'items' => $this->signatureService->history($project, $reportKey, $hash),
         ], 'Historial de firmas obtenido correctamente.');
     }
 
@@ -140,7 +188,7 @@ class ProjectReportSignatureController extends Controller
             return ApiResponse::error('No existe un documento firmado para este reporte.', null, 404);
         }
 
-        return response(Storage::disk('local')->get($signature->signed_file_path), 200, [
+        return response($this->signatureService->signedPdfContent($signature), 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="reporte_firmado.pdf"',
         ]);
@@ -180,7 +228,7 @@ class ProjectReportSignatureController extends Controller
 
     public function approvalCallback(Request $request): JsonResponse
     {
-        $code = (string) ($request->query('code') ?: $request->input('code') ?: $request->query('signature') ?: $request->input('signature'));
+        $code = $this->signatureReferenceFrom($request);
 
         if ($code === '') {
             return ApiResponse::error('No se recibió el código de firma.', [
@@ -227,5 +275,18 @@ class ProjectReportSignatureController extends Controller
         }
 
         return $this->approvalCallback($request);
+    }
+
+    private function signatureReferenceFrom(Request $request): string
+    {
+        foreach (['code', 'signature'] as $key) {
+            $value = $request->query($key) ?: $request->input($key);
+
+            if (filled($value)) {
+                return (string) $value;
+            }
+        }
+
+        return '';
     }
 }

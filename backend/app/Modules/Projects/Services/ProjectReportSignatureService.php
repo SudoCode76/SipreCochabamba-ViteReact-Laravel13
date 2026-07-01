@@ -7,6 +7,7 @@ use App\Models\ProjectReportSignature;
 use App\Models\User;
 use App\Services\Citizenship\CiudadaniaDigitalException;
 use App\Services\Citizenship\CiudadaniaDigitalClient;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -80,16 +81,15 @@ class ProjectReportSignatureService
 
         try {
             $accessToken = $this->accessTokenFrom($payload) ?: Cache::get($this->accessTokenCacheKey($signature));
-            $documentsResponse = $this->ciudadaniaDigitalClient->signedDocuments($accessToken);
+            $documentResponse = $this->ciudadaniaDigitalClient->approvedDocument($accessToken, (string) $signature->code);
             $signature->forceFill([
                 'response_payload' => array_merge($signature->response_payload ?? [], [
                     'callback' => $this->sanitizePayload($payload),
-                    'document_list' => $documentsResponse,
+                    'document_approval' => $documentResponse,
                 ]),
             ])->save();
 
-            $matchedDocument = $this->findSignedDocument($signature, $documentsResponse);
-            $documentUrl = (string) data_get($matchedDocument, 'url_documento');
+            $documentUrl = $this->documentUrlFromApproval($signature, $documentResponse);
             $content = $this->ciudadaniaDigitalClient->downloadDocument($documentUrl);
 
             if (! str_starts_with($content, '%PDF')) {
@@ -99,7 +99,7 @@ class ProjectReportSignatureService
             $validationResponse = $this->ciudadaniaDigitalClient->validateSignedDocument($content, $this->signedDocumentName($signature), $accessToken);
             $signature->forceFill([
                 'response_payload' => array_merge($signature->response_payload ?? [], [
-                    'matched_document' => $matchedDocument,
+                    'matched_document' => data_get($documentResponse, 'data'),
                     'signed_document_url' => $documentUrl,
                     'validation' => $validationResponse,
                 ]),
@@ -118,8 +118,8 @@ class ProjectReportSignatureService
                 'signed_file_path' => $signedPath,
                 'response_payload' => array_merge($signature->response_payload ?? [], [
                     'callback' => $this->sanitizePayload($payload),
-                    'document_list' => $documentsResponse,
-                    'matched_document' => $matchedDocument,
+                    'document_approval' => $documentResponse,
+                    'matched_document' => data_get($documentResponse, 'data'),
                     'signed_document_url' => $documentUrl,
                     'validation' => $validationResponse,
                     'logout' => $logoutResponse,
@@ -146,16 +146,56 @@ class ProjectReportSignatureService
         }
     }
 
-    public function history(Project $project, string $reportKey): array
+    public function history(Project $project, string $reportKey, ?string $parametersHash = null): array
     {
         return ProjectReportSignature::query()
             ->with('user')
             ->where('id_proyecto', $project->id_proyecto)
             ->where('report_key', $reportKey)
+            ->when($parametersHash, fn ($query) => $query->where('parameters_hash', $parametersHash))
             ->latest('id')
             ->get()
             ->map(fn (ProjectReportSignature $signature): array => $this->serialize($signature))
             ->all();
+    }
+
+    public function latest(Project $project, string $reportKey, ?string $parametersHash = null): ?ProjectReportSignature
+    {
+        return ProjectReportSignature::query()
+            ->with('user')
+            ->where('id_proyecto', $project->id_proyecto)
+            ->where('report_key', $reportKey)
+            ->when($parametersHash, fn ($query) => $query->where('parameters_hash', $parametersHash))
+            ->latest('id')
+            ->first();
+    }
+
+    public function signedPdfContent(ProjectReportSignature $signature): string
+    {
+        $externalUrl = data_get($signature->response_payload, 'signed_document_url');
+
+        if (is_string($externalUrl) && $externalUrl !== '') {
+            try {
+                $content = $this->ciudadaniaDigitalClient->downloadDocument($externalUrl);
+
+                if (str_starts_with($content, '%PDF')) {
+                    return $content;
+                }
+            } catch (CiudadaniaDigitalException $exception) {
+                Log::notice('No se pudo descargar el PDF firmado externo, se usara copia local si existe.', [
+                    'trace_id' => $signature->trace_id,
+                    'signature_id' => $signature->id,
+                    'phase' => $exception->phase(),
+                    'http_status' => $exception->httpStatus(),
+                ]);
+            }
+        }
+
+        if ($signature->signed_file_path && Storage::disk('local')->exists($signature->signed_file_path)) {
+            return Storage::disk('local')->get($signature->signed_file_path);
+        }
+
+        throw new RuntimeException('No existe un documento firmado para este reporte.');
     }
 
     public function latestSigned(Project $project, string $reportKey, ?string $parametersHash = null): ?ProjectReportSignature
@@ -193,6 +233,8 @@ class ProjectReportSignatureService
             'logout_redirect_url' => data_get($signature->response_payload, 'logout_redirect_url'),
             'signed_document_url' => data_get($signature->response_payload, 'signed_document_url'),
             'validation' => data_get($signature->response_payload, 'validation'),
+            'citizenship_user' => data_get($signature->response_payload, 'ciudadania_user.data'),
+            'validation_records' => data_get($signature->response_payload, 'validation.data.registros', []),
             'error_message' => $signature->error_message,
         ];
     }
@@ -212,22 +254,22 @@ class ProjectReportSignatureService
 
     private function assertCanStart(Project $project, string $reportKey, User $user): void
     {
-        if (! $project->isFrozen()) {
-            throw ValidationException::withMessages([
-                'project' => ['Solo proyectos FINALIZADOS pueden firmarse digitalmente.'],
-            ]);
-        }
+        $report = $this->signableReportService->findEnabled($reportKey);
 
-        if (! $this->signableReportService->findEnabled($reportKey)) {
+        if (! $report) {
             throw ValidationException::withMessages([
                 'report_key' => ['Este reporte no está habilitado para firma digital.'],
             ]);
         }
 
-        if (! $this->signableReportService->canSign($user, $reportKey)) {
+        if (! $this->signableReportService->projectStatusAllowsSigning($report, $project->isFrozen())) {
             throw ValidationException::withMessages([
-                'authorization' => ['No tiene permisos para firmar este reporte.'],
+                'project' => ['Este reporte solo permite firma digital en proyectos FINALIZADOS.'],
             ]);
+        }
+
+        if (! $this->signableReportService->canSign($user, $reportKey)) {
+            throw new AuthorizationException('No tiene permisos para firmar este reporte.');
         }
     }
 
@@ -323,12 +365,112 @@ class ProjectReportSignatureService
         throw new RuntimeException($this->messageWithTrace('No se encontro el documento firmado correspondiente a esta solicitud.', $signature));
     }
 
+    private function documentUrlFromApproval(ProjectReportSignature $signature, array $response): string
+    {
+        $url = data_get($response, 'data.url_documento')
+            ?: data_get($response, 'url_documento')
+            ?: data_get($response, 'data.url_document')
+            ?: data_get($response, 'url_document');
+
+        if (! is_string($url) || $url === '') {
+            throw new RuntimeException($this->messageWithTrace('Ciudadania Digital no devolvio la URL del documento firmado.', $signature));
+        }
+
+        return $url;
+    }
+
     private function isValidationSuccessful(array $response): bool
     {
         return data_get($response, 'data.verificacion_exitosa') === true
             || data_get($response, 'data.verificacion_exitosa') === 'true'
             || data_get($response, 'data.verification_successful') === true
             || data_get($response, 'data.verification_successful') === 'true';
+    }
+
+    private function previousSignedFor(ProjectReportSignature $signature): ?ProjectReportSignature
+    {
+        return ProjectReportSignature::query()
+            ->where('id_proyecto', $signature->id_proyecto)
+            ->where('report_key', $signature->report_key)
+            ->where('parameters_hash', $signature->parameters_hash)
+            ->where('status', 'signed')
+            ->whereNotNull('signed_file_path')
+            ->where('id', '!=', $signature->id)
+            ->latest('id')
+            ->first();
+    }
+
+    private function assertCanDeriveFromPreviousSignature(
+        ProjectReportSignature $signature,
+        ProjectReportSignature $previousSigned,
+        ?array $userInfo,
+        ?string $accessToken
+    ): string {
+        $currentDocumentNumber = $this->citizenshipDocumentNumber($userInfo);
+
+        if ($currentDocumentNumber === '') {
+            throw ValidationException::withMessages([
+                'signature' => ['No se pudo validar el documento de identidad del usuario de Ciudadanía Digital.'],
+            ]);
+        }
+
+        $documentResponse = $this->ciudadaniaDigitalClient->approvedDocument($accessToken, (string) $previousSigned->code);
+        $documentUrl = $this->documentUrlFromApproval($previousSigned, $documentResponse);
+        $content = $this->ciudadaniaDigitalClient->downloadDocument($documentUrl);
+
+        if (! str_starts_with($content, '%PDF')) {
+            throw new RuntimeException('El documento firmado anterior descargado no es un PDF valido.');
+        }
+
+        $validationResponse = $this->ciudadaniaDigitalClient->validateSignedDocument(
+            $content,
+            $this->signedDocumentName($previousSigned),
+            $accessToken
+        );
+
+        if (! $this->isValidationSuccessful($validationResponse)) {
+            throw new RuntimeException('Ciudadania Digital no valido correctamente el documento firmado anterior.');
+        }
+
+        $previousSigned->forceFill([
+            'response_payload' => array_merge($previousSigned->response_payload ?? [], [
+                'document_approval' => $documentResponse,
+                'signed_document_url' => $documentUrl,
+                'validation' => $validationResponse,
+            ]),
+        ])->save();
+
+        foreach ($this->validationRecords($validationResponse) as $record) {
+            if ($this->normalizeDocumentNumber(data_get($record, 'nro_documento')) === $currentDocumentNumber) {
+                throw ValidationException::withMessages([
+                    'signature' => ['Esta persona ya firmó este documento.'],
+                ]);
+            }
+        }
+
+        return $documentUrl;
+    }
+
+    private function citizenshipDocumentNumber(?array $userInfo): string
+    {
+        return $this->normalizeDocumentNumber(
+            data_get($userInfo, 'data.numero_documento')
+            ?: data_get($userInfo, 'data.nro_documento')
+            ?: data_get($userInfo, 'numero_documento')
+            ?: data_get($userInfo, 'nro_documento')
+        );
+    }
+
+    private function validationRecords(array $response): array
+    {
+        $records = data_get($response, 'data.registros', []);
+
+        return is_array($records) ? $records : [];
+    }
+
+    private function normalizeDocumentNumber(mixed $value): string
+    {
+        return Str::upper(preg_replace('/[^A-Za-z0-9]/', '', (string) $value) ?: '');
     }
 
     private function safeUserInfo(ProjectReportSignature $signature, ?string $accessToken): ?array
@@ -387,6 +529,15 @@ class ProjectReportSignatureService
     private function requestApproval(ProjectReportSignature $signature, array $parameters): ProjectReportSignature
     {
         $accessToken = $this->accessTokenFrom($parameters);
+        $signatureCode = $this->signatureCode($signature);
+        $validFrom = now();
+        $validTo = $validFrom->copy()->addMonth();
+        $previousSigned = $this->previousSignedFor($signature);
+
+        if ($signature->code !== $signatureCode) {
+            $signature->forceFill(['code' => $signatureCode])->save();
+        }
+
         $payload = [
             'acces_token' => $accessToken,
             'save' => 'false',
@@ -395,10 +546,12 @@ class ProjectReportSignatureService
             'descripcion_documento' => $this->description($signature->project, $signature->report_key),
             'nombre_documento' => $this->signedDocumentName($signature),
             'redirect_uri' => $this->approvalCallbackUrl($signature),
-            'code' => (string) $signature->id,
+            'code' => $signatureCode,
             'format_sign' => 'false',
             'asignaciones' => '',
             'num_documento' => '',
+            'valid_from' => $validFrom->toIso8601String(),
+            'valid_to' => $validTo->toIso8601String(),
         ];
 
         try {
@@ -407,22 +560,34 @@ class ProjectReportSignatureService
             }
 
             $userInfo = $this->safeUserInfo($signature, $accessToken);
-            $response = $this->ciudadaniaDigitalClient->createSigningUrl($signature->base_file_path, $payload);
+            if ($previousSigned) {
+                $payload['firmar_derivacion'] = 'true';
+                $payload['url_document'] = $this->assertCanDeriveFromPreviousSignature(
+                    $signature,
+                    $previousSigned,
+                    $userInfo,
+                    $accessToken
+                );
+                $response = $this->ciudadaniaDigitalClient->createDerivedSigningUrl($payload);
+            } else {
+                $payload['is_derivated'] = 'true';
+                $response = $this->ciudadaniaDigitalClient->createSigningUrl($signature->base_file_path, $payload);
+            }
+            $safeRequestPayload = Arr::except($payload, ['acces_token']);
             $signature->forceFill([
                 'response_payload' => array_merge($response, [
                     'ciudadania_user' => $userInfo,
                     'document_name' => $this->signedDocumentName($signature),
                 ]),
-                'request_payload' => Arr::except($payload, ['acces_token']),
+                'request_payload' => $safeRequestPayload,
             ])->save();
 
             $redirectUrl = $this->redirectUrlFromResponse($response);
-            $code = (string) (data_get($response, 'data.code') ?: data_get($response, 'code') ?: $signature->id);
 
             $signature->forceFill([
                 'status' => 'sent',
-                'code' => $code,
-                'request_payload' => Arr::except($payload, ['acces_token']),
+                'code' => $signatureCode,
+                'request_payload' => $safeRequestPayload,
                 'response_payload' => array_merge($response, [
                     'ciudadania_user' => $userInfo,
                     'document_name' => $this->signedDocumentName($signature),
@@ -538,6 +703,11 @@ class ProjectReportSignatureService
     private function signedDocumentName(ProjectReportSignature $signature): string
     {
         return sprintf('sipre_firma_%d_%s.pdf', $signature->id, Str::slug($signature->report_key, '_'));
+    }
+
+    private function signatureCode(ProjectReportSignature $signature): string
+    {
+        return $signature->code ?: 'code-'.$signature->id;
     }
 
     private function accessTokenFrom(array $payload): ?string

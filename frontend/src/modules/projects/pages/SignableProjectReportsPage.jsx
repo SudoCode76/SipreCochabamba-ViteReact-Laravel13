@@ -41,7 +41,9 @@ export default function SignableProjectReportsPage() {
           </div>
           <div>
             <CardTitle className="text-2xl tracking-[-0.04em]">Reportes firmables</CardTitle>
-            <CardDescription>Habilita o deshabilita globalmente qué PDFs de proyecto pueden firmarse.</CardDescription>
+            <CardDescription>
+              Habilita qué PDFs de proyecto pueden firmarse y si requieren una versión finalizada.
+            </CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -66,6 +68,7 @@ export default function SignableProjectReportsPage() {
                 <tr>
                   <th className="px-5 py-4">Reporte</th>
                   <th className="px-5 py-4">Estado</th>
+                  <th className="px-5 py-4">Requisito</th>
                   <th className="px-5 py-4 text-right">Acción</th>
                 </tr>
               </thead>
@@ -80,6 +83,31 @@ export default function SignableProjectReportsPage() {
                       <Badge className={item.is_enabled ? "bg-emerald-600 text-white" : "bg-slate-500 text-white"}>
                         {item.is_enabled ? "HABILITADO" : "DESHABILITADO"}
                       </Badge>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex flex-col gap-2">
+                        <Badge
+                          className={
+                            item.requires_finalized_project
+                              ? "bg-blue-600 text-white"
+                              : "bg-amber-500 text-white"
+                          }
+                        >
+                          {item.requires_finalized_project ? "SOLO FINALIZADOS" : "CUALQUIER ESTADO"}
+                        </Badge>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={!canManage || updateMutation.isPending || isFetching}
+                          onClick={() => updateMutation.mutate({
+                            reportKey: item.report_key,
+                            payload: { requires_finalized_project: !item.requires_finalized_project },
+                          })}
+                        >
+                          {item.requires_finalized_project ? "Permitir no finalizados" : "Exigir finalizado"}
+                        </Button>
+                      </div>
                     </td>
                     <td className="px-5 py-4 text-right">
                       <Button

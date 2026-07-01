@@ -100,8 +100,8 @@ export const projectService = {
     return response.data;
   },
 
-  reportSignatures: async (projectId, reportKey) => {
-    const response = await apiClient.get(`/v1/projects/${projectId}/reports/${reportKey}/signatures`);
+  reportSignatures: async (projectId, reportKey, params = {}) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/reports/${reportKey}/signatures`, { params });
     return response.data;
   },
 

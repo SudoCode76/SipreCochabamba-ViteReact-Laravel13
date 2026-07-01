@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, FileSignature, FileText, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, CheckCircle2, ExternalLink, FileSignature, FileText, History, Loader2, RefreshCw, X } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 import { apiOrigin } from "@/lib/api/client";
+import { buildPdfViewerUrl, openUrlInNewTab } from "@/lib/utils/pdf";
 import { projectService } from "@/modules/projects/services/project.service";
 
 const DEFAULT_ERROR_MESSAGE = "No se pudo generar el PDF.";
@@ -78,6 +79,74 @@ function readApiError(error, fallback) {
   return message;
 }
 
+function formatSignatureDate(value) {
+  if (!value) {
+    return "-";
+  }
+
+  try {
+    return new Intl.DateTimeFormat("es-BO", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
+  } catch {
+    return String(value);
+  }
+}
+
+function signatureStatusMeta(signatureStatus) {
+  const latestSigned = signatureStatus?.latest_signed;
+  const latestSignature = signatureStatus?.latest_signature;
+
+  if (latestSigned?.has_signed_file) {
+    return {
+      label: "Firmado",
+      className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    };
+  }
+
+  if (latestSignature?.status && !["signed", "failed", "error", "cancelled"].includes(latestSignature.status)) {
+    return {
+      label: "Firma pendiente",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    };
+  }
+
+  if (latestSignature?.status === "failed" || latestSignature?.status === "error") {
+    return {
+      label: "Firma con error",
+      className: "border-rose-200 bg-rose-50 text-rose-700",
+    };
+  }
+
+  return {
+    label: "Sin firma",
+    className: "border-slate-200 bg-slate-50 text-slate-600",
+  };
+}
+
+function signerLabel(signature) {
+  const validationRecords = Array.isArray(signature?.validation_records) ? signature.validation_records : [];
+  const citizenshipUser = signature?.citizenship_user;
+  const validationNames = validationRecords
+    .map((record) => [
+      record?.nombres,
+      record?.primer_apellido,
+      record?.segundo_apellido,
+    ].filter(Boolean).join(" ").trim())
+    .filter(Boolean);
+
+  if (validationNames.length > 0) {
+    return validationNames.join(", ");
+  }
+
+  const fullName = [
+    citizenshipUser?.nombre,
+  ].filter(Boolean).join(" ");
+
+  return fullName || citizenshipUser?.nombre || signature?.user_name || "Sin firmante registrado";
+}
+
 function resolveAllowedPdfUrl(rawUrl) {
   if (!rawUrl) {
     return null;
@@ -115,16 +184,64 @@ export default function PdfViewerPage() {
   const [signatureLoading, setSignatureLoading] = useState(false);
   const [signatureError, setSignatureError] = useState("");
   const [signing, setSigning] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [signatureHistory, setSignatureHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+
+  const latestSigned = signatureStatus?.latest_signed;
+  const hasSignedPdf = Boolean(latestSigned?.has_signed_file);
+  const statusMeta = signatureStatusMeta(signatureStatus);
 
   const canSignPdf = Boolean(
     !loading
       && !error
       && blobUrl
       && hasSignatureContext
-      && signatureStatus?.project_is_finalized
+      && signatureStatus?.project_status_allows_signing
       && signatureStatus?.report?.is_enabled
       && signatureStatus?.report?.can_sign,
   );
+  const signatureRestrictionMessage = useMemo(() => {
+    if (!hasSignatureContext || signatureLoading || signatureError || !signatureStatus?.report) {
+      return "";
+    }
+
+    if (!signatureStatus.report.is_enabled) {
+      return "La firma digital no está habilitada para este reporte.";
+    }
+
+    if (!signatureStatus.project_status_allows_signing) {
+      return "Este reporte solo puede firmarse cuando el proyecto está finalizado.";
+    }
+
+    if (!signatureStatus.report.can_sign) {
+      return "Su rol no tiene permiso para firmar este reporte.";
+    }
+
+    return "";
+  }, [hasSignatureContext, signatureError, signatureLoading, signatureStatus]);
+
+  const openSignedPdf = (signature = latestSigned) => {
+    if (!signature?.has_signed_file) {
+      return;
+    }
+
+    const signedUrl = projectService.latestSignedReportUrl(
+      signature.project_id || signatureProjectId,
+      signature.report_key || signatureReportKey,
+      signature.parameters || signatureParameters,
+    );
+
+    openUrlInNewTab(buildPdfViewerUrl(signedUrl, {
+      title: "PDF firmado",
+      signature: {
+        projectId: signature.project_id || signatureProjectId,
+        reportKey: signature.report_key || signatureReportKey,
+        parameters: signature.parameters || signatureParameters,
+      },
+    }));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -281,6 +398,26 @@ export default function PdfViewerPage() {
     }
   };
 
+  const handleOpenHistory = async () => {
+    if (!hasSignatureContext) {
+      return;
+    }
+
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    setHistoryError("");
+
+    try {
+      const response = await projectService.reportSignatures(signatureProjectId, signatureReportKey, signatureParameters);
+      setSignatureHistory(response?.data?.items ?? []);
+    } catch (historyLoadError) {
+      setHistoryError(readApiError(historyLoadError, "No se pudo cargar el historial de firmas."));
+      setSignatureHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col bg-slate-100 text-slate-950">
       {showChrome ? (
@@ -295,6 +432,12 @@ export default function PdfViewerPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {!error && hasSignatureContext && !signatureLoading ? (
+              <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${statusMeta.className}`}>
+                {hasSignedPdf ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+                {statusMeta.label}
+              </span>
+            ) : null}
             {signatureLoading && !error ? (
               <span className="inline-flex items-center gap-2 text-sm text-slate-500">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -303,6 +446,29 @@ export default function PdfViewerPage() {
             ) : null}
             {!error && signatureError ? (
               <span className="max-w-sm text-right text-xs leading-5 text-red-600">{signatureError}</span>
+            ) : null}
+            {!error && signatureRestrictionMessage ? (
+              <span className="max-w-sm text-right text-xs leading-5 text-slate-500">{signatureRestrictionMessage}</span>
+            ) : null}
+            {!error && hasSignedPdf ? (
+              <button
+                type="button"
+                onClick={() => openSignedPdf()}
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 shadow-sm transition hover:bg-emerald-100"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Abrir PDF firmado
+              </button>
+            ) : null}
+            {!error && hasSignatureContext ? (
+              <button
+                type="button"
+                onClick={handleOpenHistory}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                <History className="h-4 w-4" />
+                Historial
+              </button>
             ) : null}
             {canSignPdf ? (
               <button
@@ -360,6 +526,85 @@ export default function PdfViewerPage() {
           />
         ) : null}
       </section>
+
+      {historyOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+              <div>
+                <h2 className="text-lg font-semibold">Historial de firmas</h2>
+                <p className="mt-1 text-sm text-slate-500">Firmas del reporte y parámetros visualizados.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(false)}
+                className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Cerrar historial"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto p-5">
+              {historyLoading ? (
+                <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 p-8 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Cargando historial...
+                </div>
+              ) : null}
+
+              {!historyLoading && historyError ? (
+                <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">{historyError}</div>
+              ) : null}
+
+              {!historyLoading && !historyError && signatureHistory.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
+                  No hay firmas registradas para estos parámetros.
+                </div>
+              ) : null}
+
+              {!historyLoading && !historyError && signatureHistory.length > 0 ? (
+                <div className="space-y-3">
+                  {signatureHistory.map((signature) => (
+                    <div key={signature.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                              signature.status === "signed"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : signature.status === "failed" || signature.status === "error"
+                                  ? "bg-rose-100 text-rose-700"
+                                  : "bg-amber-100 text-amber-700"
+                            }`}
+                            >
+                              {signature.status === "signed" ? "Firmado" : signature.status}
+                            </span>
+                            <span className="text-xs text-slate-500">{formatSignatureDate(signature.signed_at || signature.sent_at)}</span>
+                          </div>
+                          <div className="mt-2 text-sm font-medium text-slate-900">{signerLabel(signature)}</div>
+                          <div className="mt-1 text-xs text-slate-500">SIPRE: {signature.user_name || "Sin usuario"} · Seguimiento: {signature.trace_id}</div>
+                        </div>
+
+                        {signature.has_signed_file ? (
+                          <button
+                            type="button"
+                            onClick={() => openSignedPdf(signature)}
+                            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            Abrir firmado
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

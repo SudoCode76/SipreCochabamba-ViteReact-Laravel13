@@ -57,19 +57,24 @@ class ProjectSignableReportService
     {
         $permissions = $this->projectPermissionService->resolve($user);
         $canManage = $this->canManage($user);
+        $canSignReports = $this->hasSigningPermission($user);
 
         return ProjectSignableReport::query()
             ->orderBy('id')
             ->get()
-            ->map(function (ProjectSignableReport $report) use ($permissions, $canManage): array {
+            ->map(function (ProjectSignableReport $report) use ($permissions, $canManage, $canSignReports): array {
                 $definition = self::REPORTS[$report->report_key] ?? [];
+                $reportPermission = (string) ($definition['permission'] ?? '');
 
                 return [
                     'report_key' => $report->report_key,
                     'name' => $report->name,
                     'description' => $report->description,
                     'is_enabled' => (bool) $report->is_enabled,
-                    'can_sign' => (bool) ($permissions[$definition['permission'] ?? ''] ?? false),
+                    'requires_finalized_project' => (bool) $report->requires_finalized_project,
+                    'can_sign' => (bool) $report->is_enabled
+                        && $canSignReports
+                        && (bool) ($permissions[$reportPermission] ?? false),
                     'available_actions' => [
                         'manage' => $canManage,
                     ],
@@ -93,13 +98,13 @@ class ProjectSignableReportService
             return false;
         }
 
-        if ($this->permissionResolverService->allows($user, 'PROYECTO', ['FIRMAR_REPORTES', 'FIRMAR_PRESUPUESTO_GENERAL', 'FIRMAS_DIGITALES'])) {
-            $permissions = $this->projectPermissionService->resolve($user);
-
-            return (bool) ($permissions[self::REPORTS[$reportKey]['permission']] ?? false);
+        if (! $this->hasSigningPermission($user)) {
+            return false;
         }
 
-        return $user->isAdministrator();
+        $permissions = $this->projectPermissionService->resolve($user);
+
+        return (bool) ($permissions[self::REPORTS[$reportKey]['permission']] ?? false);
     }
 
     public function findEnabled(string $reportKey): ?ProjectSignableReport
@@ -108,5 +113,24 @@ class ProjectSignableReportService
             ->where('report_key', $reportKey)
             ->where('is_enabled', true)
             ->first();
+    }
+
+    public function projectStatusAllowsSigning(ProjectSignableReport $report, bool $projectIsFinalized): bool
+    {
+        return ! $report->requires_finalized_project || $projectIsFinalized;
+    }
+
+    private function hasSigningPermission(?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return $user->isAdministrator()
+            || $this->permissionResolverService->allows($user, 'PROYECTO', [
+                'FIRMAR_REPORTES',
+                'FIRMAR_PRESUPUESTO_GENERAL',
+                'FIRMAS_DIGITALES',
+            ]);
     }
 }

@@ -13,12 +13,14 @@ class ProjectSignableReport extends Model
         'name',
         'description',
         'is_enabled',
+        'requires_finalized_project',
     ];
 
     protected function casts(): array
     {
         return [
             'is_enabled' => 'boolean',
+            'requires_finalized_project' => 'boolean',
         ];
     }
 }

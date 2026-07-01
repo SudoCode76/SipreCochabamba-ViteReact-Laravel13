@@ -16,6 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { downloadUrl, openPdfViewer } from "@/lib/utils/pdf";
 import ProjectEditForm from "../components/ProjectEditForm";
+import ReportSignatureStatus from "../components/ReportSignatureStatus";
 import { getProjectApprovalLabel, PROJECT_APPROVAL_LABELS } from "../lib/project-status";
 import { projectService } from "../services/project.service";
 
@@ -1241,6 +1242,11 @@ export default function ProjectsPage() {
             <CardContent className="space-y-4 p-5">
               {renderReportVersionSelector()}
 
+              <ReportSignatureStatus
+                projectId={resolvedReportProjectId}
+                reportKey={exportChoice.reportKey}
+              />
+
               <div className="grid gap-3 sm:grid-cols-2">
                 <Button type="button" variant="outline" className="h-12 gap-2 rounded-xl" onClick={handleExportChoicePdf}>
                   <FileSpreadsheet className="h-4 w-4" />
@@ -1618,6 +1624,12 @@ export default function ProjectsPage() {
                     />
                   </div>
 
+                  <ReportSignatureStatus
+                    projectId={resolvedReportProjectId}
+                    reportKey="budget_recalculation"
+                    parameters={recalculateDate ? { fecha: recalculateDate } : {}}
+                  />
+
                   <div className="flex justify-end gap-2 pt-2">
                     <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={closeRecalculate}>
                       Cancelar
@@ -1685,6 +1697,12 @@ export default function ProjectsPage() {
                     </select>
                   </div>
 
+                  <ReportSignatureStatus
+                    projectId={resolvedReportProjectId}
+                    reportKey="incidence_summary"
+                    parameters={{ format: incidenceFormat }}
+                  />
+
                   <div className="flex justify-end gap-3">
                     <Button type="button" variant="outline" onClick={closeIncidenceSummary}>Cancelar</Button>
                     <Button type="button" variant="outline" onClick={handleIncidenceSummaryXlsx}>Exportar XLSX</Button>
@@ -1740,6 +1758,12 @@ export default function ProjectsPage() {
                       <option value="PC_OBRAS">PC_OBRAS</option>
                     </select>
                   </div>
+
+                  <ReportSignatureStatus
+                    projectId={resolvedReportProjectId}
+                    reportKey="general_budget"
+                    parameters={{ format: generalBudgetFormat }}
+                  />
 
                   <div className="flex justify-end gap-3">
                     <Button type="button" variant="outline" onClick={closeGeneralBudget}>Cancelar</Button>
@@ -1797,6 +1821,12 @@ export default function ProjectsPage() {
                       <option value="3">Maquinaria y Herramientas</option>
                     </select>
                   </div>
+
+                  <ReportSignatureStatus
+                    projectId={resolvedReportProjectId}
+                    reportKey="input_breakdown"
+                    parameters={{ type: inputBreakdownType }}
+                  />
 
                   <div className="flex justify-end gap-3">
                     <Button type="button" variant="outline" onClick={closeInputBreakdown}>Cancelar</Button>

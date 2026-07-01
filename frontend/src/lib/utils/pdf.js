@@ -28,7 +28,7 @@ export function openUrlInNewTab(url) {
   return openedWindow;
 }
 
-export function openPdfViewer(url, options = {}) {
+export function buildPdfViewerUrl(url, options = {}) {
   const viewerUrl = new URL("/pdf-viewer", window.location.origin);
   const signature = options.signature;
 
@@ -55,7 +55,11 @@ export function openPdfViewer(url, options = {}) {
     }
   }
 
-  return openUrlInNewTab(viewerUrl.toString());
+  return viewerUrl.toString();
+}
+
+export function openPdfViewer(url, options = {}) {
+  return openUrlInNewTab(buildPdfViewerUrl(url, options));
 }
 
 export function openPdfInNewTab(path, params = {}) {

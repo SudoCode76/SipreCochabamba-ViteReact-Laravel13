@@ -62,16 +62,50 @@ const initialForm = {
   unit_description: "",
 };
 
+const passwordMinLength = 8;
+
+const rawValidationMessages = {
+  "validation.min.string": "La contraseña debe tener al menos 8 caracteres.",
+  "validation.password.min": "La contraseña debe tener al menos 8 caracteres.",
+  "validation.required": "Este campo es obligatorio.",
+  "validation.confirmed": "La confirmación no coincide.",
+  "validation.unique": "El valor ingresado ya está registrado.",
+};
+
+function translateFormError(field, message) {
+  if (!message) return message;
+
+  if (message === "validation.unique") {
+    if (field === "username" || field === "usuario") return "Ya existe un usuario con ese nombre de usuario.";
+    if (field === "ci" || field === "documento") return "Ya existe un usuario registrado con ese C.I.";
+  }
+
+  if (field === "password" && (message === "validation.min.string" || message === "validation.password.min")) {
+    return "La contraseña debe tener al menos 8 caracteres.";
+  }
+
+  if (field === "password" && message === "validation.required") {
+    return "La contraseña es obligatoria.";
+  }
+
+  if (field === "password_confirmation" && message === "validation.required") {
+    return "La confirmación es obligatoria.";
+  }
+
+  if (field === "password" && message === "validation.confirmed") {
+    return "La confirmación no coincide.";
+  }
+
+  return rawValidationMessages[message] ?? message;
+}
+
 function normalizeFormErrors(errors = {}) {
-  const translated = { ...errors };
-
-  if (translated.username?.[0]) {
-    translated.username = ["Ya existe un usuario con ese nombre de usuario."];
-  }
-
-  if (translated.ci?.[0]) {
-    translated.ci = ["Ya existe un usuario registrado con ese C.I."];
-  }
+  const translated = Object.fromEntries(
+    Object.entries(errors).map(([field, messages]) => [
+      field,
+      (Array.isArray(messages) ? messages : [messages]).map((message) => translateFormError(field, message)),
+    ]),
+  );
 
   return {
     ...translated,
@@ -356,6 +390,7 @@ export default function UsersPage() {
 
     if (!isEditing) {
       if (!form.password) nextErrors.password = ["La contraseña es obligatoria."];
+      else if (form.password.length < passwordMinLength) nextErrors.password = ["La contraseña debe tener al menos 8 caracteres."];
       if (!form.password_confirmation) nextErrors.password_confirmation = ["La confirmación es obligatoria."];
       if (form.password && form.password_confirmation && form.password !== form.password_confirmation) {
         nextErrors.password_confirmation = ["La confirmación no coincide."];
@@ -891,6 +926,7 @@ export default function UsersPage() {
                               Contraseña
                             </Label>
                             <Input id="password" type="password" value={form.password} onChange={handleFormChange} className="h-12 rounded-2xl border-border/80 bg-background/90" />
+                            {!formErrors.password && <p className="text-xs text-muted-foreground">Mínimo 8 caracteres.</p>}
                             {formErrors.password && <p className="text-sm text-destructive">{formErrors.password[0]}</p>}
                           </div>
 

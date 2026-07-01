@@ -47,6 +47,24 @@ class CiudadaniaDigitalClient
         return $this->jsonOrFail($response, $endpoint, $requestPayload, 'create_url', 'Ciudadanía Digital rechazó la solicitud de firma.');
     }
 
+    public function createDerivedSigningUrl(array $payload): array
+    {
+        $this->ensureConfigured();
+
+        $endpoint = $this->url('aprovador-v2/url');
+        $requestPayload = array_merge($this->credentials(), $payload);
+
+        try {
+            $response = $this->http()
+                ->asMultipart()
+                ->post($endpoint, $requestPayload);
+        } catch (ConnectionException $exception) {
+            throw $this->connectionException($endpoint, $requestPayload, $exception, 'create_url');
+        }
+
+        return $this->jsonOrFail($response, $endpoint, $requestPayload, 'create_url', 'Ciudadanía Digital rechazó la solicitud de firma.');
+    }
+
     public function userInfo(?string $accessToken = null): array
     {
         $this->ensureConfigured();
@@ -82,6 +100,25 @@ class CiudadaniaDigitalClient
         }
 
         return $this->jsonOrFail($response, $endpoint, $requestPayload, 'fetch_signed_documents', 'No se pudieron obtener los documentos firmados.');
+    }
+
+    public function approvedDocument(?string $accessToken, string $code): array
+    {
+        $this->ensureConfigured();
+
+        $endpoint = $this->url('aprovador-v2/document-approval');
+        $requestPayload = array_filter(array_merge($this->credentials(), [
+            'acces_token' => $accessToken,
+            'code' => $code,
+        ]));
+
+        try {
+            $response = $this->http()->post($endpoint, $requestPayload);
+        } catch (ConnectionException $exception) {
+            throw $this->connectionException($endpoint, $requestPayload, $exception, 'fetch_signed_document');
+        }
+
+        return $this->jsonOrFail($response, $endpoint, $requestPayload, 'fetch_signed_document', 'No se pudo obtener el documento firmado.');
     }
 
     public function downloadDocument(string $url): string
