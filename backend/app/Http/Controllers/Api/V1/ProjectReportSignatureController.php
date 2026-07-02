@@ -172,9 +172,12 @@ class ProjectReportSignatureController extends Controller
         ]);
         $parameters = $this->signatureService->normalizeParameters($validated);
         $hash = $this->signatureService->parametersHash($parameters);
+        $latestSigned = $this->signatureService->latestSigned($project, $reportKey, $hash);
 
         return ApiResponse::success([
             'items' => $this->signatureService->history($project, $reportKey, $hash),
+            'latest_signed' => $latestSigned ? $this->signatureService->serialize($latestSigned) : null,
+            'signers' => $this->signatureService->latestSignedSigners($project, $reportKey, $hash),
         ], 'Historial de firmas obtenido correctamente.');
     }
 

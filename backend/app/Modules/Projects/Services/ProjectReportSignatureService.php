@@ -159,6 +159,15 @@ class ProjectReportSignatureService
             ->all();
     }
 
+    public function latestSignedSigners(Project $project, string $reportKey, ?string $parametersHash = null): array
+    {
+        $signature = $this->latestSigned($project, $reportKey, $parametersHash);
+
+        return $signature
+            ? $this->validationRecords(data_get($signature->response_payload, 'validation', []))
+            : [];
+    }
+
     public function latest(Project $project, string $reportKey, ?string $parametersHash = null): ?ProjectReportSignature
     {
         return ProjectReportSignature::query()

@@ -33,38 +33,12 @@ function statusMeta(status) {
   return { label: "Sin firma", className: "bg-slate-100 text-slate-600" };
 }
 
-function formatSignatureDate(value) {
-  if (!value) {
-    return "-";
-  }
-
-  try {
-    return new Intl.DateTimeFormat("es-BO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-  } catch {
-    return String(value);
-  }
-}
-
-function signerLabel(signature) {
-  const validationRecords = Array.isArray(signature?.validation_records) ? signature.validation_records : [];
-  const citizenshipUser = signature?.citizenship_user;
-  const validationNames = validationRecords
-    .map((record) => [
-      record?.nombres,
-      record?.primer_apellido,
-      record?.segundo_apellido,
-    ].filter(Boolean).join(" ").trim())
-    .filter(Boolean);
-
-  if (validationNames.length > 0) {
-    return validationNames.join(", ");
-  }
-
-  const fullName = [
-    citizenshipUser?.nombre,
-  ].filter(Boolean).join(" ");
-
-  return fullName || citizenshipUser?.nombre || signature?.user_name || "Sin firmante registrado";
+function signerName(record) {
+  return [
+    record?.nombres,
+    record?.primer_apellido,
+    record?.segundo_apellido,
+  ].filter(Boolean).join(" ").trim() || "Firmante sin nombre";
 }
 
 export default function ReportSignatureStatus({ projectId, reportKey, parameters = {} }) {
@@ -94,7 +68,7 @@ export default function ReportSignatureStatus({ projectId, reportKey, parameters
   const status = statusQuery.data?.data;
   const latestSigned = status?.latest_signed;
   const meta = statusMeta(status);
-  const historyItems = historyQuery.data?.data?.items ?? [];
+  const latestSigners = historyQuery.data?.data?.signers ?? latestSigned?.validation_records ?? [];
 
   const openSignedPdf = (signature = latestSigned) => {
     if (!signature?.has_signed_file) {
@@ -172,46 +146,27 @@ export default function ReportSignatureStatus({ projectId, reportKey, parameters
               </div>
             ) : null}
 
-            {!historyQuery.isFetching && !historyQuery.isError && historyItems.length === 0 ? (
+            {!historyQuery.isFetching && !historyQuery.isError && latestSigners.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border/80 p-8 text-center text-sm text-muted-foreground">
-                No hay firmas registradas para estos parámetros.
+                No hay firmantes validados para estos parámetros.
               </div>
             ) : null}
 
-            {!historyQuery.isFetching && !historyQuery.isError && historyItems.length > 0 ? (
+            {!historyQuery.isFetching && !historyQuery.isError && latestSigners.length > 0 ? (
               <div className="space-y-3">
-                {historyItems.map((signature) => (
-                  <div key={signature.id} className="rounded-xl border border-border/70 bg-background p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge className={`rounded-full px-2.5 py-1 text-[11px] uppercase tracking-[0.16em] ${
-                            signature.status === "signed"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : signature.status === "failed" || signature.status === "error"
-                                ? "bg-rose-100 text-rose-700"
-                                : "bg-amber-100 text-amber-700"
-                          }`}
-                          >
-                            {signature.status === "signed" ? "Firmado" : signature.status}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">{formatSignatureDate(signature.signed_at || signature.sent_at)}</span>
-                        </div>
-                        <div className="mt-2 text-sm font-medium text-foreground">{signerLabel(signature)}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          SIPRE: {signature.user_name || "Sin usuario"} · Seguimiento: {signature.trace_id}
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
+                  <h3 className="text-sm font-semibold text-emerald-900">Firmantes del PDF</h3>
+                  <div className="mt-3 space-y-2">
+                    {latestSigners.map((signer, index) => (
+                      <div key={`${signer?.nro_documento || index}-${signer?.fecha_verificacion || index}`} className="rounded-lg bg-white/80 px-3 py-2 text-sm">
+                        <div className="font-medium text-foreground">{signerName(signer)}</div>
+                        <div className="mt-0.5 text-xs text-muted-foreground">
+                          Doc.: {signer?.nro_documento || "-"} · Sol.: {signer?.fecha_solicitud || "-"} · Verif.: {signer?.fecha_verificacion || "-"}
                         </div>
                       </div>
-
-                      {signature.has_signed_file ? (
-                        <Button type="button" variant="outline" size="sm" className="rounded-full gap-2" onClick={() => openSignedPdf(signature)}>
-                          <ExternalLink className="h-4 w-4" />
-                          Abrir firmado
-                        </Button>
-                      ) : null}
-                    </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             ) : null}
           </div>
