@@ -10,9 +10,11 @@ use App\Modules\Projects\Services\ProjectReportSignatureService;
 use App\Modules\Projects\Services\ProjectSignableReportService;
 use App\Support\ApiResponse;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -20,6 +22,8 @@ use RuntimeException;
 
 class ProjectReportSignatureController extends Controller
 {
+    private const PENDING_SIGNATURE_COOKIE = 'sipre_pending_signature';
+
     public function __construct(
         private readonly ProjectSignableReportService $signableReportService,
         private readonly ProjectReportSignatureService $signatureService,
@@ -149,7 +153,8 @@ class ProjectReportSignatureController extends Controller
         return ApiResponse::success([
             'signature' => $serializedSignature,
             'redirect_url' => $serializedSignature['redirect_url'] ?? null,
-        ], 'Solicitud de firma creada correctamente.', 201);
+        ], 'Solicitud de firma creada correctamente.', 201)
+            ->withCookie($this->pendingSignatureCookie((string) $signature->id));
     }
 
     public function signatures(Request $request, Project $project, string $reportKey): JsonResponse
@@ -196,7 +201,8 @@ class ProjectReportSignatureController extends Controller
 
     public function loginCallback(Request $request): JsonResponse|RedirectResponse
     {
-        $signatureId = (string) ($request->query('signature') ?: $request->input('signature'));
+        $signature = $this->signatureForLoginCallback($request);
+        $signatureId = $signature ? (string) $signature->id : '';
 
         if ($signatureId === '') {
             if (! $this->wantsJson($request)) {
@@ -229,7 +235,13 @@ class ProjectReportSignatureController extends Controller
             }
 
             if (! $this->wantsJson($request)) {
-                return redirect()->away($redirectUrl);
+                $debugAccessToken = $request->input('access_token') ?: $request->input('acces_token');
+
+                return redirect()->to($this->frontendSignatureCallbackUrl('login', array_filter([
+                    'signature' => $serializedSignature['id'] ?? $signatureId,
+                    'debug_access_token' => is_string($debugAccessToken) ? $debugAccessToken : null,
+                    'redirect_url' => $redirectUrl,
+                ], static fn ($value) => $value !== null && $value !== '')));
             }
 
             return ApiResponse::success([
@@ -302,26 +314,24 @@ class ProjectReportSignatureController extends Controller
 
     public function logoutCallback(Request $request): JsonResponse|RedirectResponse
     {
-        $signatureId = (string) ($request->query('signature') ?: $request->input('signature'));
-        $signature = $signatureId !== ''
-            ? ProjectReportSignature::query()->find($signatureId)
-            : null;
+        $signature = $this->signatureForLogoutCallback($request);
 
         if (! $this->wantsJson($request)) {
             return redirect()->to($this->frontendSignatureCallbackUrl('logout', [
                 'signature' => $signature?->id,
                 'completed' => '1',
-            ]));
+            ]))->withCookie($this->forgetPendingSignatureCookie());
         }
 
         return ApiResponse::success([
             'signature' => $signature ? $this->signatureService->serialize($signature) : null,
-        ], 'Sesión de Ciudadanía Digital cerrada correctamente.');
+        ], 'Sesión de Ciudadanía Digital cerrada correctamente.')
+            ->withCookie($this->forgetPendingSignatureCookie());
     }
 
     public function callback(Request $request): JsonResponse|RedirectResponse
     {
-        $signatureId = (string) ($request->query('signature') ?: $request->input('signature'));
+        $signatureId = $this->signatureIdFromRequest($request);
         $pendingSignature = $signatureId !== ''
             ? ProjectReportSignature::query()->find($signatureId)
             : null;
@@ -343,12 +353,12 @@ class ProjectReportSignatureController extends Controller
             }
         }
 
-        return '';
+        return $this->signatureIdFromCookie($request);
     }
 
     private function wantsJson(Request $request): bool
     {
-        return $request->expectsJson() || $request->isMethod('post');
+        return $request->expectsJson();
     }
 
     private function frontendSignatureCallbackUrl(string $phase, array $query = []): string
@@ -365,5 +375,102 @@ class ProjectReportSignatureController extends Controller
             ->all();
 
         return $query === [] ? $url : $url.'?'.http_build_query($query);
+    }
+
+    private function signatureIdFromRequest(Request $request): string
+    {
+        $value = $request->query('signature') ?: $request->input('signature');
+
+        return filled($value) ? (string) $value : $this->signatureIdFromCookie($request);
+    }
+
+    private function signatureForLoginCallback(Request $request): ?ProjectReportSignature
+    {
+        $signatureId = $this->signatureIdFromRequest($request);
+
+        if ($signatureId !== '' && ctype_digit($signatureId)) {
+            $signature = ProjectReportSignature::query()->find($signatureId);
+
+            if ($signature) {
+                return $signature;
+            }
+        }
+
+        return ProjectReportSignature::query()
+            ->where('status', 'auth_pending')
+            ->when(
+                $request->user(),
+                fn ($query, $user) => $query->where('id_usuario', $user->id_usuario)
+            )
+            ->where('created_at', '>=', now()->subMinutes(30))
+            ->latest('id')
+            ->first();
+    }
+
+    private function signatureForLogoutCallback(Request $request): ?ProjectReportSignature
+    {
+        $signatureId = $this->signatureIdFromRequest($request);
+
+        if ($signatureId !== '' && ctype_digit($signatureId)) {
+            $signature = ProjectReportSignature::query()->find($signatureId);
+
+            if ($signature) {
+                return $signature;
+            }
+        }
+
+        $code = $request->query('code') ?: $request->input('code');
+
+        if (filled($code)) {
+            $signature = ProjectReportSignature::query()
+                ->where('code', (string) $code)
+                ->latest('id')
+                ->first();
+
+            if ($signature) {
+                return $signature;
+            }
+        }
+
+        return ProjectReportSignature::query()
+            ->where('status', 'signed')
+            ->where('signed_at', '>=', now()->subMinutes(30))
+            ->latest('signed_at')
+            ->first();
+    }
+
+    private function signatureIdFromCookie(Request $request): string
+    {
+        $value = $request->cookie(self::PENDING_SIGNATURE_COOKIE);
+
+        if (! is_string($value) || $value === '') {
+            return '';
+        }
+
+        try {
+            return Crypt::decryptString($value);
+        } catch (DecryptException) {
+            return '';
+        }
+    }
+
+    private function pendingSignatureCookie(string $signatureId)
+    {
+        return cookie(
+            self::PENDING_SIGNATURE_COOKIE,
+            Crypt::encryptString($signatureId),
+            30,
+            '/api/v1/citizenship/signature',
+            null,
+            request()->isSecure(),
+            true,
+            false,
+            'Lax'
+        );
+    }
+
+    private function forgetPendingSignatureCookie()
+    {
+        return cookie()->forget(self::PENDING_SIGNATURE_COOKIE, '/api/v1/citizenship/signature');
     }
 }

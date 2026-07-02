@@ -101,10 +101,25 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
       try {
         const backendError = searchParams.get("error_message");
         const backendCompleted = searchParams.get("completed") === "1";
+        const debugAccessToken = searchParams.get("debug_access_token")
+          || searchParams.get("access_token")
+          || searchParams.get("acces_token");
+        const passthroughRedirectUrl = searchParams.get("redirect_url");
+
+        if (debugAccessToken) {
+          window.__CIUDADANIA_DIGITAL_TOKEN__ = debugAccessToken;
+          console.info("[Ciudadanía Digital] acces_token:", debugAccessToken);
+        }
 
         if (backendError) {
           setError(backendError);
           setStatus("");
+          return;
+        }
+
+        if (passthroughRedirectUrl) {
+          setStatus(config.redirectStatus);
+          window.location.href = passthroughRedirectUrl;
           return;
         }
 

@@ -683,13 +683,9 @@ class ProjectReportSignatureService
     private function configuredCallbackUrl(string $configKey, string $path, ProjectReportSignature $signature): string
     {
         $configuredUrl = (string) config('services.ciudadania_digital.'.$configKey);
-        $url = $configuredUrl !== ''
+        return $configuredUrl !== ''
             ? $configuredUrl
             : rtrim((string) config('app.url'), '/').$path;
-
-        $separator = str_contains($url, '?') ? '&' : '?';
-
-        return $url.$separator.http_build_query(['signature' => $signature->id]);
     }
 
     private function description(Project $project, string $reportKey): string
