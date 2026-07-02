@@ -99,6 +99,33 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
 
     async function continueSignature() {
       try {
+        const backendError = searchParams.get("error_message");
+        const backendCompleted = searchParams.get("completed") === "1";
+
+        if (backendError) {
+          setError(backendError);
+          setStatus("");
+          return;
+        }
+
+        if (backendCompleted) {
+          const pendingSignature = readPendingSignature();
+          const signatureId = searchParams.get("signature") || pendingSignature?.id;
+
+          if (signatureId && pendingSignature?.project_id && pendingSignature?.report_key) {
+            const signedUrl = projectService.latestSignedReportUrl(
+              pendingSignature.project_id,
+              pendingSignature.report_key,
+              pendingSignature.parameters || {},
+            );
+            setSignedReportUrl(buildPdfViewerUrl(signedUrl, "PDF firmado"));
+          }
+
+          clearPendingSignature();
+          setStatus("Firma finalizada y sesión de Ciudadanía Digital cerrada.");
+          return;
+        }
+
         setStatus(config.initialStatus);
         const response = await apiClient.post(config.endpoint, callbackPayload, {
           skipAuthRedirect: true,
@@ -140,7 +167,7 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
     return () => {
       cancelled = true;
     };
-  }, [callbackPayload, config.endpoint, config.initialStatus, config.redirectField, config.redirectStatus, config.successStatus, phase]);
+  }, [callbackPayload, config.endpoint, config.initialStatus, config.redirectField, config.redirectStatus, config.successStatus, phase, searchParams]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">

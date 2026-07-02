@@ -194,11 +194,17 @@ class ProjectReportSignatureController extends Controller
         ]);
     }
 
-    public function loginCallback(Request $request): JsonResponse
+    public function loginCallback(Request $request): JsonResponse|RedirectResponse
     {
         $signatureId = (string) ($request->query('signature') ?: $request->input('signature'));
 
         if ($signatureId === '') {
+            if (! $this->wantsJson($request)) {
+                return redirect()->to($this->frontendSignatureCallbackUrl('login', [
+                    'error_message' => 'No se recibió la solicitud de firma.',
+                ]));
+            }
+
             return ApiResponse::error('No se recibió la solicitud de firma.', [
                 'signature' => ['No se recibió la solicitud de firma.'],
             ], 422);
@@ -210,9 +216,20 @@ class ProjectReportSignatureController extends Controller
             $redirectUrl = $serializedSignature['redirect_url'] ?? null;
 
             if (! $redirectUrl) {
+                if (! $this->wantsJson($request)) {
+                    return redirect()->to($this->frontendSignatureCallbackUrl('login', [
+                        'signature' => $serializedSignature['id'] ?? $signatureId,
+                        'error_message' => 'Ciudadanía Digital no devolvió una URL de firma válida.',
+                    ]));
+                }
+
                 return ApiResponse::error('Ciudadanía Digital no devolvió una URL de firma válida.', [
                     'signature' => ['Ciudadanía Digital no devolvió una URL de firma válida.'],
                 ], 422);
+            }
+
+            if (! $this->wantsJson($request)) {
+                return redirect()->away($redirectUrl);
             }
 
             return ApiResponse::success([
@@ -220,17 +237,30 @@ class ProjectReportSignatureController extends Controller
                 'redirect_url' => $redirectUrl,
             ], 'Autenticación validada correctamente.');
         } catch (RuntimeException $exception) {
+            if (! $this->wantsJson($request)) {
+                return redirect()->to($this->frontendSignatureCallbackUrl('login', [
+                    'signature' => $signatureId,
+                    'error_message' => $exception->getMessage(),
+                ]));
+            }
+
             return ApiResponse::error($exception->getMessage(), [
                 'signature' => [$exception->getMessage()],
             ], 422);
         }
     }
 
-    public function approvalCallback(Request $request): JsonResponse
+    public function approvalCallback(Request $request): JsonResponse|RedirectResponse
     {
         $code = $this->signatureReferenceFrom($request);
 
         if ($code === '') {
+            if (! $this->wantsJson($request)) {
+                return redirect()->to($this->frontendSignatureCallbackUrl('approval', [
+                    'error_message' => 'No se recibió el código de firma.',
+                ]));
+            }
+
             return ApiResponse::error('No se recibió el código de firma.', [
                 'code' => ['No se recibió el código de firma.'],
             ], 422);
@@ -239,24 +269,50 @@ class ProjectReportSignatureController extends Controller
         try {
             $signature = $this->signatureService->complete($code, $request->all());
             $serializedSignature = $this->signatureService->serialize($signature);
+            $logoutRedirectUrl = $serializedSignature['logout_redirect_url'] ?? null;
+
+            if (! $this->wantsJson($request)) {
+                if ($logoutRedirectUrl) {
+                    return redirect()->away($logoutRedirectUrl);
+                }
+
+                return redirect()->to($this->frontendSignatureCallbackUrl('logout', [
+                    'signature' => $serializedSignature['id'] ?? null,
+                    'completed' => '1',
+                ]));
+            }
 
             return ApiResponse::success([
                 'signature' => $serializedSignature,
-                'logout_redirect_url' => $serializedSignature['logout_redirect_url'] ?? null,
+                'logout_redirect_url' => $logoutRedirectUrl,
             ], 'Documento firmado guardado correctamente.');
         } catch (RuntimeException $exception) {
+            if (! $this->wantsJson($request)) {
+                return redirect()->to($this->frontendSignatureCallbackUrl('approval', [
+                    'code' => $code,
+                    'error_message' => $exception->getMessage(),
+                ]));
+            }
+
             return ApiResponse::error($exception->getMessage(), [
                 'signature' => [$exception->getMessage()],
             ], 422);
         }
     }
 
-    public function logoutCallback(Request $request): JsonResponse
+    public function logoutCallback(Request $request): JsonResponse|RedirectResponse
     {
         $signatureId = (string) ($request->query('signature') ?: $request->input('signature'));
         $signature = $signatureId !== ''
             ? ProjectReportSignature::query()->find($signatureId)
             : null;
+
+        if (! $this->wantsJson($request)) {
+            return redirect()->to($this->frontendSignatureCallbackUrl('logout', [
+                'signature' => $signature?->id,
+                'completed' => '1',
+            ]));
+        }
 
         return ApiResponse::success([
             'signature' => $signature ? $this->signatureService->serialize($signature) : null,
@@ -288,5 +344,26 @@ class ProjectReportSignatureController extends Controller
         }
 
         return '';
+    }
+
+    private function wantsJson(Request $request): bool
+    {
+        return $request->expectsJson() || $request->isMethod('post');
+    }
+
+    private function frontendSignatureCallbackUrl(string $phase, array $query = []): string
+    {
+        $paths = [
+            'login' => '/ciudadania-digital/login/callback',
+            'approval' => '/ciudadania-digital/aprobacion/callback',
+            'logout' => '/ciudadania-digital/logout/callback',
+        ];
+        $frontendUrl = rtrim((string) config('services.ciudadania_digital.frontend_url'), '/');
+        $url = ($frontendUrl !== '' ? $frontendUrl : url('/')).($paths[$phase] ?? $paths['login']);
+        $query = collect($query)
+            ->filter(fn ($value): bool => $value !== null && $value !== '')
+            ->all();
+
+        return $query === [] ? $url : $url.'?'.http_build_query($query);
     }
 }

@@ -667,27 +667,29 @@ class ProjectReportSignatureService
 
     private function loginCallbackUrl(ProjectReportSignature $signature): string
     {
-        return $this->configuredCallbackUrl('login_redirect_uri', '/ciudadania-digital/login/callback', $signature);
+        return $this->configuredCallbackUrl('login_redirect_uri', '/api/v1/citizenship/signature/login-callback', $signature);
     }
 
     private function approvalCallbackUrl(ProjectReportSignature $signature): string
     {
-        return $this->configuredCallbackUrl('approval_redirect_uri', '/ciudadania-digital/aprobacion/callback', $signature);
+        return $this->configuredCallbackUrl('approval_redirect_uri', '/api/v1/citizenship/signature/approval-callback', $signature);
     }
 
     private function logoutCallbackUrl(ProjectReportSignature $signature): string
     {
-        return $this->configuredCallbackUrl('logout_redirect_uri', '/ciudadania-digital/logout/callback', $signature);
+        return $this->configuredCallbackUrl('logout_redirect_uri', '/api/v1/citizenship/signature/logout-callback', $signature);
     }
 
     private function configuredCallbackUrl(string $configKey, string $path, ProjectReportSignature $signature): string
     {
         $configuredUrl = (string) config('services.ciudadania_digital.'.$configKey);
-        $frontendUrl = rtrim((string) config('services.ciudadania_digital.frontend_url'), '/');
         $url = $configuredUrl !== ''
             ? $configuredUrl
-            : ($frontendUrl !== '' ? $frontendUrl.$path : url('/api/v1/citizenship/signature/callback'));
-        return $url;
+            : rtrim((string) config('app.url'), '/').$path;
+
+        $separator = str_contains($url, '?') ? '&' : '?';
+
+        return $url.$separator.http_build_query(['signature' => $signature->id]);
     }
 
     private function description(Project $project, string $reportKey): string
