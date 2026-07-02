@@ -7,6 +7,7 @@ use App\Support\ApiResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -91,6 +92,21 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             report($exception);
+
+            if ($exception instanceof QueryException) {
+                $sqlState = (string) ($exception->errorInfo[0] ?? $exception->getCode());
+
+                if (in_array($sqlState, ['42P01', '42703'], true)) {
+                    return ApiResponse::error('La base de datos no está actualizada. Ejecute las migraciones pendientes.', [
+                        'code' => 'DB_SCHEMA_MISMATCH',
+                        'action' => 'run_migrations',
+                    ], 500);
+                }
+
+                return ApiResponse::error('No se pudo consultar la base de datos. Revise los logs del servidor.', [
+                    'code' => 'DB_QUERY_ERROR',
+                ], 500);
+            }
 
             return ApiResponse::error('Ocurrio un error inesperado.', null, 500);
         });
