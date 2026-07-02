@@ -6,6 +6,7 @@ import apiClient from "@/lib/api/client";
 import { projectService } from "@/modules/projects/services/project.service";
 
 const SIGNATURE_SESSION_KEY = "sipre:ciudadania-digital:signature";
+const DEBUG_TOKEN_SESSION_KEY = "sipre:ciudadania-digital:debug-token";
 
 const PHASE_CONFIG = {
   login: {
@@ -61,6 +62,35 @@ function clearPendingSignature() {
   localStorage.removeItem(SIGNATURE_SESSION_KEY);
 }
 
+function showDebugToken(token) {
+  if (!token) {
+    return;
+  }
+
+  sessionStorage.setItem(DEBUG_TOKEN_SESSION_KEY, token);
+  window.__CIUDADANIA_DIGITAL_TOKEN__ = token;
+  console.info("[Ciudadanía Digital] acces_token:", token);
+}
+
+function showDocumentCode(code) {
+  if (!code) {
+    return "";
+  }
+
+  window.__CIUDADANIA_DIGITAL_CODE__ = code;
+  console.info("[Ciudadanía Digital] code:", code);
+
+  return code;
+}
+
+function codeFromSignature(signatureId, code = "") {
+  if (code) {
+    return code;
+  }
+
+  return signatureId ? `code-${signatureId}` : "";
+}
+
 function buildPdfViewerUrl(url, title = "PDF firmado") {
   const viewerUrl = new URL("/pdf-viewer", window.location.origin);
   viewerUrl.searchParams.set("url", url);
@@ -75,6 +105,7 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
   const [status, setStatus] = useState(config.initialStatus);
   const [error, setError] = useState("");
   const [signedReportUrl, setSignedReportUrl] = useState("");
+  const [documentCode, setDocumentCode] = useState("");
 
   const callbackPayload = useMemo(() => {
     const payload = {};
@@ -106,10 +137,7 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
           || searchParams.get("acces_token");
         const passthroughRedirectUrl = searchParams.get("redirect_url");
 
-        if (debugAccessToken) {
-          window.__CIUDADANIA_DIGITAL_TOKEN__ = debugAccessToken;
-          console.info("[Ciudadanía Digital] acces_token:", debugAccessToken);
-        }
+        showDebugToken(debugAccessToken || sessionStorage.getItem(DEBUG_TOKEN_SESSION_KEY));
 
         if (backendError) {
           setError(backendError);
@@ -126,6 +154,7 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
         if (backendCompleted) {
           const pendingSignature = readPendingSignature();
           const signatureId = searchParams.get("signature") || pendingSignature?.id;
+          setDocumentCode(showDocumentCode(codeFromSignature(signatureId, searchParams.get("code") || pendingSignature?.code)));
 
           if (signatureId && pendingSignature?.project_id && pendingSignature?.report_key) {
             const signedUrl = projectService.latestSignedReportUrl(
@@ -158,6 +187,7 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
         }
 
         const signature = response.data?.data?.signature;
+        setDocumentCode(showDocumentCode(codeFromSignature(signature?.id || callbackPayload.signature, signature?.code || callbackPayload.code || readPendingSignature()?.code)));
 
         if (signature?.status === "signed" && signature?.project_id && signature?.report_key) {
           const signedUrl = projectService.latestSignedReportUrl(signature.project_id, signature.report_key, signature.parameters || {});
@@ -193,6 +223,14 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
         <h1 className="text-2xl font-semibold text-foreground">Firma digital</h1>
         {status ? (
           <p className="mt-3 text-sm text-muted-foreground">{status}</p>
+        ) : null}
+        {documentCode ? (
+          <div className="mt-5 rounded-xl border bg-muted/40 p-4 text-left text-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Código del documento
+            </p>
+            <p className="mt-2 break-all font-mono text-foreground">{documentCode}</p>
+          </div>
         ) : null}
         {error ? (
           <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">

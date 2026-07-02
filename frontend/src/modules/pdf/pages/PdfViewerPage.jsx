@@ -378,9 +378,11 @@ export default function PdfViewerPage() {
       }
 
       if (signature?.id) {
+        const signatureCode = signature.code || `code-${signature.id}`;
         const pendingSignature = JSON.stringify({
           id: signature.id,
           trace_id: signature.trace_id,
+          code: signatureCode,
           project_id: signature.project_id,
           report_key: signature.report_key,
           parameters: signature.parameters || signatureParameters || {},
