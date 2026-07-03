@@ -15,7 +15,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -208,14 +210,42 @@ class ProjectReportSignatureController extends Controller
         $signatureId = $signature ? (string) $signature->id : '';
 
         if ($signatureId === '') {
+            $traceId = (string) Str::uuid();
+            $message = 'No se recibió la solicitud de firma. Código de seguimiento: '.$traceId;
+            $recentPendingSignatures = ProjectReportSignature::query()
+                ->where('status', 'auth_pending')
+                ->latest('id')
+                ->limit(10)
+                ->get(['id', 'trace_id', 'id_usuario', 'created_at']);
+
+            Log::warning('No se pudo correlacionar el callback de login de Ciudadanía Digital.', [
+                'trace_id' => $traceId,
+                'request_host' => $request->getHost(),
+                'request_origin' => $request->getSchemeAndHttpHost(),
+                'app_url' => config('app.url'),
+                'configured_login_redirect_uri' => config('services.ciudadania_digital.login_redirect_uri'),
+                'state' => $request->query('state') ?: $request->input('state'),
+                'has_pending_cookie' => $request->hasCookie(self::PENDING_SIGNATURE_COOKIE),
+                'pending_cookie_signature_id' => $this->signatureIdFromCookie($request) ?: null,
+                'recent_auth_pending_count' => $recentPendingSignatures->count(),
+                'recent_auth_pending' => $recentPendingSignatures
+                    ->map(fn (ProjectReportSignature $pending): array => [
+                        'id' => $pending->id,
+                        'trace_id' => $pending->trace_id,
+                        'user_id' => $pending->id_usuario,
+                        'created_at' => optional($pending->created_at)->toIso8601String(),
+                    ])
+                    ->all(),
+            ]);
+
             if (! $this->wantsJson($request)) {
                 return redirect()->to($this->frontendSignatureCallbackUrl('login', [
-                    'error_message' => 'No se recibió la solicitud de firma.',
+                    'error_message' => $message,
                 ]));
             }
 
-            return ApiResponse::error('No se recibió la solicitud de firma.', [
-                'signature' => ['No se recibió la solicitud de firma.'],
+            return ApiResponse::error($message, [
+                'signature' => [$message],
             ], 422);
         }
 
@@ -399,13 +429,26 @@ class ProjectReportSignatureController extends Controller
             }
         }
 
+        $state = $request->query('state') ?: $request->input('state');
+
+        if (filled($state)) {
+            $signature = ProjectReportSignature::query()
+                ->where('status', 'auth_pending')
+                ->where('response_payload->auth_state', (string) $state)
+                ->latest('id')
+                ->first();
+
+            if ($signature) {
+                return $signature;
+            }
+        }
+
         return ProjectReportSignature::query()
             ->where('status', 'auth_pending')
             ->when(
                 $request->user(),
                 fn ($query, $user) => $query->where('id_usuario', $user->id_usuario)
             )
-            ->where('created_at', '>=', now()->subMinutes(30))
             ->latest('id')
             ->first();
     }
@@ -462,8 +505,8 @@ class ProjectReportSignatureController extends Controller
         return cookie(
             self::PENDING_SIGNATURE_COOKIE,
             Crypt::encryptString($signatureId),
-            30,
-            '/api/v1/citizenship/signature',
+            120,
+            '/',
             null,
             request()->isSecure(),
             true,
@@ -474,6 +517,6 @@ class ProjectReportSignatureController extends Controller
 
     private function forgetPendingSignatureCookie()
     {
-        return cookie()->forget(self::PENDING_SIGNATURE_COOKIE, '/api/v1/citizenship/signature');
+        return cookie()->forget(self::PENDING_SIGNATURE_COOKIE, '/');
     }
 }

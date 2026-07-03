@@ -512,7 +512,10 @@ class ProjectReportSignatureService
             $signature->forceFill([
                 'status' => 'auth_pending',
                 'request_payload' => ['redirect_uri' => $redirectUri],
-                'response_payload' => array_merge($response, ['redirect_url' => $redirectUrl]),
+                'response_payload' => array_merge($response, [
+                    'redirect_url' => $redirectUrl,
+                    'auth_state' => $this->stateFromUrl($redirectUrl),
+                ]),
                 'sent_at' => now(),
             ])->save();
 
@@ -674,6 +677,18 @@ class ProjectReportSignatureService
         return null;
     }
 
+    private function stateFromUrl(?string $url): ?string
+    {
+        if (! is_string($url) || $url === '') {
+            return null;
+        }
+
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        $state = $query['state'] ?? null;
+
+        return is_string($state) && $state !== '' ? $state : null;
+    }
+
     private function loginCallbackUrl(ProjectReportSignature $signature): string
     {
         return $this->configuredCallbackUrl('login_redirect_uri', '/api/v1/citizenship/signature/login-callback', $signature);
@@ -692,9 +707,37 @@ class ProjectReportSignatureService
     private function configuredCallbackUrl(string $configKey, string $path, ProjectReportSignature $signature): string
     {
         $configuredUrl = (string) config('services.ciudadania_digital.'.$configKey);
-        return $configuredUrl !== ''
-            ? $configuredUrl
-            : rtrim((string) config('app.url'), '/').$path;
+        $appUrl = rtrim((string) config('app.url'), '/');
+        $fallbackUrl = $appUrl.$path;
+
+        if ($configuredUrl === '') {
+            return $fallbackUrl;
+        }
+
+        if ($this->urlOrigin($configuredUrl) === $this->urlOrigin($appUrl)) {
+            return $configuredUrl;
+        }
+
+        Log::warning('Callback de FirmaGAMC descartado por pertenecer a otro backend.', [
+            'signature_id' => $signature->id,
+            'trace_id' => $signature->trace_id,
+            'config_key' => $configKey,
+            'configured_url' => $configuredUrl,
+            'app_url' => $appUrl,
+            'fallback_url' => $fallbackUrl,
+        ]);
+
+        return $fallbackUrl;
+    }
+
+    private function urlOrigin(string $url): string
+    {
+        $parts = parse_url($url);
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+
+        return $scheme !== '' && $host !== '' ? $scheme.'://'.$host.$port : '';
     }
 
     private function description(Project $project, string $reportKey): string

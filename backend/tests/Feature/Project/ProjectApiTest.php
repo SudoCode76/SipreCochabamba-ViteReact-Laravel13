@@ -350,13 +350,19 @@ class ProjectApiTest extends TestCase
             'FIRMAR_REPORTES',
         ]));
 
+        config()->set('app.url', 'http://localhost:8011');
+        config()->set(
+            'services.ciudadania_digital.login_redirect_uri',
+            'https://sipregamcapidev.cochabamba.bo/api/v1/citizenship/signature/login-callback'
+        );
+
         $client = Mockery::mock(CiudadaniaDigitalClient::class);
         $client->shouldReceive('createAuthenticationUrl')
             ->once()
             ->with('http://localhost:8011/api/v1/citizenship/signature/login-callback')
             ->andReturn([
                 'status' => 200,
-                'data' => ['url' => 'https://ciudadania.test/login'],
+                'data' => ['url' => 'https://ciudadania.test/login?state=state-general-budget'],
             ]);
         $this->app->instance(CiudadaniaDigitalClient::class, $client);
 
@@ -366,15 +372,66 @@ class ProjectApiTest extends TestCase
 
         $response->assertCreated()
             ->assertCookie('sipre_pending_signature')
-            ->assertJsonPath('data.redirect_url', 'https://ciudadania.test/login');
+            ->assertJsonPath('data.redirect_url', 'https://ciudadania.test/login?state=state-general-budget');
 
         $signature = ProjectReportSignature::query()->latest('id')->firstOrFail();
 
         $this->assertSame('auth_pending', $signature->status);
+        $this->assertSame('state-general-budget', $signature->response_payload['auth_state']);
         $this->assertSame(
             'http://localhost:8011/api/v1/citizenship/signature/login-callback',
             $signature->request_payload['redirect_uri']
         );
+    }
+
+    public function test_signature_login_callback_uses_auth_state_when_available(): void
+    {
+        $this->createProjectRecord(['id_proyecto' => 1]);
+
+        $oldSignature = ProjectReportSignature::query()->create([
+            'id_proyecto' => 1,
+            'trace_id' => 'trace-old',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
+            'status' => 'auth_pending',
+            'id_usuario' => 1,
+            'base_file_path' => 'project-signatures/old.pdf',
+            'response_payload' => ['auth_state' => 'old-state'],
+        ]);
+        $targetSignature = ProjectReportSignature::query()->create([
+            'id_proyecto' => 1,
+            'trace_id' => 'trace-target',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
+            'status' => 'auth_pending',
+            'id_usuario' => 1,
+            'base_file_path' => 'project-signatures/target.pdf',
+            'response_payload' => ['auth_state' => 'target-state'],
+        ]);
+
+        $service = Mockery::mock(ProjectReportSignatureService::class);
+        $service->shouldReceive('continueAfterAuthentication')
+            ->once()
+            ->with((string) $targetSignature->id, Mockery::on(fn (array $payload): bool => ($payload['state'] ?? null) === 'target-state'))
+            ->andReturn($targetSignature);
+        $service->shouldReceive('serialize')
+            ->once()
+            ->with($targetSignature)
+            ->andReturn([
+                'id' => $targetSignature->id,
+                'status' => 'sent',
+                'redirect_url' => 'https://aprobador.test/solicitudes/target',
+            ]);
+        $this->app->instance(ProjectReportSignatureService::class, $service);
+
+        $response = $this
+            ->get('/api/v1/citizenship/signature/login-callback?state=target-state&access_token=token-ciudadania')
+            ->assertRedirect();
+
+        $this->assertStringContainsString('signature='.$targetSignature->id, $response->headers->get('Location'));
+        $this->assertStringNotContainsString('signature='.$oldSignature->id, $response->headers->get('Location'));
     }
 
     public function test_signature_login_callback_without_query_uses_latest_auth_pending_signature(): void
@@ -434,7 +491,11 @@ class ProjectApiTest extends TestCase
 
         $this->postJson('/api/v1/citizenship/signature/login-callback')
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'No se recibió la solicitud de firma.');
+            ->assertJson(fn ($json) => $json
+                ->where('success', false)
+                ->where('message', fn (string $message): bool => str_starts_with($message, 'No se recibió la solicitud de firma. Código de seguimiento: '))
+                ->etc()
+            );
     }
 
     public function test_second_report_signature_uses_previous_signed_url_for_derivation(): void
