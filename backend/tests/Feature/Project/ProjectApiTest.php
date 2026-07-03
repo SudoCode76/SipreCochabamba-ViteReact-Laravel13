@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Citizenship\CiudadaniaDigitalClient;
 use App\Modules\Projects\Services\ProjectReportSignatureService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
@@ -498,21 +499,61 @@ class ProjectApiTest extends TestCase
             );
     }
 
+    public function test_repeated_login_callback_reuses_existing_approval_url(): void
+    {
+        $this->createProjectRecord(['id_proyecto' => 1]);
+
+        $signature = ProjectReportSignature::query()->create([
+            'id_proyecto' => 1,
+            'trace_id' => 'trace-sent',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
+            'status' => 'sent',
+            'code' => 'code-sent',
+            'id_usuario' => 1,
+            'base_file_path' => 'project-signatures/base.pdf',
+            'response_payload' => [
+                'redirect_url' => 'https://aprobador.test/solicitudes/existing',
+            ],
+        ]);
+
+        $client = Mockery::mock(CiudadaniaDigitalClient::class);
+        $client->shouldNotReceive('createSigningUrl');
+        $client->shouldNotReceive('createDerivedSigningUrl');
+        $client->shouldNotReceive('userInfo');
+        $this->app->instance(CiudadaniaDigitalClient::class, $client);
+
+        $result = app(ProjectReportSignatureService::class)
+            ->continueAfterAuthentication($signature->id, ['access_token' => 'token-ciudadania']);
+
+        $this->assertSame($signature->id, $result->id);
+        $this->assertSame('sent', $result->status);
+        $this->assertSame(
+            'https://aprobador.test/solicitudes/existing',
+            $result->response_payload['redirect_url']
+        );
+    }
+
     public function test_second_report_signature_uses_previous_signed_url_for_derivation(): void
     {
         ProjectSignableReport::query()
             ->where('report_key', 'general_budget')
-            ->update(['is_enabled' => true]);
+            ->update([
+                'is_enabled' => true,
+                'requires_finalized_project' => false,
+            ]);
 
         $project = $this->createProjectRecord([
-            'aprobado' => 'RV',
-            'fecha_aprob' => now()->toDateString(),
-            'fecha_finalizacion' => now(),
+            'aprobado' => 'AP',
+            'fecha_aprob' => null,
+            'fecha_finalizacion' => null,
         ]);
 
         $service = app(ProjectReportSignatureService::class);
         $parameters = ['format' => 'PCA'];
         $hash = $service->parametersHash($parameters);
+        $documentHash = $service->currentDocumentHash($project, 'general_budget', $parameters);
         Storage::disk('local')->put('project-signatures/previous.pdf', '%PDF-previous');
 
         $previous = ProjectReportSignature::query()->create([
@@ -526,6 +567,7 @@ class ProjectApiTest extends TestCase
             'id_usuario' => 1,
             'base_file_path' => 'project-signatures/previous.pdf',
             'signed_file_path' => 'project-signatures/previous.pdf',
+            'base_document_hash' => $documentHash,
             'response_payload' => [
                 'signed_document_url' => 'https://repo.test/previous.pdf',
                 'validation' => [
@@ -594,6 +636,57 @@ class ProjectApiTest extends TestCase
         $this->assertSame('code-'.$signature->id, $capturedPayload['code']);
         $this->assertArrayNotHasKey('is_derivated', $capturedPayload);
         $this->assertSame($capturedPayload['url_document'], $signature->request_payload['url_document']);
+    }
+
+    public function test_report_signature_hash_ignores_technical_snapshot_columns_but_changes_for_project_content(): void
+    {
+        $project = $this->createProjectRecord(['aprobado' => 'AP']);
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createItemRecord(['id_item' => 1]);
+        $this->createProjectItemRecord([
+            'id_proyecto_item' => 1,
+            'id_proyecto' => $project->id_proyecto,
+            'cantidad' => 2,
+            'precio' => 10,
+        ]);
+
+        DB::table('proyecto_item_insumo_snapshot')->insert([
+            'id_proyecto_item' => 1,
+            'id_insumo' => 1,
+            'descripcion' => 'INSUMO TEST',
+            'tipo' => 1,
+            'unidad' => 'u',
+            'cantidad' => 1,
+            'precio_unitario' => 5,
+            'parcial' => 5,
+            'estado' => 'AC',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $service = app(ProjectReportSignatureService::class);
+        $parameters = ['format' => 'PCA'];
+        $originalHash = $service->currentDocumentHash($project, 'general_budget', $parameters);
+
+        DB::table('proyecto_item_insumo_snapshot')
+            ->where('id_proyecto_item', 1)
+            ->update(['updated_at' => now()->addDay()]);
+
+        $this->assertSame(
+            $originalHash,
+            $service->currentDocumentHash($project, 'general_budget', $parameters)
+        );
+
+        ProjectItem::query()
+            ->where('id_proyecto_item', 1)
+            ->update(['cantidad' => 3]);
+
+        $this->assertNotSame(
+            $originalHash,
+            $service->currentDocumentHash($project, 'general_budget', $parameters)
+        );
     }
 
     public function test_report_signature_blocks_repeated_citizenship_signer(): void

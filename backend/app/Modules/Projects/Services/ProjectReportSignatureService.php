@@ -10,6 +10,7 @@ use App\Services\Citizenship\CiudadaniaDigitalClient;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -30,13 +31,21 @@ class ProjectReportSignatureService
 
         $normalizedParameters = $this->normalizeParameters($parameters);
         $hash = $this->parametersHash($normalizedParameters);
+        $pdf = $this->pdfResolver->resolve($project, $reportKey, $normalizedParameters);
+        $baseDocumentHash = $this->currentDocumentHash($project, $reportKey, $normalizedParameters);
         $previous = $this->latestSigned($project, $reportKey, $hash);
+        $canDeriveFromPrevious = $previous
+            && (
+                ($previous->base_document_hash && hash_equals((string) $previous->base_document_hash, $baseDocumentHash))
+                || (! $previous->base_document_hash && $this->isProjectFrozen($project))
+            );
 
-        if ($previous?->signed_file_path && Storage::disk('local')->exists($previous->signed_file_path)) {
+        if ($canDeriveFromPrevious && $previous?->signed_file_path && Storage::disk('local')->exists($previous->signed_file_path)) {
+            $baseContent = Storage::disk('local')->get($previous->signed_file_path);
             $basePath = $previous->signed_file_path;
         } else {
-            $pdf = $this->pdfResolver->resolve($project, $reportKey, $normalizedParameters);
-            $basePath = $this->storeBasePdf($project, $reportKey, $pdf['content']);
+            $baseContent = $pdf['content'];
+            $basePath = $this->storeBasePdf($project, $reportKey, $baseContent);
         }
 
         $signature = ProjectReportSignature::query()->create([
@@ -48,6 +57,7 @@ class ProjectReportSignatureService
             'status' => 'pending',
             'id_usuario' => $user->id_usuario,
             'base_file_path' => $basePath,
+            'base_document_hash' => $baseDocumentHash,
         ]);
 
         if (! $this->accessTokenFrom($parameters)) {
@@ -60,6 +70,21 @@ class ProjectReportSignatureService
     public function continueAfterAuthentication(int|string $signatureId, array $payload): ProjectReportSignature
     {
         $signature = ProjectReportSignature::query()->findOrFail($signatureId);
+
+        if ($signature->status === 'signed') {
+            return $signature;
+        }
+
+        if ($signature->status === 'sent' && $this->storedRedirectUrl($signature)) {
+            return $signature;
+        }
+
+        if ($signature->status === 'error') {
+            throw new RuntimeException(
+                $signature->error_message ?: $this->messageWithTrace('La solicitud de firma tiene un error previo.', $signature)
+            );
+        }
+
         $accessToken = $this->accessTokenFrom($payload);
 
         if (! $accessToken) {
@@ -233,6 +258,7 @@ class ProjectReportSignatureService
             'user_name' => $signature->user?->funcionario,
             'sent_at' => $signature->sent_at?->toIso8601String(),
             'signed_at' => $signature->signed_at?->toIso8601String(),
+            'base_document_hash' => $signature->base_document_hash,
             'has_signed_file' => filled($signature->signed_file_path),
             'redirect_url' => data_get($signature->response_payload, 'redirect_url')
                 ?: data_get($signature->response_payload, 'data.url')
@@ -259,6 +285,93 @@ class ProjectReportSignatureService
     public function parametersHash(array $parameters): string
     {
         return hash('sha256', json_encode($parameters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    public function currentDocumentHash(Project $project, string $reportKey, array $parameters): string
+    {
+        $normalizedParameters = $this->normalizeParameters($parameters);
+        $project = $project->fresh() ?? $project;
+        $projectItems = DB::table('proyecto_item')
+            ->where('id_proyecto', $project->id_proyecto)
+            ->where('estado', 'AC')
+            ->orderBy('id_proyecto_item')
+            ->get();
+        $projectItemIds = $projectItems->pluck('id_proyecto_item')->filter()->values()->all();
+
+        return hash('sha256', json_encode([
+            'report_key' => $reportKey,
+            'parameters' => $normalizedParameters,
+            'project' => $this->stableHashRow($project->getAttributes(), [
+                'id_proyecto',
+                'id_proyecto_raiz',
+                'numero_version',
+                'nombre_proyecto',
+                'fecha',
+                'aprobado',
+                'estado',
+            ]),
+            'project_items' => $this->stableHashRows($projectItems, [
+                'id_proyecto_item',
+                'id_item',
+                'id_modulo',
+                'estado',
+                'cantidad',
+                'precio',
+                'prioridad',
+                'nombre_snapshot',
+                'grupo_snapshot',
+                'subgrupo_snapshot',
+                'unidad_snapshot',
+                'estado_catalogo_snapshot',
+            ]),
+            'input_snapshots' => $projectItemIds === []
+                ? []
+                : $this->stableHashRows(DB::table('proyecto_item_insumo_snapshot')
+                    ->whereIn('id_proyecto_item', $projectItemIds)
+                    ->orderBy('id_proyecto_item')
+                    ->orderBy('id_snapshot')
+                    ->get(), [
+                        'id_proyecto_item',
+                        'id_insumo',
+                        'descripcion',
+                        'tipo',
+                        'unidad',
+                        'cantidad',
+                        'precio_unitario',
+                        'parcial',
+                        'estado',
+                    ]),
+            'percentage_snapshots' => $this->stableHashRows(DB::table('proyecto_porcentaje_snapshot')
+                ->where('id_proyecto', $project->id_proyecto)
+                ->orderBy('formato')
+                ->orderBy('codigo')
+                ->orderBy('id_snapshot')
+                ->get(), [
+                    'formato',
+                    'codigo',
+                    'descripcion',
+                    'porcentaje',
+                    'estado',
+                ]),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function stableHashRows(iterable $rows, array $keys): array
+    {
+        return collect($rows)
+            ->map(fn ($row): array => $this->stableHashRow((array) $row, $keys))
+            ->values()
+            ->all();
+    }
+
+    private function stableHashRow(array $row, array $keys): array
+    {
+        return Arr::only($row, $keys);
+    }
+
+    public function documentHash(string $content): string
+    {
+        return hash('sha256', $content);
     }
 
     private function assertCanStart(Project $project, string $reportKey, User $user): void
@@ -404,9 +517,23 @@ class ProjectReportSignatureService
             ->where('parameters_hash', $signature->parameters_hash)
             ->where('status', 'signed')
             ->whereNotNull('signed_file_path')
+            ->where(function ($query) use ($signature): void {
+                $query->where('base_document_hash', $signature->base_document_hash);
+
+                if ($this->isProjectFrozen($signature->project)) {
+                    $query->orWhereNull('base_document_hash');
+                }
+            })
             ->where('id', '!=', $signature->id)
             ->latest('id')
             ->first();
+    }
+
+    private function isProjectFrozen(Project $project): bool
+    {
+        return $project->aprobado === 'RV'
+            || filled($project->fecha_finalizacion)
+            || (bool) ($project->is_frozen ?? false);
     }
 
     private function assertCanDeriveFromPreviousSignature(
@@ -540,6 +667,10 @@ class ProjectReportSignatureService
 
     private function requestApproval(ProjectReportSignature $signature, array $parameters): ProjectReportSignature
     {
+        if ($signature->status === 'sent' && $this->storedRedirectUrl($signature)) {
+            return $signature;
+        }
+
         $accessToken = $this->accessTokenFrom($parameters);
         $signatureCode = $this->signatureCode($signature);
         $validFrom = now();
@@ -654,6 +785,15 @@ class ProjectReportSignatureService
         }
 
         return $url;
+    }
+
+    private function storedRedirectUrl(ProjectReportSignature $signature): ?string
+    {
+        $url = data_get($signature->response_payload, 'redirect_url')
+            ?: data_get($signature->response_payload, 'data.url')
+            ?: data_get($signature->response_payload, 'data.link');
+
+        return is_string($url) && $url !== '' ? $url : null;
     }
 
     private function firstUrlInPayload(array|string|null $payload): ?string

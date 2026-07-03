@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, ExternalLink, FileSignature, FileText, History, Loader2, RefreshCw, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, ExternalLink, FileSignature, FileText, History, Loader2, RefreshCw, X } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 import { apiOrigin } from "@/lib/api/client";
@@ -83,6 +83,13 @@ function signatureStatusMeta(signatureStatus) {
   const latestSigned = signatureStatus?.latest_signed;
   const latestSignature = signatureStatus?.latest_signature;
 
+  if (signatureStatus?.is_signed_stale) {
+    return {
+      label: "Firma anterior disponible",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    };
+  }
+
   if (latestSigned?.has_signed_file) {
     return {
       label: "Firmado",
@@ -153,6 +160,8 @@ export default function PdfViewerPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [signatureStatus, setSignatureStatus] = useState(null);
   const [signatureLoading, setSignatureLoading] = useState(false);
+  const [signatureChecked, setSignatureChecked] = useState(!hasSignatureContext);
+  const [acceptedStaleNoticeKey, setAcceptedStaleNoticeKey] = useState("");
   const [signatureError, setSignatureError] = useState("");
   const [signing, setSigning] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -162,6 +171,16 @@ export default function PdfViewerPage() {
 
   const latestSigned = signatureStatus?.latest_signed;
   const hasSignedPdf = Boolean(latestSigned?.has_signed_file);
+  const isSignedStale = Boolean(signatureStatus?.is_signed_stale);
+  const staleNoticeKey = `${pdfUrl || ""}|${reloadKey}|${signatureProjectId || ""}|${signatureReportKey || ""}|${signatureParametersRaw}`;
+  const staleNoticeAccepted = acceptedStaleNoticeKey === staleNoticeKey;
+  const canRenderPdf = Boolean(
+    !loading
+      && !error
+      && blobUrl
+      && (!hasSignatureContext || signatureChecked)
+      && (!isSignedStale || staleNoticeAccepted),
+  );
   const statusMeta = signatureStatusMeta(signatureStatus);
 
   const canSignPdf = Boolean(
@@ -169,6 +188,7 @@ export default function PdfViewerPage() {
       && !error
       && blobUrl
       && hasSignatureContext
+      && (!isSignedStale || staleNoticeAccepted)
       && signatureStatus?.project_status_allows_signing
       && signatureStatus?.report?.is_enabled
       && signatureStatus?.report?.can_sign,
@@ -294,9 +314,12 @@ export default function PdfViewerPage() {
     let cancelled = false;
 
     async function loadSignatureStatus() {
+      setSignatureChecked(false);
+
       if (!hasSignatureContext) {
         setSignatureStatus(null);
         setSignatureError("");
+        setSignatureChecked(true);
         return;
       }
 
@@ -320,6 +343,7 @@ export default function PdfViewerPage() {
       } finally {
         if (!cancelled) {
           setSignatureLoading(false);
+          setSignatureChecked(true);
         }
       }
     }
@@ -491,7 +515,17 @@ export default function PdfViewerPage() {
           </div>
         ) : null}
 
-        {!loading && !error && blobUrl ? (
+        {!loading && !error && blobUrl && hasSignatureContext && !signatureChecked ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+            <Loader2 className="h-10 w-10 animate-spin text-slate-500" />
+            <div>
+              <p className="text-lg font-semibold">Validando firma...</p>
+              <p className="mt-1 text-sm text-slate-500">Revisando si existe un PDF firmado anterior.</p>
+            </div>
+          </div>
+        ) : null}
+
+        {canRenderPdf ? (
           <iframe
             title={title}
             src={blobUrl}
@@ -499,6 +533,39 @@ export default function PdfViewerPage() {
           />
         ) : null}
       </section>
+
+      {!loading && !error && blobUrl && signatureChecked && isSignedStale && !staleNoticeAccepted ? (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl border border-amber-200 bg-white p-6 text-center shadow-2xl">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <h2 className="mt-4 text-xl font-semibold">Firma anterior disponible</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              El proyecto fue modificado y existe un reporte anterior firmado. Se mostrará el reporte actual.
+            </p>
+            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setAcceptedStaleNoticeKey(staleNoticeKey)}
+                className="inline-flex items-center justify-center rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                Continuar y ver PDF actual
+              </button>
+              {hasSignedPdf ? (
+                <button
+                  type="button"
+                  onClick={() => openSignedPdf()}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 transition hover:bg-amber-100"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Abrir PDF firmado anterior
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {historyOpen ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">

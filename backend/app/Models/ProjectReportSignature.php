@@ -19,6 +19,7 @@ class ProjectReportSignature extends Model
         'code',
         'id_usuario',
         'base_file_path',
+        'base_document_hash',
         'signed_file_path',
         'request_payload',
         'response_payload',

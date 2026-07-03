@@ -93,15 +93,31 @@ class ProjectReportSignatureController extends Controller
             $latestSigned = $this->signatureService->latestSigned($project, $reportKey, $hash);
             $report = $reports->firstWhere('report_key', $reportKey);
             $projectIsFinalized = $project->isFrozen();
+            $currentDocumentHash = $latestSigned
+                ? $this->signatureService->currentDocumentHash($project, $reportKey, $parameters)
+                : null;
+            $signedDocumentHash = $latestSigned?->base_document_hash;
+            $isCurrentPdfSigned = filled($currentDocumentHash)
+                && filled($signedDocumentHash)
+                && hash_equals((string) $signedDocumentHash, (string) $currentDocumentHash);
 
             return ApiResponse::success([
                 'project_is_finalized' => $projectIsFinalized,
+                'project_is_frozen' => $projectIsFinalized,
                 'project_status_allows_signing' => $report
                     ? (! ($report['requires_finalized_project'] ?? true) || $projectIsFinalized)
                     : false,
                 'report' => $report,
                 'latest_signature' => $latest ? $this->signatureService->serialize($latest) : null,
                 'latest_signed' => $latestSigned ? $this->signatureService->serialize($latestSigned) : null,
+                'current_document_hash' => $currentDocumentHash,
+                'signed_document_hash' => $signedDocumentHash,
+                'is_current_pdf_signed' => $isCurrentPdfSigned,
+                'is_signed_stale' => $latestSigned
+                    && ! $projectIsFinalized
+                    && filled($currentDocumentHash)
+                    && filled($signedDocumentHash)
+                    && ! $isCurrentPdfSigned,
             ], 'Estado de firma obtenido correctamente.');
         }
 
@@ -422,7 +438,10 @@ class ProjectReportSignatureController extends Controller
         $signatureId = $this->signatureIdFromRequest($request);
 
         if ($signatureId !== '' && ctype_digit($signatureId)) {
-            $signature = ProjectReportSignature::query()->find($signatureId);
+            $signature = ProjectReportSignature::query()
+                ->whereKey($signatureId)
+                ->whereIn('status', ['auth_pending', 'sent'])
+                ->first();
 
             if ($signature) {
                 return $signature;
