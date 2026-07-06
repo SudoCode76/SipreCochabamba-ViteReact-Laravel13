@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { FileSignature } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 import apiClient from "@/lib/api/client";
+import { CitizenshipSessionIndicator } from "@/modules/pdf/components/CitizenshipSessionIndicator";
+import { citizenshipSessionKey } from "@/modules/pdf/services/citizenship.service";
 import { projectService } from "@/modules/projects/services/project.service";
 
 const SIGNATURE_SESSION_KEY = "sipre:ciudadania-digital:signature";
@@ -100,6 +103,7 @@ function buildPdfViewerUrl(url, title = "PDF firmado") {
 }
 
 export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const config = PHASE_CONFIG[phase] || PHASE_CONFIG.login;
   const [status, setStatus] = useState(config.initialStatus);
@@ -166,6 +170,7 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
           }
 
           clearPendingSignature();
+          void queryClient.invalidateQueries({ queryKey: citizenshipSessionKey });
           setStatus("Firma finalizada y sesión de Ciudadanía Digital cerrada.");
           return;
         }
@@ -196,6 +201,7 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
 
         if (phase === "logout" || (signature?.status === "signed" && !redirectUrl)) {
           clearPendingSignature();
+          void queryClient.invalidateQueries({ queryKey: citizenshipSessionKey });
         }
 
         setStatus(response.data?.message || config.successStatus);
@@ -212,7 +218,7 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
     return () => {
       cancelled = true;
     };
-  }, [callbackPayload, config.endpoint, config.initialStatus, config.redirectField, config.redirectStatus, config.successStatus, phase, searchParams]);
+  }, [callbackPayload, config.endpoint, config.initialStatus, config.redirectField, config.redirectStatus, config.successStatus, phase, queryClient, searchParams]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
@@ -237,6 +243,7 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
             {error}
           </div>
         ) : null}
+        {error ? <CitizenshipSessionIndicator compact /> : null}
         {signedReportUrl ? (
           <a
             className="mt-5 inline-flex rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground"

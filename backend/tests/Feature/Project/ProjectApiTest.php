@@ -11,8 +11,10 @@ use App\Models\SystemFunction;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\Citizenship\CiudadaniaDigitalClient;
+use App\Services\Citizenship\CiudadaniaDigitalException;
 use App\Modules\Projects\Services\ProjectReportSignatureService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -307,13 +309,17 @@ class ProjectApiTest extends TestCase
 
         $signature = ProjectReportSignature::query()->latest('id')->firstOrFail();
 
-        $this->assertSame('code-'.$signature->id, $signature->code);
-        $this->assertSame('code-'.$signature->id, $capturedPayload['code']);
+        $this->assertMatchesRegularExpression(
+            '/^sipre-'.$project->id_proyecto.'-[0-9a-f-]{36}$/',
+            (string) $signature->code
+        );
+        $this->assertSame($signature->code, $capturedPayload['code']);
         $this->assertArrayNotHasKey('code ', $capturedPayload);
         $this->assertArrayNotHasKey('id_system', $capturedPayload);
         $this->assertArrayNotHasKey('codigo', $capturedPayload);
         $this->assertSame('true', $capturedPayload['is_derivated']);
         $this->assertSame('false', $capturedPayload['format_sign']);
+        $this->assertSame('BOTTOM', $capturedPayload['signed_position']);
         $this->assertArrayHasKey('valid_from', $capturedPayload);
         $this->assertArrayHasKey('valid_to', $capturedPayload);
         $this->assertSame($capturedPayload['code'], $signature->request_payload['code']);
@@ -321,6 +327,7 @@ class ProjectApiTest extends TestCase
         $this->assertArrayNotHasKey('id_system', $signature->request_payload);
         $this->assertArrayNotHasKey('codigo', $signature->request_payload);
         $this->assertSame($capturedPayload['is_derivated'], $signature->request_payload['is_derivated']);
+        $this->assertSame($capturedPayload['signed_position'], $signature->request_payload['signed_position']);
         $this->assertSame($capturedPayload['valid_from'], $signature->request_payload['valid_from']);
         $this->assertSame($capturedPayload['valid_to'], $signature->request_payload['valid_to']);
         $this->assertArrayNotHasKey('acces_token', $signature->request_payload);
@@ -485,6 +492,210 @@ class ProjectApiTest extends TestCase
             ->assertRedirect();
     }
 
+    public function test_citizenship_session_reports_active_pending_signature(): void
+    {
+        $user = $this->createLegacyAuthUser();
+        $this->createProjectRecord(['id_proyecto' => 1]);
+        Sanctum::actingAs($user);
+
+        $signature = ProjectReportSignature::query()->create([
+            'id_proyecto' => 1,
+            'trace_id' => 'trace-session',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
+            'status' => 'error',
+            'code' => 'code-session',
+            'id_usuario' => $user->id_usuario,
+            'base_file_path' => 'project-signatures/base.pdf',
+            'error_message' => 'Error de firma',
+        ]);
+
+        Cache::put('ciudadania_digital_signature_token:'.$signature->id, 'token-ciudadania', now()->addMinutes(30));
+
+        $client = Mockery::mock(CiudadaniaDigitalClient::class);
+        $client->shouldReceive('userInfo')
+            ->once()
+            ->with('token-ciudadania')
+            ->andReturn(['data' => ['id' => 1]]);
+        $this->app->instance(CiudadaniaDigitalClient::class, $client);
+
+        $this->getJson('/api/v1/citizenship/session')
+            ->assertOk()
+            ->assertJsonPath('data.active', true)
+            ->assertJsonPath('data.can_logout', true)
+            ->assertJsonPath('data.signature.id', $signature->id);
+    }
+
+    public function test_citizenship_session_logout_returns_redirect_url_for_user_signature(): void
+    {
+        $user = $this->createLegacyAuthUser();
+        $this->createProjectRecord(['id_proyecto' => 1]);
+        Sanctum::actingAs($user);
+
+        $signature = ProjectReportSignature::query()->create([
+            'id_proyecto' => 1,
+            'trace_id' => 'trace-logout',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
+            'status' => 'error',
+            'code' => 'code-logout',
+            'id_usuario' => $user->id_usuario,
+            'base_file_path' => 'project-signatures/base.pdf',
+        ]);
+
+        Cache::put('ciudadania_digital_signature_token:'.$signature->id, 'token-ciudadania', now()->addMinutes(30));
+
+        $client = Mockery::mock(CiudadaniaDigitalClient::class);
+        $client->shouldReceive('userInfo')
+            ->once()
+            ->with('token-ciudadania')
+            ->andReturn(['data' => ['id' => 1]]);
+        $client->shouldReceive('logout')
+            ->once()
+            ->with('token-ciudadania', Mockery::type('string'))
+            ->andReturn(['data' => ['url' => 'https://ciudadania.test/logout']]);
+        $this->app->instance(CiudadaniaDigitalClient::class, $client);
+
+        $this->postJson('/api/v1/citizenship/session/logout')
+            ->assertOk()
+            ->assertJsonPath('data.active', false)
+            ->assertJsonPath('data.can_logout', true)
+            ->assertJsonPath('data.logout_redirect_url', 'https://ciudadania.test/logout');
+
+        $signature->refresh();
+        $this->assertSame('https://ciudadania.test/logout', data_get($signature->response_payload, 'logout_redirect_url'));
+        $this->assertNotEmpty(data_get($signature->response_payload, 'logout_requested_at'));
+        $this->assertFalse(Cache::has('ciudadania_digital_signature_token:'.$signature->id));
+
+        $this->getJson('/api/v1/citizenship/session')
+            ->assertOk()
+            ->assertJsonPath('data.active', false)
+            ->assertJsonPath('data.can_logout', false);
+    }
+
+    public function test_citizenship_session_ignores_historical_logout_redirect_url_without_token(): void
+    {
+        $user = $this->createLegacyAuthUser();
+        $this->createProjectRecord(['id_proyecto' => 1]);
+        Sanctum::actingAs($user);
+
+        ProjectReportSignature::query()->create([
+            'id_proyecto' => 1,
+            'trace_id' => 'trace-signed-logout',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
+            'status' => 'signed',
+            'code' => 'code-signed-logout',
+            'id_usuario' => $user->id_usuario,
+            'base_file_path' => 'project-signatures/base.pdf',
+            'signed_file_path' => 'project-signatures/signed.pdf',
+            'response_payload' => ['logout_redirect_url' => 'https://ciudadania.test/logout'],
+            'signed_at' => now(),
+        ]);
+
+        $this->getJson('/api/v1/citizenship/session')
+            ->assertOk()
+            ->assertJsonPath('data.active', false)
+            ->assertJsonPath('data.can_logout', false)
+            ->assertJsonPath('data.logout_redirect_url', null);
+    }
+
+    public function test_citizenship_session_logout_treats_missing_token_as_closed(): void
+    {
+        $user = $this->createLegacyAuthUser();
+        $this->createProjectRecord(['id_proyecto' => 1]);
+        Sanctum::actingAs($user);
+
+        $signature = ProjectReportSignature::query()->create([
+            'id_proyecto' => 1,
+            'trace_id' => 'trace-missing-token',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
+            'status' => 'error',
+            'code' => 'code-missing-token',
+            'id_usuario' => $user->id_usuario,
+            'base_file_path' => 'project-signatures/base.pdf',
+        ]);
+
+        $this->postJson('/api/v1/citizenship/session/logout')
+            ->assertOk()
+            ->assertJsonPath('data.active', false)
+            ->assertJsonPath('data.can_logout', false)
+            ->assertJsonPath('data.logout_redirect_url', null);
+
+        $signature->refresh();
+        $this->assertNotEmpty(data_get($signature->response_payload, 'logout_token_missing_at'));
+    }
+
+    public function test_citizenship_session_closes_invalid_cached_token(): void
+    {
+        $user = $this->createLegacyAuthUser();
+        $this->createProjectRecord(['id_proyecto' => 1]);
+        Sanctum::actingAs($user);
+
+        $signature = ProjectReportSignature::query()->create([
+            'id_proyecto' => 1,
+            'trace_id' => 'trace-invalid-token',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
+            'status' => 'error',
+            'code' => 'code-invalid-token',
+            'id_usuario' => $user->id_usuario,
+            'base_file_path' => 'project-signatures/base.pdf',
+        ]);
+
+        Cache::put('ciudadania_digital_signature_token:'.$signature->id, 'token-ciudadania', now()->addMinutes(30));
+
+        $client = Mockery::mock(CiudadaniaDigitalClient::class);
+        $client->shouldReceive('userInfo')
+            ->once()
+            ->with('token-ciudadania')
+            ->andThrow(new CiudadaniaDigitalException('Token inválido.', 'users/info', 401));
+        $this->app->instance(CiudadaniaDigitalClient::class, $client);
+
+        $this->getJson('/api/v1/citizenship/session')
+            ->assertOk()
+            ->assertJsonPath('data.active', false)
+            ->assertJsonPath('data.can_logout', false);
+
+        $signature->refresh();
+        $this->assertFalse(Cache::has('ciudadania_digital_signature_token:'.$signature->id));
+        $this->assertNotEmpty(data_get($signature->response_payload, 'citizenship_session_closed_at'));
+    }
+
+    public function test_signature_logout_callback_marks_citizenship_session_closed(): void
+    {
+        $this->createProjectRecord(['id_proyecto' => 1]);
+
+        $signature = ProjectReportSignature::query()->create([
+            'id_proyecto' => 1,
+            'trace_id' => 'trace-closed',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
+            'status' => 'signed',
+            'code' => 'code-closed',
+            'id_usuario' => 1,
+            'base_file_path' => 'project-signatures/base.pdf',
+            'signed_file_path' => 'project-signatures/signed.pdf',
+            'response_payload' => ['logout_redirect_url' => 'https://ciudadania.test/logout'],
+            'signed_at' => now(),
+        ]);
+        Cache::put('ciudadania_digital_signature_token:'.$signature->id, 'token-ciudadania', now()->addMinutes(30));
+
+        $this->get('/api/v1/citizenship/signature/logout-callback?signature='.$signature->id)
+            ->assertRedirect();
+
+        $signature->refresh();
+        $this->assertNotEmpty(data_get($signature->response_payload, 'logout_confirmed_at'));
+        $this->assertFalse(Cache::has('ciudadania_digital_signature_token:'.$signature->id));
+    }
+
     public function test_signature_browser_post_callback_redirects_unless_json_is_requested(): void
     {
         $this->post('/api/v1/citizenship/signature/login-callback')
@@ -533,6 +744,129 @@ class ProjectApiTest extends TestCase
             'https://aprobador.test/solicitudes/existing',
             $result->response_payload['redirect_url']
         );
+    }
+
+    public function test_new_signature_replaces_incomplete_attempt_for_same_user_and_report(): void
+    {
+        ProjectSignableReport::query()
+            ->where('report_key', 'general_budget')
+            ->update(['is_enabled' => true]);
+
+        $project = $this->createProjectRecord([
+            'aprobado' => 'RV',
+            'fecha_aprob' => now()->toDateString(),
+            'fecha_finalizacion' => now(),
+        ]);
+        $user = $this->createProjectUserWithPermissions([
+            'PRESUPUESTO_GENERAL',
+            'FIRMAR_REPORTES',
+        ]);
+        $hash = app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']);
+
+        Storage::disk('local')->put('project-signatures/abandoned-base.pdf', '%PDF-abandoned');
+        $abandoned = ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'trace_id' => 'trace-abandoned',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => $hash,
+            'status' => 'sent',
+            'code' => 'code-abandoned',
+            'id_usuario' => $user->id_usuario,
+            'base_file_path' => 'project-signatures/abandoned-base.pdf',
+            'response_payload' => ['redirect_url' => 'https://aprobador.test/solicitudes/abandoned'],
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $client = Mockery::mock(CiudadaniaDigitalClient::class);
+        $client->shouldReceive('createAuthenticationUrl')
+            ->once()
+            ->andReturn([
+                'status' => 200,
+                'data' => ['url' => 'https://ciudadania.test/login?state=new-state'],
+            ]);
+        $this->app->instance(CiudadaniaDigitalClient::class, $client);
+
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/sign", [
+            'format' => 'PCA',
+        ])->assertCreated();
+
+        $this->assertDatabaseMissing('project_report_signatures', ['id' => $abandoned->id]);
+        $this->assertFalse(Storage::disk('local')->exists('project-signatures/abandoned-base.pdf'));
+        $this->assertDatabaseHas('project_report_signatures', [
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'general_budget',
+            'status' => 'auth_pending',
+            'id_usuario' => $user->id_usuario,
+        ]);
+    }
+
+    public function test_signature_history_only_returns_completed_signatures(): void
+    {
+        $project = $this->createProjectRecord(['id_proyecto' => 1]);
+        $hash = app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']);
+        Storage::disk('local')->put('project-signatures/signed.pdf', '%PDF-signed');
+
+        ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'trace_id' => 'trace-signed',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => $hash,
+            'status' => 'signed',
+            'code' => 'code-signed',
+            'id_usuario' => 1,
+            'base_file_path' => 'project-signatures/signed.pdf',
+            'signed_file_path' => 'project-signatures/signed.pdf',
+        ]);
+        ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'trace_id' => 'trace-sent',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => $hash,
+            'status' => 'sent',
+            'code' => 'code-sent',
+            'id_usuario' => 1,
+            'base_file_path' => 'project-signatures/sent.pdf',
+        ]);
+
+        Sanctum::actingAs($this->createProjectUserWithPermissions(['PRESUPUESTO_GENERAL']));
+
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signatures?format=PCA")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.status', 'signed');
+    }
+
+    public function test_late_login_callback_for_replaced_signature_does_not_use_another_pending_signature(): void
+    {
+        $this->createProjectRecord(['id_proyecto' => 1]);
+
+        $active = ProjectReportSignature::query()->create([
+            'id_proyecto' => 1,
+            'trace_id' => 'trace-active',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
+            'status' => 'auth_pending',
+            'id_usuario' => 1,
+            'base_file_path' => 'project-signatures/active.pdf',
+        ]);
+        $replacedId = $active->id + 100;
+
+        $response = $this
+            ->get('/api/v1/citizenship/signature/login-callback?signature='.$replacedId.'&access_token=token-ciudadania')
+            ->assertRedirect();
+
+        $location = $response->headers->get('Location');
+        $this->assertStringContainsString('error_message=', $location);
+        $this->assertStringContainsString('La+solicitud+de+firma+ya+no+est%C3%A1+activa', $location);
+        $this->assertDatabaseHas('project_report_signatures', [
+            'id' => $active->id,
+            'status' => 'auth_pending',
+        ]);
     }
 
     public function test_second_report_signature_uses_previous_signed_url_for_derivation(): void
@@ -633,7 +967,12 @@ class ProjectApiTest extends TestCase
 
         $this->assertSame('true', $capturedPayload['firmar_derivacion']);
         $this->assertSame('https://repo.test/previous-updated.pdf', $capturedPayload['url_document']);
-        $this->assertSame('code-'.$signature->id, $capturedPayload['code']);
+        $this->assertMatchesRegularExpression(
+            '/^sipre-'.$project->id_proyecto.'-[0-9a-f-]{36}$/',
+            (string) $capturedPayload['code']
+        );
+        $this->assertSame($signature->code, $capturedPayload['code']);
+        $this->assertSame('BOTTOM', $capturedPayload['signed_position']);
         $this->assertArrayNotHasKey('is_derivated', $capturedPayload);
         $this->assertSame($capturedPayload['url_document'], $signature->request_payload['url_document']);
     }
@@ -687,6 +1026,81 @@ class ProjectApiTest extends TestCase
             $originalHash,
             $service->currentDocumentHash($project, 'general_budget', $parameters)
         );
+    }
+
+    public function test_signature_status_marks_open_project_signed_report_as_stale_when_project_content_changes(): void
+    {
+        ProjectSignableReport::query()
+            ->where('report_key', 'general_budget')
+            ->update(['is_enabled' => true, 'requires_finalized_project' => false]);
+
+        $project = $this->createProjectRecord(['aprobado' => 'AP']);
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createItemRecord(['id_item' => 1]);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM NUEVO', 'cod' => 'ITM-002']);
+        $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'cantidad' => 1, 'precio' => 10]);
+
+        $service = app(ProjectReportSignatureService::class);
+        $parameters = ['format' => 'PCA'];
+        $path = 'project-signatures/stale.pdf';
+        Storage::disk('local')->put($path, '%PDF-signed');
+
+        ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'trace_id' => 'trace-stale',
+            'report_key' => 'general_budget',
+            'parameters' => $parameters,
+            'parameters_hash' => $service->parametersHash($parameters),
+            'status' => 'signed',
+            'id_usuario' => 1,
+            'base_file_path' => $path,
+            'signed_file_path' => $path,
+            'base_document_hash' => $service->currentDocumentHash($project, 'general_budget', $parameters),
+        ]);
+
+        $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'cantidad' => 1, 'precio' => 20]);
+
+        Sanctum::actingAs($this->createProjectUserWithPermissions(['PRESUPUESTO_GENERAL', 'FIRMAR_REPORTES']));
+
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget&format=PCA")
+            ->assertOk()
+            ->assertJsonPath('data.is_current_pdf_signed', false)
+            ->assertJsonPath('data.is_signed_stale', true);
+    }
+
+    public function test_signature_status_marks_open_project_legacy_signed_report_without_hash_as_stale(): void
+    {
+        ProjectSignableReport::query()
+            ->where('report_key', 'general_budget')
+            ->update(['is_enabled' => true, 'requires_finalized_project' => false]);
+
+        $project = $this->createProjectRecord(['aprobado' => 'AP']);
+        $service = app(ProjectReportSignatureService::class);
+        $parameters = ['format' => 'PCA'];
+        $path = 'project-signatures/legacy-no-hash.pdf';
+        Storage::disk('local')->put($path, '%PDF-signed');
+
+        ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'trace_id' => 'trace-no-hash',
+            'report_key' => 'general_budget',
+            'parameters' => $parameters,
+            'parameters_hash' => $service->parametersHash($parameters),
+            'status' => 'signed',
+            'id_usuario' => 1,
+            'base_file_path' => $path,
+            'signed_file_path' => $path,
+            'base_document_hash' => null,
+        ]);
+
+        Sanctum::actingAs($this->createProjectUserWithPermissions(['PRESUPUESTO_GENERAL', 'FIRMAR_REPORTES']));
+
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget&format=PCA")
+            ->assertOk()
+            ->assertJsonPath('data.is_current_pdf_signed', false)
+            ->assertJsonPath('data.is_signed_stale', true);
     }
 
     public function test_report_signature_blocks_repeated_citizenship_signer(): void
@@ -802,6 +1216,7 @@ class ProjectApiTest extends TestCase
             ->once()
             ->andReturn(null);
         $this->app->instance(CiudadaniaDigitalClient::class, $client);
+        Cache::put('ciudadania_digital_signature_token:'.$signature->id, 'token-ciudadania', now()->addMinutes(30));
 
         $this->postJson('/api/v1/citizenship/signature/approval-callback', [
             'code' => 'code-complete',
@@ -815,6 +1230,7 @@ class ProjectApiTest extends TestCase
         $this->assertSame('signed', $signature->status);
         $this->assertSame('https://repo.test/completed.pdf', data_get($signature->response_payload, 'signed_document_url'));
         $this->assertTrue(Storage::disk('local')->exists($signature->signed_file_path));
+        $this->assertFalse(Cache::has('ciudadania_digital_signature_token:'.$signature->id));
     }
 
     public function test_signature_approval_callback_accepts_code(): void

@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { canAccessNavigationItem, hasPermission } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 import { itemsService } from "@/modules/dashboard/services/items.service";
+import { CitizenshipSessionIndicator } from "@/modules/pdf/components/CitizenshipSessionIndicator";
 
 function isSectionActive(section, pathname) {
   if (section.path) {
@@ -140,6 +141,7 @@ export default function MainLayout() {
           </nav>
 
           <div className="flex items-center gap-3">
+            <CitizenshipSessionIndicator />
             {canViewItemAlerts && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

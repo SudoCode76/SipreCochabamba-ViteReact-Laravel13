@@ -13,6 +13,8 @@ Route::get('/citizenship/signature/logout-callback', [ProjectReportSignatureCont
 Route::post('/citizenship/signature/logout-callback', [ProjectReportSignatureController::class, 'logoutCallback']);
 
 Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
+    Route::get('/citizenship/session', [ProjectReportSignatureController::class, 'citizenshipSession']);
+    Route::post('/citizenship/session/logout', [ProjectReportSignatureController::class, 'logoutCitizenshipSession']);
     Route::get('/signable-project-reports', [ProjectReportSignatureController::class, 'index']);
     Route::patch('/signable-project-reports/{reportKey}', [ProjectReportSignatureController::class, 'update']);
 });

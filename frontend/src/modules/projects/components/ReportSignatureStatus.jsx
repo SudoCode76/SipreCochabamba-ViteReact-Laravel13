@@ -18,6 +18,10 @@ function statusMeta(status) {
   const latestSigned = status?.latest_signed;
   const latestSignature = status?.latest_signature;
 
+  if (status?.is_signed_stale) {
+    return { label: "Firma anterior disponible", className: "bg-amber-100 text-amber-700" };
+  }
+
   if (latestSigned?.has_signed_file) {
     return { label: "Firmado", className: "bg-emerald-100 text-emerald-700" };
   }

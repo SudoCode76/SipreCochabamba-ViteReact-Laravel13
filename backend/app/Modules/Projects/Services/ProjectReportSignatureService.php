@@ -31,6 +31,8 @@ class ProjectReportSignatureService
 
         $normalizedParameters = $this->normalizeParameters($parameters);
         $hash = $this->parametersHash($normalizedParameters);
+        $this->deleteIncompleteAttempts($project, $reportKey, $hash, $user);
+
         $pdf = $this->pdfResolver->resolve($project, $reportKey, $normalizedParameters);
         $baseDocumentHash = $this->currentDocumentHash($project, $reportKey, $normalizedParameters);
         $previous = $this->latestSigned($project, $reportKey, $hash);
@@ -55,6 +57,7 @@ class ProjectReportSignatureService
             'parameters' => $normalizedParameters,
             'parameters_hash' => $hash,
             'status' => 'pending',
+            'code' => $this->newSignatureCode($project),
             'id_usuario' => $user->id_usuario,
             'base_file_path' => $basePath,
             'base_document_hash' => $baseDocumentHash,
@@ -102,7 +105,11 @@ class ProjectReportSignatureService
             ->where('code', $code)
             ->orWhere('id', is_numeric($code) ? (int) $code : 0)
             ->latest('id')
-            ->firstOrFail();
+            ->first();
+
+        if (! $signature) {
+            throw new RuntimeException('La solicitud de firma ya no está activa. Inicie la firma nuevamente.');
+        }
 
         try {
             $accessToken = $this->accessTokenFrom($payload) ?: Cache::get($this->accessTokenCacheKey($signature));
@@ -178,6 +185,7 @@ class ProjectReportSignatureService
             ->where('id_proyecto', $project->id_proyecto)
             ->where('report_key', $reportKey)
             ->when($parametersHash, fn ($query) => $query->where('parameters_hash', $parametersHash))
+            ->where('status', 'signed')
             ->latest('id')
             ->get()
             ->map(fn (ProjectReportSignature $signature): array => $this->serialize($signature))
@@ -266,12 +274,105 @@ class ProjectReportSignatureService
                 ?: data_get($signature->response_payload, 'url')
                 ?: (is_string(data_get($signature->response_payload, 'data')) ? data_get($signature->response_payload, 'data') : null),
             'logout_redirect_url' => data_get($signature->response_payload, 'logout_redirect_url'),
+            'logout_confirmed_at' => data_get($signature->response_payload, 'logout_confirmed_at'),
             'signed_document_url' => data_get($signature->response_payload, 'signed_document_url'),
             'validation' => data_get($signature->response_payload, 'validation'),
             'citizenship_user' => data_get($signature->response_payload, 'ciudadania_user.data'),
             'validation_records' => data_get($signature->response_payload, 'validation.data.registros', []),
             'error_message' => $signature->error_message,
         ];
+    }
+
+    public function citizenshipSession(User $user): array
+    {
+        $session = $this->currentCitizenshipSession($user);
+
+        if (! $session) {
+            return [
+                'active' => false,
+                'can_logout' => false,
+                'logout_redirect_url' => null,
+                'signature' => null,
+            ];
+        }
+
+        $signature = $session['signature'];
+        $logoutRedirectUrl = $this->storedLogoutRedirectUrl($signature);
+
+        return [
+            'active' => true,
+            'can_logout' => true,
+            'logout_redirect_url' => $logoutRedirectUrl,
+            'signature' => $this->serialize($signature),
+        ];
+    }
+
+    public function logoutCitizenshipSession(User $user): array
+    {
+        $session = $this->currentCitizenshipSession($user);
+
+        if (! $session) {
+            return [
+                'active' => false,
+                'can_logout' => false,
+                'logout_redirect_url' => null,
+                'signature' => null,
+            ];
+        }
+
+        $signature = $session['signature'];
+        $accessToken = $session['access_token'];
+        $logoutRedirectUrl = $this->storedLogoutRedirectUrl($signature);
+
+        if (! $logoutRedirectUrl) {
+            $logoutResponse = $this->ciudadaniaDigitalClient->logout($accessToken, $this->logoutCallbackUrl($signature));
+            $logoutRedirectUrl = is_array($logoutResponse) ? $this->redirectUrlFromResponse($logoutResponse, false) : null;
+
+            if ($logoutRedirectUrl) {
+                $signature->forceFill([
+                    'response_payload' => array_merge($signature->response_payload ?? [], [
+                        'logout' => $logoutResponse,
+                        'logout_redirect_url' => $logoutRedirectUrl,
+                    ]),
+                ])->save();
+                $signature->refresh();
+            }
+        }
+
+        if ($logoutRedirectUrl) {
+            Cache::forget($this->accessTokenCacheKey($signature));
+
+            $signature->forceFill([
+                'response_payload' => array_merge($signature->response_payload ?? [], [
+                    'logout_requested_at' => now()->toIso8601String(),
+                ]),
+            ])->save();
+            $signature->refresh();
+        }
+
+        return [
+            'active' => $logoutRedirectUrl === null,
+            'can_logout' => $logoutRedirectUrl !== null,
+            'logout_redirect_url' => $logoutRedirectUrl,
+            'signature' => $this->serialize($signature),
+        ];
+    }
+
+    public function confirmCitizenshipLogout(?ProjectReportSignature $signature): ?ProjectReportSignature
+    {
+        if (! $signature) {
+            return null;
+        }
+
+        Cache::forget($this->accessTokenCacheKey($signature));
+
+        $signature->forceFill([
+            'response_payload' => array_merge($signature->response_payload ?? [], [
+                'logout_confirmed_at' => now()->toIso8601String(),
+            ]),
+        ])->save();
+
+        return $signature->refresh();
     }
 
     public function normalizeParameters(array $parameters): array
@@ -407,6 +508,26 @@ class ProjectReportSignatureService
         Storage::disk('local')->put($path, $content);
 
         return $path;
+    }
+
+    private function deleteIncompleteAttempts(Project $project, string $reportKey, string $parametersHash, User $user): void
+    {
+        ProjectReportSignature::query()
+            ->where('id_proyecto', $project->id_proyecto)
+            ->where('report_key', $reportKey)
+            ->where('parameters_hash', $parametersHash)
+            ->where('id_usuario', $user->id_usuario)
+            ->whereIn('status', ['pending', 'auth_pending', 'sent', 'error'])
+            ->whereNull('signed_file_path')
+            ->get()
+            ->each(function (ProjectReportSignature $signature): void {
+                foreach (array_filter([$signature->base_file_path]) as $path) {
+                    Storage::disk('local')->delete($path);
+                }
+
+                Cache::forget($this->accessTokenCacheKey($signature));
+                $signature->delete();
+            });
     }
 
     private function storeSignedPdf(ProjectReportSignature $signature, string $content): string
@@ -695,6 +816,7 @@ class ProjectReportSignatureService
             'num_documento' => '',
             'valid_from' => $validFrom->toIso8601String(),
             'valid_to' => $validTo->toIso8601String(),
+            'signed_position' => 'BOTTOM',
         ];
 
         try {
@@ -794,6 +916,73 @@ class ProjectReportSignatureService
             ?: data_get($signature->response_payload, 'data.link');
 
         return is_string($url) && $url !== '' ? $url : null;
+    }
+
+    private function storedLogoutRedirectUrl(ProjectReportSignature $signature): ?string
+    {
+        $url = data_get($signature->response_payload, 'logout_redirect_url');
+
+        return is_string($url) && $url !== '' ? $url : null;
+    }
+
+    private function currentCitizenshipSession(User $user): ?array
+    {
+        return ProjectReportSignature::query()
+            ->with('user')
+            ->where('id_usuario', $user->id_usuario)
+            ->whereIn('status', ['auth_pending', 'sent', 'error'])
+            ->latest('id')
+            ->get()
+            ->map(function (ProjectReportSignature $signature): ?array {
+                if ($this->hasCitizenshipSessionCloseMarker($signature)) {
+                    return null;
+                }
+
+                $cacheKey = $this->accessTokenCacheKey($signature);
+                $accessToken = Cache::get($cacheKey);
+
+                if (! is_string($accessToken) || $accessToken === '') {
+                    Cache::forget($cacheKey);
+                    $this->markCitizenshipSessionClosed($signature, 'logout_token_missing_at');
+
+                    return null;
+                }
+
+                try {
+                    $this->ciudadaniaDigitalClient->userInfo($accessToken);
+                } catch (CiudadaniaDigitalException) {
+                    Cache::forget($cacheKey);
+                    $this->markCitizenshipSessionClosed($signature, 'citizenship_session_closed_at');
+
+                    return null;
+                }
+
+                return [
+                    'signature' => $signature,
+                    'access_token' => $accessToken,
+                ];
+            })
+            ->first(fn (?array $session): bool => $session !== null);
+    }
+
+    private function hasCitizenshipSessionCloseMarker(ProjectReportSignature $signature): bool
+    {
+        foreach (['logout_requested_at', 'logout_token_missing_at', 'logout_confirmed_at', 'citizenship_session_closed_at'] as $key) {
+            if (filled(data_get($signature->response_payload, $key))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function markCitizenshipSessionClosed(ProjectReportSignature $signature, string $key): void
+    {
+        $signature->forceFill([
+            'response_payload' => array_merge($signature->response_payload ?? [], [
+                $key => now()->toIso8601String(),
+            ]),
+        ])->save();
     }
 
     private function firstUrlInPayload(array|string|null $payload): ?string
@@ -897,7 +1086,19 @@ class ProjectReportSignatureService
 
     private function signatureCode(ProjectReportSignature $signature): string
     {
-        return $signature->code ?: 'code-'.$signature->id;
+        if ($signature->code) {
+            return $signature->code;
+        }
+
+        $code = $this->newSignatureCode($signature->project);
+        $signature->forceFill(['code' => $code])->save();
+
+        return $code;
+    }
+
+    private function newSignatureCode(Project $project): string
+    {
+        return sprintf('sipre-%d-%s', $project->id_proyecto, Str::uuid());
     }
 
     private function accessTokenFrom(array $payload): ?string

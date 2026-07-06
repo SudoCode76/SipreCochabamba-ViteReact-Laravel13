@@ -100,6 +100,9 @@ class ProjectReportSignatureController extends Controller
             $isCurrentPdfSigned = filled($currentDocumentHash)
                 && filled($signedDocumentHash)
                 && hash_equals((string) $signedDocumentHash, (string) $currentDocumentHash);
+            $isSignedStale = (bool) $latestSigned
+                && ! $projectIsFinalized
+                && (! filled($signedDocumentHash) || ! $isCurrentPdfSigned);
 
             return ApiResponse::success([
                 'project_is_finalized' => $projectIsFinalized,
@@ -113,11 +116,7 @@ class ProjectReportSignatureController extends Controller
                 'current_document_hash' => $currentDocumentHash,
                 'signed_document_hash' => $signedDocumentHash,
                 'is_current_pdf_signed' => $isCurrentPdfSigned,
-                'is_signed_stale' => $latestSigned
-                    && ! $projectIsFinalized
-                    && filled($currentDocumentHash)
-                    && filled($signedDocumentHash)
-                    && ! $isCurrentPdfSigned,
+                'is_signed_stale' => $isSignedStale,
             ], 'Estado de firma obtenido correctamente.');
         }
 
@@ -220,14 +219,40 @@ class ProjectReportSignatureController extends Controller
         ]);
     }
 
+    public function citizenshipSession(Request $request): JsonResponse
+    {
+        return ApiResponse::success(
+            $this->signatureService->citizenshipSession($request->user()),
+            'Estado de sesión de Ciudadanía Digital obtenido correctamente.'
+        );
+    }
+
+    public function logoutCitizenshipSession(Request $request): JsonResponse
+    {
+        $session = $this->signatureService->logoutCitizenshipSession($request->user());
+
+        if (($session['active'] ?? false) && ! ($session['logout_redirect_url'] ?? null)) {
+            return ApiResponse::error(
+                'No se pudo generar el cierre de sesión de Ciudadanía Digital. Intente iniciar la firma nuevamente.',
+                ['session' => ['La sesión ya no dispone de un token válido para cerrarse.']],
+                422
+            );
+        }
+
+        return ApiResponse::success($session, 'Cierre de sesión de Ciudadanía Digital iniciado correctamente.');
+    }
+
     public function loginCallback(Request $request): JsonResponse|RedirectResponse
     {
+        $requestedSignatureId = $this->signatureIdFromRequest($request);
         $signature = $this->signatureForLoginCallback($request);
         $signatureId = $signature ? (string) $signature->id : '';
 
         if ($signatureId === '') {
             $traceId = (string) Str::uuid();
-            $message = 'No se recibió la solicitud de firma. Código de seguimiento: '.$traceId;
+            $message = $requestedSignatureId !== '' && ctype_digit($requestedSignatureId)
+                ? 'La solicitud de firma ya no está activa. Inicie la firma nuevamente.'
+                : 'No se recibió la solicitud de firma. Código de seguimiento: '.$traceId;
             $recentPendingSignatures = ProjectReportSignature::query()
                 ->where('status', 'auth_pending')
                 ->latest('id')
@@ -363,7 +388,9 @@ class ProjectReportSignatureController extends Controller
 
     public function logoutCallback(Request $request): JsonResponse|RedirectResponse
     {
-        $signature = $this->signatureForLogoutCallback($request);
+        $signature = $this->signatureService->confirmCitizenshipLogout(
+            $this->signatureForLogoutCallback($request)
+        );
 
         if (! $this->wantsJson($request)) {
             return redirect()->to($this->frontendSignatureCallbackUrl('logout', [
@@ -446,6 +473,8 @@ class ProjectReportSignatureController extends Controller
             if ($signature) {
                 return $signature;
             }
+
+            return null;
         }
 
         $state = $request->query('state') ?: $request->input('state');

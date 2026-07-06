@@ -339,7 +339,7 @@ export default function ProjectsPage() {
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
   const historyProjectId = historyProject?.id_proyecto;
   const reportVersionProjectId = reportVersionProject?.id_proyecto;
-  const shouldLoadReportVersions = Boolean(reportVersionProjectId) && Number(reportVersionProject?.version_count || 1) > 1;
+  const shouldLoadReportVersions = Boolean(reportVersionProjectId);
 
   const {
     data: reportVersionsData,
@@ -354,6 +354,7 @@ export default function ProjectsPage() {
   const reportVersions = shouldLoadReportVersions
     ? (reportVersionsData?.data?.items ?? (reportVersionProject ? [reportVersionProject] : []))
     : (reportVersionProject ? [reportVersionProject] : []);
+  const shouldShowReportVersionSelector = reportVersionsLoading || reportVersions.length > 1;
   const selectedReportProject = reportVersions.find((version) => String(version.id_proyecto) === String(selectedReportProjectId))
     || getDefaultReportVersion(reportVersions, reportVersionProject);
   const resolvedReportProjectId = selectedReportProject?.id_proyecto || selectedReportProjectId || reportVersionProject?.id_proyecto;
@@ -485,7 +486,7 @@ export default function ProjectsPage() {
 
   const openReportVersionScope = (project) => {
     setReportVersionProject(project);
-    setSelectedReportProjectId(project?.id_proyecto ? String(project.id_proyecto) : "");
+    setSelectedReportProjectId("");
   };
 
   const closeReportVersionScope = () => {
@@ -494,7 +495,7 @@ export default function ProjectsPage() {
   };
 
   const renderReportVersionSelector = () => {
-    if (!shouldLoadReportVersions) {
+    if (!shouldShowReportVersionSelector) {
       return null;
     }
 
