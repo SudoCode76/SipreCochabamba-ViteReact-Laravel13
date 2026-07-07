@@ -13,6 +13,8 @@ import { authService } from "@/modules/auth/services/auth.service";
 
 const MIN_CROP_PERCENT = 8;
 const CROP_HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+const ROTATION_MIN = -180;
+const ROTATION_MAX = 180;
 
 function userName(user) {
   return user?.full_name || user?.nombre || user?.username || "Usuario";
@@ -103,6 +105,9 @@ export default function ProfilePage() {
   const [selectedFileName, setSelectedFileName] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewImage, setPreviewImage] = useState(null);
+  const [rotatedPreviewUrl, setRotatedPreviewUrl] = useState("");
+  const [rotatedImage, setRotatedImage] = useState(null);
+  const [rotation, setRotation] = useState(0);
   const [crop, setCrop] = useState({ x: 10, y: 10, w: 80, h: 80 });
   const [drag, setDrag] = useState(null);
 
@@ -164,7 +169,10 @@ export default function ProfilePage() {
     setSelectedFileName(file.name);
     setCrop({ x: 10, y: 10, w: 80, h: 80 });
     setDrag(null);
+    setRotation(0);
     setPreviewImage(null);
+    setRotatedImage(null);
+    setRotatedPreviewUrl("");
     setPreviewUrl((currentUrl) => {
       if (currentUrl) {
         URL.revokeObjectURL(currentUrl);
@@ -177,6 +185,9 @@ export default function ProfilePage() {
   const clearSelectedFile = () => {
     setSelectedFileName("");
     setPreviewImage(null);
+    setRotatedImage(null);
+    setRotatedPreviewUrl("");
+    setRotation(0);
     setCrop({ x: 10, y: 10, w: 80, h: 80 });
     setDrag(null);
     setPreviewUrl((currentUrl) => {
@@ -193,18 +204,20 @@ export default function ProfilePage() {
   };
 
   const handleSaveCrop = async () => {
-    if (!previewImage) {
+    const image = rotatedImage || previewImage;
+
+    if (!image) {
       return;
     }
 
     const canvas = document.createElement("canvas");
-    const sx = Math.round((crop.x / 100) * previewImage.naturalWidth);
-    const sy = Math.round((crop.y / 100) * previewImage.naturalHeight);
-    const sw = Math.round((crop.w / 100) * previewImage.naturalWidth);
-    const sh = Math.round((crop.h / 100) * previewImage.naturalHeight);
+    const sx = Math.round((crop.x / 100) * image.naturalWidth);
+    const sy = Math.round((crop.y / 100) * image.naturalHeight);
+    const sw = Math.round((crop.w / 100) * image.naturalWidth);
+    const sh = Math.round((crop.h / 100) * image.naturalHeight);
     canvas.width = sw;
     canvas.height = sh;
-    canvas.getContext("2d").drawImage(previewImage, sx, sy, sw, sh, 0, 0, sw, sh);
+    canvas.getContext("2d").drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
 
     canvas.toBlob((blob) => {
       if (!blob) {
@@ -276,6 +289,38 @@ export default function ProfilePage() {
       image.onload = null;
     };
   }, [previewUrl]);
+
+  useEffect(() => {
+    if (!previewImage) {
+      return undefined;
+    }
+
+    const radians = (rotation * Math.PI) / 180;
+    const sin = Math.abs(Math.sin(radians));
+    const cos = Math.abs(Math.cos(radians));
+    const width = Math.ceil(previewImage.naturalWidth * cos + previewImage.naturalHeight * sin);
+    const height = Math.ceil(previewImage.naturalWidth * sin + previewImage.naturalHeight * cos);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    context.translate(width / 2, height / 2);
+    context.rotate(radians);
+    context.drawImage(previewImage, -previewImage.naturalWidth / 2, -previewImage.naturalHeight / 2);
+
+    const url = canvas.toDataURL("image/png");
+    const image = new Image();
+    image.onload = () => {
+      setRotatedPreviewUrl(url);
+      setRotatedImage(image);
+    };
+    image.src = url;
+
+    return () => {
+      image.onload = null;
+    };
+  }, [previewImage, rotation]);
 
   useEffect(() => () => {
     if (previewUrl) {
@@ -376,7 +421,7 @@ export default function ProfilePage() {
                   <div>
                     <h3 className="text-sm font-semibold">Recortar firma</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Arrastra el recuadro o sus esquinas antes de guardar.
+                      Arrastra el recuadro, sus esquinas o ajusta la rotación antes de guardar.
                     </p>
                   </div>
                   <Button type="button" variant="ghost" size="icon" onClick={clearSelectedFile} disabled={uploadMutation.isPending} aria-label="Cancelar recorte">
@@ -392,7 +437,7 @@ export default function ProfilePage() {
                     onPointerUp={endCropDrag}
                     onPointerCancel={endCropDrag}
                   >
-                    <img src={previewUrl} alt="Recorte de firma" className="block max-h-[500px] max-w-full" draggable={false} />
+                    <img src={rotatedPreviewUrl || previewUrl} alt="Recorte de firma" className="block max-h-[500px] max-w-full" draggable={false} />
                     <div
                       className="absolute border-2 border-violet-500 bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.32)]"
                       style={{
@@ -417,11 +462,34 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
+                <div className="mt-4 rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
+                  <div className="mb-2 flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                    <span>Rotación</span>
+                    <span>{rotation}°</span>
+                  </div>
+                  <Input
+                    type="range"
+                    min={ROTATION_MIN}
+                    max={ROTATION_MAX}
+                    step="1"
+                    value={rotation}
+                    onChange={(event) => setRotation(Number(event.target.value))}
+                    className="h-2 cursor-pointer p-0"
+                  />
+                  <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
+                    <span>{ROTATION_MIN}°</span>
+                    <Button type="button" variant="ghost" size="sm" className="h-6 rounded-full px-2 text-xs" onClick={() => setRotation(0)}>
+                      0°
+                    </Button>
+                    <span>{ROTATION_MAX}°</span>
+                  </div>
+                </div>
+
                 <div className="mt-4 flex justify-end gap-2">
                   <Button type="button" variant="outline" className="rounded-full" onClick={clearSelectedFile} disabled={uploadMutation.isPending}>
                     Cancelar
                   </Button>
-                  <Button type="button" className="rounded-full bg-foreground text-background hover:bg-foreground/90" onClick={handleSaveCrop} disabled={uploadMutation.isPending || !previewImage}>
+                  <Button type="button" className="rounded-full bg-foreground text-background hover:bg-foreground/90" onClick={handleSaveCrop} disabled={uploadMutation.isPending || !previewImage || !rotatedImage}>
                     {uploadMutation.isPending ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Upload data-icon="inline-start" />}
                     {uploadMutation.isPending ? "Guardando..." : "Guardar firma"}
                   </Button>
