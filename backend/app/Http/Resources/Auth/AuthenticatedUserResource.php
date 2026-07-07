@@ -15,6 +15,9 @@ class AuthenticatedUserResource extends JsonResource
             'ci' => $this->ci,
             'username' => $this->username,
             'status' => $this->estado,
+            'signature_image_url' => $this->firma_imagen_path
+                ? '/storage/'.ltrim((string) $this->firma_imagen_path, '/')
+                : null,
             'is_admin' => $this->isAdministrator(),
             'role' => $this->whenLoaded('role', fn (): ?array => $this->role ? [
                 'id' => $this->role->id_rol,

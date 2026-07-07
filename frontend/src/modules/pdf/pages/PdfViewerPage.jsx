@@ -168,10 +168,16 @@ export default function PdfViewerPage() {
   const [latestSigners, setLatestSigners] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [physicalStatus, setPhysicalStatus] = useState(null);
+  const [physicalLoading, setPhysicalLoading] = useState(false);
+  const [physicalError, setPhysicalError] = useState("");
+  const [markingPhysical, setMarkingPhysical] = useState(false);
 
   const latestSigned = signatureStatus?.latest_signed;
   const hasSignedPdf = Boolean(latestSigned?.has_signed_file);
   const isSignedStale = Boolean(signatureStatus?.is_signed_stale);
+  const physicalSignatures = physicalStatus?.items ?? [];
+  const physicalSignatureCount = physicalStatus?.count ?? 0;
   const staleNoticeKey = `${pdfUrl || ""}|${reloadKey}|${signatureProjectId || ""}|${signatureReportKey || ""}|${signatureParametersRaw}`;
   const staleNoticeAccepted = acceptedStaleNoticeKey === staleNoticeKey;
   const canRenderPdf = Boolean(
@@ -231,6 +237,14 @@ export default function PdfViewerPage() {
         reportKey: signature.report_key || signatureReportKey,
         parameters: signature.parameters || signatureParameters,
       },
+    }));
+  };
+
+  const openPhysicalSignedPdf = () => {
+    const signedUrl = projectService.physicalSignaturesPdfUrl(signatureProjectId, signatureReportKey, signatureParameters);
+
+    openUrlInNewTab(buildPdfViewerUrl(signedUrl, {
+      title: "PDF con firmas físicas",
     }));
   };
 
@@ -355,6 +369,44 @@ export default function PdfViewerPage() {
     };
   }, [hasSignatureContext, signatureParameters, signatureProjectId, signatureReportKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPhysicalStatus() {
+      if (!hasSignatureContext || !hasSignedPdf || isSignedStale) {
+        setPhysicalStatus(null);
+        setPhysicalError("");
+        return;
+      }
+
+      setPhysicalLoading(true);
+      setPhysicalError("");
+
+      try {
+        const response = await projectService.physicalSignatures(signatureProjectId, signatureReportKey, signatureParameters);
+
+        if (!cancelled) {
+          setPhysicalStatus(response?.data ?? null);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setPhysicalStatus(null);
+          setPhysicalError(readApiError(loadError, "No se pudo cargar las firmas físicas."));
+        }
+      } finally {
+        if (!cancelled) {
+          setPhysicalLoading(false);
+        }
+      }
+    }
+
+    void loadPhysicalStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasSignatureContext, hasSignedPdf, isSignedStale, signatureParameters, signatureProjectId, signatureReportKey]);
+
   const handleSignPdf = async () => {
     if (!canSignPdf || signing) {
       return;
@@ -415,6 +467,24 @@ export default function PdfViewerPage() {
     }
   };
 
+  const handleMarkPhysicalSignature = async () => {
+    if (!physicalStatus?.can_mark || markingPhysical) {
+      return;
+    }
+
+    setMarkingPhysical(true);
+    setPhysicalError("");
+
+    try {
+      const response = await projectService.markPhysicalSignature(signatureProjectId, signatureReportKey, signatureParameters);
+      setPhysicalStatus(response?.data ?? null);
+    } catch (markError) {
+      setPhysicalError(readApiError(markError, "No se pudo marcar la firma física."));
+    } finally {
+      setMarkingPhysical(false);
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col bg-slate-100 text-slate-950">
       {showChrome ? (
@@ -444,6 +514,9 @@ export default function PdfViewerPage() {
             {!error && signatureError ? (
               <span className="max-w-sm text-right text-xs leading-5 text-red-600">{signatureError}</span>
             ) : null}
+            {!error && physicalError ? (
+              <span className="max-w-sm text-right text-xs leading-5 text-red-600">{physicalError}</span>
+            ) : null}
             {!error && signatureRestrictionMessage ? (
               <span className="max-w-sm text-right text-xs leading-5 text-slate-500">{signatureRestrictionMessage}</span>
             ) : null}
@@ -455,6 +528,38 @@ export default function PdfViewerPage() {
               >
                 <ExternalLink className="h-4 w-4" />
                 Abrir PDF firmado
+              </button>
+            ) : null}
+            {!error && hasSignedPdf && !isSignedStale ? (
+              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm">
+                {physicalLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSignature className="h-3.5 w-3.5" />}
+                Firmas físicas: {physicalSignatureCount}
+              </span>
+            ) : null}
+            {!error && hasSignedPdf && !isSignedStale && physicalStatus?.already_marked ? (
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                Ya marcaste este documento
+              </span>
+            ) : null}
+            {!error && hasSignedPdf && !isSignedStale && physicalStatus?.can_mark ? (
+              <button
+                type="button"
+                onClick={handleMarkPhysicalSignature}
+                disabled={markingPhysical}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {markingPhysical ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
+                Marcar firma física
+              </button>
+            ) : null}
+            {!error && hasSignedPdf && !isSignedStale && physicalSignatureCount > 0 ? (
+              <button
+                type="button"
+                onClick={openPhysicalSignedPdf}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                <ExternalLink className="h-4 w-4" />
+                PDF con firmas físicas
               </button>
             ) : null}
             {!error && hasSignatureContext ? (
@@ -617,6 +722,22 @@ export default function PdfViewerPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {!historyLoading && !historyError && physicalSignatures.length > 0 ? (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                  <h3 className="text-sm font-semibold text-slate-900">Firmas físicas marcadas</h3>
+                  <div className="mt-3 space-y-2">
+                    {physicalSignatures.map((physicalSignature) => (
+                      <div key={physicalSignature.id} className="rounded-lg bg-white px-3 py-2 text-sm">
+                        <div className="font-medium text-slate-900">{physicalSignature.user_name || "Usuario"}</div>
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          Marcado: {physicalSignature.marked_at || "-"}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ) : null}

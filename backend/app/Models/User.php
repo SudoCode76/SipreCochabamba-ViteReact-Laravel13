@@ -36,6 +36,7 @@ class User extends Authenticatable
         'item',
         'fecha',
         'subalcaldia',
+        'firma_imagen_path',
     ];
 
     protected $hidden = [

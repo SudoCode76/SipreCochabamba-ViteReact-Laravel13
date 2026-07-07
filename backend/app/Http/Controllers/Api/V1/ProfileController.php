@@ -11,6 +11,7 @@ use App\Services\Auth\LegacyPasswordService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 class ProfileController extends Controller
 {
@@ -72,6 +73,60 @@ class ProfileController extends Controller
             'success' => true,
             'message' => 'Contrasena actualizada correctamente.',
             'data' => null,
+        ]);
+    }
+
+    public function uploadSignatureImage(Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $validated = $request->validate([
+            'signature_image' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
+        ]);
+
+        if ($user->firma_imagen_path) {
+            Storage::disk('public')->delete($user->firma_imagen_path);
+        }
+
+        $path = $validated['signature_image']->store(
+            'archivos/firmas_usuarios/'.$user->id_usuario,
+            'public'
+        );
+
+        $user->forceFill(['firma_imagen_path' => $path])->save();
+        $this->registerAudit($user, $request, 'Carga de imagen de firma fisica');
+        $user->loadMissing(['role', 'unit']);
+        $user->setRelation('permissions', $user->activePermissions()->get());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Firma cargada correctamente.',
+            'data' => [
+                'user' => new AuthenticatedUserResource($user),
+            ],
+        ]);
+    }
+
+    public function deleteSignatureImage(Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        if ($user->firma_imagen_path) {
+            Storage::disk('public')->delete($user->firma_imagen_path);
+        }
+
+        $user->forceFill(['firma_imagen_path' => null])->save();
+        $this->registerAudit($user, $request, 'Eliminacion de imagen de firma fisica');
+        $user->loadMissing(['role', 'unit']);
+        $user->setRelation('permissions', $user->activePermissions()->get());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Firma eliminada correctamente.',
+            'data' => [
+                'user' => new AuthenticatedUserResource($user),
+            ],
         ]);
     }
 

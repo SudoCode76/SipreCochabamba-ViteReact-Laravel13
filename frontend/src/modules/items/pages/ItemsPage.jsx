@@ -54,12 +54,14 @@ export default function ItemsPage() {
   const guidedSearch = searchParams.get("search") ?? "";
   const guidedReturnTo = searchParams.get("return_to") || location.state?.return_to || "";
   const guidedReturnProjectId = searchParams.get("return_project_id") || location.state?.return_project_id || "";
+  const initialFreshness = location.state?.freshness === "outdated" ? "outdated" : "";
   const [perPage, setPerPage] = useState(10);
   const [order, setOrder] = useState("legacy");
+  const [freshness, setFreshness] = useState(initialFreshness);
   const [reviewDays, setReviewDays] = useState("");
   const [duplicatesOnly, setDuplicatesOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState("AC");
-  const view = duplicatesOnly ? "duplicates" : statusFilter === "DC" ? "inactive" : reviewDays ? `review_${reviewDays}` : order;
+  const view = duplicatesOnly ? "duplicates" : statusFilter === "DC" ? "inactive" : freshness || (reviewDays ? `review_${reviewDays}` : order);
   const [search, setSearch] = useState(guidedSearch);
   const [searchQuery, setSearchQuery] = useState(guidedSearch);
   const [highlightMissingSpecifications, setHighlightMissingSpecifications] = useState(false);
@@ -267,8 +269,8 @@ export default function ItemsPage() {
   };
 
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["items", { page, perPage, search, order, reviewDays, duplicates: duplicatesOnly, status: statusFilter }],
-    queryFn: () => itemsService.list({ page, perPage, search, order, reviewDays, duplicates: duplicatesOnly, status: duplicatesOnly ? "" : statusFilter }),
+    queryKey: ["items", { page, perPage, search, order, freshness, reviewDays, duplicates: duplicatesOnly, status: statusFilter }],
+    queryFn: () => itemsService.list({ page, perPage, search, order, freshness, reviewDays, duplicates: duplicatesOnly, status: duplicatesOnly ? "" : statusFilter }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -514,11 +516,13 @@ export default function ItemsPage() {
       setDuplicatesOnly(true);
       setStatusFilter("");
       setOrder("legacy");
+      setFreshness("");
       setReviewDays("");
       return;
     }
 
     setDuplicatesOnly(false);
+    setFreshness("");
 
     if (value === "inactive") {
       setStatusFilter("DC");
@@ -528,6 +532,13 @@ export default function ItemsPage() {
     }
 
     setStatusFilter("AC");
+
+    if (value === "outdated") {
+      setFreshness("outdated");
+      setOrder("legacy");
+      setReviewDays("");
+      return;
+    }
 
     if (value.startsWith("review_")) {
       setOrder("legacy");
@@ -1378,6 +1389,7 @@ export default function ItemsPage() {
                     onChange={handleViewChange}
                   >
                     <option value="legacy">Predeterminado</option>
+                    <option value="outdated">Pendientes de revisión</option>
                     <option value="review_60">Sin revisar de 60 a 120 días</option>
                     <option value="review_120">Sin revisar de 120 a 180 días</option>
                     <option value="review_180">Sin revisar 180 días o más</option>

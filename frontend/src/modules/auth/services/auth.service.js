@@ -28,6 +28,20 @@ export const authService = {
     return response.data;
   },
 
+  uploadSignatureImage: async (file) => {
+    const formData = new FormData();
+    formData.append("signature_image", file);
+    const response = await apiClient.post("/v1/profile/signature-image", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
+
+  deleteSignatureImage: async () => {
+    const response = await apiClient.delete("/v1/profile/signature-image");
+    return response.data;
+  },
+
   logout: async () => {
     const response = await apiClient.post("/v1/auth/logout");
     return response.data;

@@ -11,6 +11,7 @@ const loadAuditsPage = () => import("@/modules/audits/pages/AuditsPage");
 const loadAuthorizationsPage = () => import("@/modules/authorizations/pages/AuthorizationsPage");
 const loadCalculationPercentagesPage = () => import("@/modules/calculation-percentages/pages/CalculationPercentagesPage");
 const loadChangePasswordPage = () => import("@/modules/auth/pages/ChangePasswordPage");
+const loadProfilePage = () => import("@/modules/auth/pages/ProfilePage");
 const loadCreateInputRequestPage = () => import("@/modules/input-requests/pages/CreateInputRequestPage");
 const loadDashboardPage = () => import("@/modules/dashboard/pages/DashboardPage");
 const loadEditInputRequestPage = () => import("@/modules/input-requests/pages/EditInputRequestPage");
@@ -51,6 +52,7 @@ const AuditsPage = lazy(loadAuditsPage);
 const AuthorizationsPage = lazy(loadAuthorizationsPage);
 const CalculationPercentagesPage = lazy(loadCalculationPercentagesPage);
 const ChangePasswordPage = lazy(loadChangePasswordPage);
+const ProfilePage = lazy(loadProfilePage);
 const CreateInputRequestPage = lazy(loadCreateInputRequestPage);
 const DashboardPage = lazy(loadDashboardPage);
 const EditInputRequestPage = lazy(loadEditInputRequestPage);
@@ -392,7 +394,7 @@ export const router = createBrowserRouter([
           },
           {
             path: "/perfil",
-            element: placeholder("Perfil de usuario", "Espacio listo para datos personales, preferencias y actividad reciente.", "Perfil", "slate"),
+            element: routeElement(<ProfilePage />),
           },
           {
             path: "/perfil/password",

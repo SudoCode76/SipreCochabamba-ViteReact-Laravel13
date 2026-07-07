@@ -107,6 +107,18 @@ export const projectService = {
 
   latestSignedReportUrl: (projectId, reportKey, params = {}) => buildApiUrl(`/v1/projects/${projectId}/reports/${reportKey}/signed/latest`, params),
 
+  physicalSignatures: async (projectId, reportKey, params = {}) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/reports/${reportKey}/physical-signatures`, { params });
+    return response.data;
+  },
+
+  markPhysicalSignature: async (projectId, reportKey, payload = {}) => {
+    const response = await apiClient.post(`/v1/projects/${projectId}/reports/${reportKey}/physical-signatures`, payload);
+    return response.data;
+  },
+
+  physicalSignaturesPdfUrl: (projectId, reportKey, params = {}) => buildApiUrl(`/v1/projects/${projectId}/reports/${reportKey}/physical-signatures/pdf`, params),
+
   update: async (projectId, payload) => {
     const response = await apiClient.put(`/v1/projects/${projectId}`, payload);
     return response.data;

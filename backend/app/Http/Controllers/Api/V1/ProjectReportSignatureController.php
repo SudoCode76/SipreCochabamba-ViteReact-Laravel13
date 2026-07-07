@@ -219,6 +219,67 @@ class ProjectReportSignatureController extends Controller
         ]);
     }
 
+    public function physicalSignatures(Request $request, Project $project, string $reportKey): JsonResponse
+    {
+        if (! array_key_exists($reportKey, ProjectSignableReportService::REPORTS)) {
+            return ApiResponse::error('El reporte solicitado no existe.', [
+                'report_key' => ['El reporte solicitado no existe.'],
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'format' => ['nullable', 'string'],
+            'type' => ['nullable', 'integer'],
+            'fecha' => ['nullable', 'date'],
+        ]);
+
+        return ApiResponse::success(
+            $this->signatureService->physicalSignatureStatus($project, $reportKey, $validated, $request->user()),
+            'Firmas fisicas obtenidas correctamente.'
+        );
+    }
+
+    public function markPhysicalSignature(Request $request, Project $project, string $reportKey): JsonResponse
+    {
+        if (! array_key_exists($reportKey, ProjectSignableReportService::REPORTS)) {
+            return ApiResponse::error('El reporte solicitado no existe.', [
+                'report_key' => ['El reporte solicitado no existe.'],
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'format' => ['nullable', 'string'],
+            'type' => ['nullable', 'integer'],
+            'fecha' => ['nullable', 'date'],
+        ]);
+
+        return ApiResponse::success(
+            $this->signatureService->markPhysicalSignature($project, $reportKey, $validated, $request->user()),
+            'Firma fisica marcada correctamente.'
+        );
+    }
+
+    public function physicalSignaturesPdf(Request $request, Project $project, string $reportKey)
+    {
+        if (! array_key_exists($reportKey, ProjectSignableReportService::REPORTS)) {
+            return ApiResponse::error('El reporte solicitado no existe.', [
+                'report_key' => ['El reporte solicitado no existe.'],
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'format' => ['nullable', 'string'],
+            'type' => ['nullable', 'integer'],
+            'fecha' => ['nullable', 'date'],
+        ]);
+        $pdf = $this->signatureService->physicalSignedPdf($project, $reportKey, $validated);
+
+        return response($pdf['content'], 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$pdf['filename'].'"',
+        ]);
+    }
+
     public function citizenshipSession(Request $request): JsonResponse
     {
         return ApiResponse::success(

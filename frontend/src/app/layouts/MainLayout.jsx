@@ -1,4 +1,4 @@
-import { ArrowRight, Bell, ChevronDown, Loader2, LogOut, ShieldCheck, User } from "lucide-react";
+import { ArrowRight, Bell, ChevronDown, FileSignature, Loader2, LogOut, ShieldCheck, User } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 
@@ -172,7 +172,7 @@ export default function MainLayout() {
                     <>
                       <DropdownMenuSeparator className="bg-border/70" />
                       <DropdownMenuItem asChild className="rounded-xl px-3 py-2 cursor-pointer">
-                        <Link to="/items">
+                        <Link to="/items" state={{ freshness: "outdated" }}>
                           <Bell className="mr-2 size-4" />
                           Ver ítems pendientes
                         </Link>
@@ -192,6 +192,12 @@ export default function MainLayout() {
                 <DropdownMenuLabel className="px-2 py-2">
                   <p className="text-sm font-medium text-foreground">{user?.username || "Usuario"}</p>                </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-border/70" />
+                <DropdownMenuItem asChild className="rounded-xl px-3 py-2 cursor-pointer">
+                  <Link to="/perfil">
+                    <FileSignature className="mr-2 size-4" />
+                    <span>Firma física</span>
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl px-3 py-2 cursor-pointer">
                   <Link to="/perfil/password">
                     <User className="mr-2 size-4" />

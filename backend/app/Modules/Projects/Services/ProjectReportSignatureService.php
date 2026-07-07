@@ -3,6 +3,7 @@
 namespace App\Modules\Projects\Services;
 
 use App\Models\Project;
+use App\Models\ProjectReportPhysicalSignature;
 use App\Models\ProjectReportSignature;
 use App\Models\User;
 use App\Services\Citizenship\CiudadaniaDigitalException;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
+use setasign\Fpdi\Tcpdf\Fpdi;
 
 class ProjectReportSignatureService
 {
@@ -201,6 +203,105 @@ class ProjectReportSignatureService
             : [];
     }
 
+    public function physicalSignatureStatus(Project $project, string $reportKey, array $parameters, User $user): array
+    {
+        $normalizedParameters = $this->normalizeParameters($parameters);
+        $parametersHash = $this->parametersHash($normalizedParameters);
+        $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalizedParameters);
+        $latestSigned = $this->latestSignedForHash($project, $reportKey, $parametersHash, $logicalHash);
+        $items = $this->physicalSignatures($project, $reportKey, $parametersHash, $logicalHash);
+
+        return [
+            'count' => $items->count(),
+            'already_marked' => $items->contains('id_usuario', $user->id_usuario),
+            'can_mark' => (bool) $latestSigned && filled($user->firma_imagen_path),
+            'needs_signature_image' => blank($user->firma_imagen_path),
+            'latest_signed' => $latestSigned ? $this->serialize($latestSigned) : null,
+            'items' => $items->map(fn (ProjectReportPhysicalSignature $signature): array => $this->serializePhysicalSignature($signature))->all(),
+        ];
+    }
+
+    public function markPhysicalSignature(Project $project, string $reportKey, array $parameters, User $user): array
+    {
+        $normalizedParameters = $this->normalizeParameters($parameters);
+        $parametersHash = $this->parametersHash($normalizedParameters);
+        $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalizedParameters);
+        $latestSigned = $this->latestSignedForHash($project, $reportKey, $parametersHash, $logicalHash);
+
+        if (! $latestSigned) {
+            throw ValidationException::withMessages([
+                'signature' => ['Primero debe existir un PDF firmado digitalmente para este reporte actual.'],
+            ]);
+        }
+
+        if (! $user->firma_imagen_path || ! Storage::disk('public')->exists($user->firma_imagen_path)) {
+            throw ValidationException::withMessages([
+                'signature_image' => ['Debe cargar una imagen de firma en su perfil antes de marcar este documento.'],
+            ]);
+        }
+
+        $existing = ProjectReportPhysicalSignature::query()
+            ->where('id_proyecto', $project->id_proyecto)
+            ->where('report_key', $reportKey)
+            ->where('parameters_hash', $parametersHash)
+            ->where('logical_document_hash', $logicalHash)
+            ->where('id_usuario', $user->id_usuario)
+            ->first();
+
+        if (! $existing) {
+            $extension = pathinfo((string) $user->firma_imagen_path, PATHINFO_EXTENSION) ?: 'png';
+            $snapshotPath = sprintf(
+                'project-physical-signatures/%d/%s/%s/%d-%s.%s',
+                $project->id_proyecto,
+                $reportKey,
+                $parametersHash,
+                $user->id_usuario,
+                Str::uuid(),
+                $extension
+            );
+
+            Storage::disk('public')->put($snapshotPath, Storage::disk('public')->get($user->firma_imagen_path));
+
+            ProjectReportPhysicalSignature::query()->create([
+                'id_proyecto' => $project->id_proyecto,
+                'report_key' => $reportKey,
+                'parameters_hash' => $parametersHash,
+                'logical_document_hash' => $logicalHash,
+                'id_usuario' => $user->id_usuario,
+                'signature_image_path' => $snapshotPath,
+                'marked_at' => now(),
+            ]);
+        }
+
+        return $this->physicalSignatureStatus($project, $reportKey, $normalizedParameters, $user);
+    }
+
+    public function physicalSignedPdf(Project $project, string $reportKey, array $parameters): array
+    {
+        $normalizedParameters = $this->normalizeParameters($parameters);
+        $parametersHash = $this->parametersHash($normalizedParameters);
+        $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalizedParameters);
+        $latestSigned = $this->latestSignedForHash($project, $reportKey, $parametersHash, $logicalHash);
+        $physicalSignatures = $this->physicalSignatures($project, $reportKey, $parametersHash, $logicalHash);
+
+        if (! $latestSigned) {
+            throw ValidationException::withMessages([
+                'signature' => ['No existe un PDF firmado digitalmente para este reporte actual.'],
+            ]);
+        }
+
+        if ($physicalSignatures->isEmpty()) {
+            throw ValidationException::withMessages([
+                'signature' => ['No hay firmas fisicas marcadas para este documento.'],
+            ]);
+        }
+
+        return [
+            'filename' => 'reporte_firmado_con_firmas_fisicas.pdf',
+            'content' => $this->stampPhysicalSignatures($this->signedPdfContent($latestSigned), $physicalSignatures),
+        ];
+    }
+
     public function latest(Project $project, string $reportKey, ?string $parametersHash = null): ?ProjectReportSignature
     {
         return ProjectReportSignature::query()
@@ -250,6 +351,41 @@ class ProjectReportSignatureService
             ->whereNotNull('signed_file_path')
             ->latest('id')
             ->first();
+    }
+
+    private function latestSignedForHash(Project $project, string $reportKey, string $parametersHash, string $logicalHash): ?ProjectReportSignature
+    {
+        return ProjectReportSignature::query()
+            ->where('id_proyecto', $project->id_proyecto)
+            ->where('report_key', $reportKey)
+            ->where('parameters_hash', $parametersHash)
+            ->where('base_document_hash', $logicalHash)
+            ->where('status', 'signed')
+            ->whereNotNull('signed_file_path')
+            ->latest('id')
+            ->first();
+    }
+
+    private function physicalSignatures(Project $project, string $reportKey, string $parametersHash, string $logicalHash)
+    {
+        return ProjectReportPhysicalSignature::query()
+            ->with('user')
+            ->where('id_proyecto', $project->id_proyecto)
+            ->where('report_key', $reportKey)
+            ->where('parameters_hash', $parametersHash)
+            ->where('logical_document_hash', $logicalHash)
+            ->orderBy('marked_at')
+            ->get();
+    }
+
+    private function serializePhysicalSignature(ProjectReportPhysicalSignature $signature): array
+    {
+        return [
+            'id' => $signature->id,
+            'user_id' => $signature->id_usuario,
+            'user_name' => $signature->user?->funcionario ?: 'Usuario',
+            'marked_at' => $signature->marked_at?->toIso8601String(),
+        ];
     }
 
     public function serialize(ProjectReportSignature $signature): array
@@ -468,6 +604,91 @@ class ProjectReportSignatureService
     private function stableHashRow(array $row, array $keys): array
     {
         return Arr::only($row, $keys);
+    }
+
+    private function stampPhysicalSignatures(string $sourcePdf, $signatures): string
+    {
+        $sourcePath = tempnam(sys_get_temp_dir(), 'sipre_signed_');
+
+        if ($sourcePath === false) {
+            throw new RuntimeException('No se pudo preparar el PDF para agregar firmas fisicas.');
+        }
+
+        file_put_contents($sourcePath, $sourcePdf);
+
+        try {
+            $pdf = new Fpdi();
+            $pdf->setPrintHeader(false);
+            $pdf->setPrintFooter(false);
+            $pdf->SetAutoPageBreak(false);
+            $pdf->SetMargins(0, 0, 0);
+            $pageCount = $pdf->setSourceFile($sourcePath);
+            $visibleSignatures = $signatures->take(4)->values();
+            $hiddenCount = max(0, $signatures->count() - $visibleSignatures->count());
+
+            for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
+                $templateId = $pdf->importPage($pageNumber);
+                $size = $pdf->getTemplateSize($templateId);
+                $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+                $pdf->useTemplate($templateId, 0, 0, $size['width'], $size['height']);
+
+                $left = 14.0;
+                $right = 14.0;
+                $slotCount = max(1, $visibleSignatures->count());
+                $slotWidth = ($size['width'] - $left - $right) / $slotCount;
+                $bandY = max(10.0, $size['height'] - 50.0);
+
+                foreach ($visibleSignatures as $index => $signature) {
+                    $x = $left + ($index * $slotWidth);
+                    $imagePath = Storage::disk('public')->path($signature->signature_image_path);
+
+                    if (is_readable($imagePath)) {
+                        $imageWidth = min(28.0, max(16.0, $slotWidth - 6.0));
+                        $pdf->Image($imagePath, $x + (($slotWidth - $imageWidth) / 2), $bandY, $imageWidth, 10);
+                    }
+
+                    $pdf->SetFont('helvetica', '', 6);
+                    $pdf->SetTextColor(25, 25, 25);
+                    $pdf->SetXY($x + 1, $bandY + 11);
+                    $pdf->MultiCell(
+                        $slotWidth - 2,
+                        3,
+                        (string) ($signature->user?->funcionario ?: 'Usuario'),
+                        0,
+                        'C',
+                        false,
+                        1
+                    );
+                    $pdf->SetXY($x + 1, $bandY + 15);
+                    $pdf->MultiCell(
+                        $slotWidth - 2,
+                        3,
+                        optional($signature->marked_at)->format('d/m/Y H:i') ?: '',
+                        0,
+                        'C',
+                        false,
+                        1
+                    );
+                }
+
+                if ($hiddenCount > 0) {
+                    $pdf->SetFont('helvetica', 'I', 5);
+                    $pdf->SetXY($left, $bandY + 19);
+                    $pdf->Cell(
+                        $size['width'] - $left - $right,
+                        3,
+                        sprintf('Existen %d firmantes adicionales; ver historial de firmas fisicas.', $hiddenCount),
+                        0,
+                        0,
+                        'C'
+                    );
+                }
+            }
+
+            return $pdf->Output('', 'S');
+        } finally {
+            @unlink($sourcePath);
+        }
     }
 
     public function documentHash(string $content): string
