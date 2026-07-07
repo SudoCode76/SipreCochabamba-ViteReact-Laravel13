@@ -248,20 +248,26 @@ class ProjectReportSignatureService
             ->where('id_usuario', $user->id_usuario)
             ->first();
 
-        if (! $existing) {
-            $extension = pathinfo((string) $user->firma_imagen_path, PATHINFO_EXTENSION) ?: 'png';
-            $snapshotPath = sprintf(
-                'project-physical-signatures/%d/%s/%s/%d-%s.%s',
-                $project->id_proyecto,
-                $reportKey,
-                $parametersHash,
-                $user->id_usuario,
-                Str::uuid(),
-                $extension
-            );
+        $extension = pathinfo((string) $user->firma_imagen_path, PATHINFO_EXTENSION) ?: 'png';
+        $snapshotPath = sprintf(
+            'project-physical-signatures/%d/%s/%s/%d-%s.%s',
+            $project->id_proyecto,
+            $reportKey,
+            $parametersHash,
+            $user->id_usuario,
+            Str::uuid(),
+            $extension
+        );
 
-            Storage::disk('public')->put($snapshotPath, Storage::disk('public')->get($user->firma_imagen_path));
+        Storage::disk('public')->put($snapshotPath, Storage::disk('public')->get($user->firma_imagen_path));
 
+        if ($existing) {
+            Storage::disk('public')->delete($existing->signature_image_path);
+            $existing->forceFill([
+                'signature_image_path' => $snapshotPath,
+                'marked_at' => now(),
+            ])->save();
+        } else {
             ProjectReportPhysicalSignature::query()->create([
                 'id_proyecto' => $project->id_proyecto,
                 'report_key' => $reportKey,
@@ -616,13 +622,15 @@ class ProjectReportSignatureService
 
         file_put_contents($sourcePath, $sourcePdf);
 
+        $compatiblePath = $this->fpdiCompatiblePdfPath($sourcePath);
+
         try {
             $pdf = new Fpdi();
             $pdf->setPrintHeader(false);
             $pdf->setPrintFooter(false);
             $pdf->SetAutoPageBreak(false);
             $pdf->SetMargins(0, 0, 0);
-            $pageCount = $pdf->setSourceFile($sourcePath);
+            $pageCount = $pdf->setSourceFile($compatiblePath);
             $visibleSignatures = $signatures->take(4)->values();
             $hiddenCount = max(0, $signatures->count() - $visibleSignatures->count());
 
@@ -636,20 +644,43 @@ class ProjectReportSignatureService
                 $right = 14.0;
                 $slotCount = max(1, $visibleSignatures->count());
                 $slotWidth = ($size['width'] - $left - $right) / $slotCount;
-                $bandY = max(10.0, $size['height'] - 50.0);
+                $bandY = max(10.0, $size['height'] - 58.0);
 
                 foreach ($visibleSignatures as $index => $signature) {
                     $x = $left + ($index * $slotWidth);
                     $imagePath = Storage::disk('public')->path($signature->signature_image_path);
 
                     if (is_readable($imagePath)) {
-                        $imageWidth = min(28.0, max(16.0, $slotWidth - 6.0));
-                        $pdf->Image($imagePath, $x + (($slotWidth - $imageWidth) / 2), $bandY, $imageWidth, 10);
+                        $dimensions = getimagesize($imagePath);
+                        $maxImageWidth = min(56.0, max(24.0, $slotWidth - 8.0));
+                        $maxImageHeight = 28.0;
+                        $imageWidth = $maxImageWidth;
+                        $imageHeight = $maxImageHeight;
+
+                        if (is_array($dimensions) && ($dimensions[0] ?? 0) > 0 && ($dimensions[1] ?? 0) > 0) {
+                            $ratio = (float) $dimensions[0] / (float) $dimensions[1];
+
+                            if ($ratio >= ($maxImageWidth / $maxImageHeight)) {
+                                $imageWidth = $maxImageWidth;
+                                $imageHeight = max(14.0, $maxImageWidth / $ratio);
+                            } else {
+                                $imageHeight = $maxImageHeight;
+                                $imageWidth = min($maxImageWidth, $maxImageHeight * $ratio);
+                            }
+                        }
+
+                        $pdf->Image(
+                            $imagePath,
+                            $x + (($slotWidth - $imageWidth) / 2),
+                            $bandY,
+                            $imageWidth,
+                            $imageHeight
+                        );
                     }
 
                     $pdf->SetFont('helvetica', '', 6);
                     $pdf->SetTextColor(25, 25, 25);
-                    $pdf->SetXY($x + 1, $bandY + 11);
+                    $pdf->SetXY($x + 1, $bandY + 30);
                     $pdf->MultiCell(
                         $slotWidth - 2,
                         3,
@@ -659,7 +690,7 @@ class ProjectReportSignatureService
                         false,
                         1
                     );
-                    $pdf->SetXY($x + 1, $bandY + 15);
+                    $pdf->SetXY($x + 1, $bandY + 34);
                     $pdf->MultiCell(
                         $slotWidth - 2,
                         3,
@@ -673,7 +704,7 @@ class ProjectReportSignatureService
 
                 if ($hiddenCount > 0) {
                     $pdf->SetFont('helvetica', 'I', 5);
-                    $pdf->SetXY($left, $bandY + 19);
+                    $pdf->SetXY($left, $bandY + 39);
                     $pdf->Cell(
                         $size['width'] - $left - $right,
                         3,
@@ -688,7 +719,60 @@ class ProjectReportSignatureService
             return $pdf->Output('', 'S');
         } finally {
             @unlink($sourcePath);
+            if ($compatiblePath !== $sourcePath) {
+                @unlink($compatiblePath);
+            }
         }
+    }
+
+    private function fpdiCompatiblePdfPath(string $sourcePath): string
+    {
+        $ghostscript = $this->ghostscriptBinary();
+
+        if ($ghostscript === null) {
+            return $sourcePath;
+        }
+
+        $targetPath = tempnam(sys_get_temp_dir(), 'sipre_pdf14_');
+
+        if ($targetPath === false) {
+            return $sourcePath;
+        }
+
+        $command = sprintf(
+            '%s -q -dSAFER -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/prepress -sOutputFile=%s %s 2>&1',
+            escapeshellarg($ghostscript),
+            escapeshellarg($targetPath),
+            escapeshellarg($sourcePath)
+        );
+
+        $output = [];
+        $exitCode = 1;
+        exec($command, $output, $exitCode);
+
+        if ($exitCode === 0 && is_readable($targetPath) && str_starts_with((string) file_get_contents($targetPath, false, null, 0, 4), '%PDF')) {
+            return $targetPath;
+        }
+
+        Log::warning('No se pudo normalizar PDF firmado para FPDI.', [
+            'exit_code' => $exitCode,
+            'output' => implode("\n", array_slice($output, -5)),
+        ]);
+
+        @unlink($targetPath);
+
+        return $sourcePath;
+    }
+
+    private function ghostscriptBinary(): ?string
+    {
+        foreach (['/usr/bin/gs', '/usr/local/bin/gs'] as $path) {
+            if (is_executable($path)) {
+                return $path;
+            }
+        }
+
+        return null;
     }
 
     public function documentHash(string $content): string

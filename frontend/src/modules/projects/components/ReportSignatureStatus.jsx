@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, ExternalLink, History, Loader2, X } from "lucide-react";
+import { CheckCircle2, ExternalLink, FileSignature, History, Loader2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,8 +45,15 @@ function signerName(record) {
   ].filter(Boolean).join(" ").trim() || "Firmante sin nombre";
 }
 
+function readApiError(error, fallback) {
+  return error?.response?.data?.message || fallback;
+}
+
 export default function ReportSignatureStatus({ projectId, reportKey, parameters = {} }) {
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [physicalOpen, setPhysicalOpen] = useState(false);
+  const [physicalError, setPhysicalError] = useState("");
+  const [markingPhysical, setMarkingPhysical] = useState(false);
   const normalizedParameters = useMemo(() => compactParameters(parameters), [parameters]);
   const parametersKey = useMemo(() => JSON.stringify(normalizedParameters), [normalizedParameters]);
   const enabled = Boolean(projectId && reportKey);
@@ -65,14 +72,26 @@ export default function ReportSignatureStatus({ projectId, reportKey, parameters
     staleTime: 15_000,
   });
 
+  const status = statusQuery.data?.data;
+  const latestSigned = status?.latest_signed;
+  const canUsePhysicalSignatures = Boolean(latestSigned?.has_signed_file && !status?.is_signed_stale);
+
+  const physicalQuery = useQuery({
+    queryKey: ["project-report-physical-signatures", projectId, reportKey, parametersKey],
+    queryFn: () => projectService.physicalSignatures(projectId, reportKey, normalizedParameters),
+    enabled: enabled && canUsePhysicalSignatures,
+    staleTime: 15_000,
+  });
+
   if (!enabled) {
     return null;
   }
 
-  const status = statusQuery.data?.data;
-  const latestSigned = status?.latest_signed;
   const meta = statusMeta(status);
   const latestSigners = historyQuery.data?.data?.signers ?? latestSigned?.validation_records ?? [];
+  const physicalStatus = physicalQuery.data?.data;
+  const physicalSignatures = physicalStatus?.items ?? [];
+  const physicalSignatureCount = physicalStatus?.count ?? 0;
 
   const openSignedPdf = (signature = latestSigned) => {
     if (!signature?.has_signed_file) {
@@ -95,29 +114,129 @@ export default function ReportSignatureStatus({ projectId, reportKey, parameters
     }));
   };
 
+  const openPhysicalSignedPdf = () => {
+    const url = projectService.physicalSignaturesPdfUrl(projectId, reportKey, normalizedParameters);
+
+    openUrlInNewTab(buildPdfViewerUrl(url, {
+      title: "PDF con firmas físicas",
+      signature: { projectId, reportKey, parameters: normalizedParameters },
+    }));
+  };
+
+  const handleMarkPhysicalSignature = async () => {
+    if (!physicalStatus?.can_mark || markingPhysical) {
+      return;
+    }
+
+    setPhysicalError("");
+    setMarkingPhysical(true);
+
+    try {
+      await projectService.markPhysicalSignature(projectId, reportKey, normalizedParameters);
+      await physicalQuery.refetch();
+    } catch (error) {
+      setPhysicalError(readApiError(error, "No se pudo marcar la firma física."));
+    } finally {
+      setMarkingPhysical(false);
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-border/70 bg-muted/20 p-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          {statusQuery.isFetching ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : <CheckCircle2 className="h-4 w-4 text-muted-foreground" />}
-          <span className="text-sm font-medium text-foreground">Firma digital</span>
-          <Badge className={`rounded-full px-2.5 py-1 text-[11px] uppercase tracking-[0.16em] ${meta.className}`}>
-            {meta.label}
-          </Badge>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            {statusQuery.isFetching ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : <CheckCircle2 className="h-4 w-4 text-muted-foreground" />}
+            <span className="text-sm font-medium text-foreground">Firma digital</span>
+            <Badge className={`rounded-full px-2.5 py-1 text-[11px] uppercase tracking-[0.16em] ${meta.className}`}>
+              {meta.label}
+            </Badge>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {latestSigned?.has_signed_file ? (
+              <Button type="button" variant="outline" size="sm" className="rounded-full gap-2" onClick={() => openSignedPdf()}>
+                <ExternalLink className="h-4 w-4" />
+                Ver PDF firmado
+              </Button>
+            ) : null}
+            {canUsePhysicalSignatures && physicalSignatureCount > 0 ? (
+              <Button type="button" variant="outline" size="sm" className="rounded-full gap-2" onClick={openPhysicalSignedPdf}>
+                <ExternalLink className="h-4 w-4" />
+                PDF con firmas físicas
+              </Button>
+            ) : null}
+            {canUsePhysicalSignatures ? (
+              <Button type="button" variant="outline" size="sm" className="rounded-full gap-2" onClick={() => setPhysicalOpen((open) => !open)}>
+                {physicalQuery.isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
+                Firmas físicas
+                <Badge className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-700">{physicalSignatureCount}</Badge>
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" size="sm" className="rounded-full gap-2" onClick={() => setHistoryOpen(true)}>
+              <History className="h-4 w-4" />
+              Historial
+            </Button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {latestSigned?.has_signed_file ? (
-            <Button type="button" variant="outline" size="sm" className="rounded-full gap-2" onClick={() => openSignedPdf()}>
-              <ExternalLink className="h-4 w-4" />
-              Ver PDF firmado
-            </Button>
-          ) : null}
-          <Button type="button" variant="outline" size="sm" className="rounded-full gap-2" onClick={() => setHistoryOpen(true)}>
-            <History className="h-4 w-4" />
-            Historial
-          </Button>
-        </div>
+        {canUsePhysicalSignatures && physicalOpen ? (
+          <div className="rounded-2xl border border-border bg-background p-3 shadow-sm">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-foreground">Firmas físicas</div>
+                <div className="text-xs text-muted-foreground">{physicalSignatureCount} usuario(s) marcaron este documento.</div>
+              </div>
+              {physicalStatus?.already_marked ? (
+                <Badge className="w-fit rounded-full bg-emerald-100 text-emerald-700">Marcado</Badge>
+              ) : (
+                <Badge className="w-fit rounded-full bg-amber-100 text-amber-700">Pendiente</Badge>
+              )}
+            </div>
+
+            <div className="mt-3 max-h-40 space-y-2 overflow-y-auto">
+              {physicalQuery.isFetching ? (
+                <div className="flex items-center gap-2 rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Cargando firmas...
+                </div>
+              ) : null}
+              {!physicalQuery.isFetching && physicalSignatures.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground">
+                  Aún no hay firmas físicas marcadas.
+                </div>
+              ) : null}
+              {!physicalQuery.isFetching && physicalSignatures.map((signature) => (
+                <div key={signature.id} className="rounded-xl bg-muted/50 px-3 py-2 text-xs">
+                  <div className="font-medium text-foreground">{signature.user_name || "Usuario"}</div>
+                  <div className="text-muted-foreground">Marcado: {signature.marked_at || "-"}</div>
+                </div>
+              ))}
+            </div>
+
+            {physicalStatus?.needs_signature_image ? (
+              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                Carga tu firma en Perfil para marcar este documento.
+              </p>
+            ) : null}
+            {physicalError ? (
+              <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700">{physicalError}</p>
+            ) : null}
+
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                size="sm"
+                className="rounded-full"
+                disabled={!physicalStatus?.can_mark || markingPhysical}
+                onClick={handleMarkPhysicalSignature}
+              >
+                {markingPhysical ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSignature className="mr-2 h-4 w-4" />}
+                {physicalStatus?.already_marked ? "Actualizar firma física" : "Marcar firma física"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {statusQuery.isError ? (

@@ -384,34 +384,36 @@ export default function ProfilePage() {
                   </Button>
                 </div>
 
-                <div
-                  ref={cropAreaRef}
-                  className="relative mt-4 max-h-[520px] overflow-hidden rounded-2xl border border-border/70 bg-muted/30 touch-none select-none"
-                  onPointerMove={handleCropPointerMove}
-                  onPointerUp={endCropDrag}
-                  onPointerCancel={endCropDrag}
-                >
-                  <img src={previewUrl} alt="Recorte de firma" className="block max-h-[520px] w-full object-contain" draggable={false} />
+                <div className="mt-4 flex max-h-[540px] justify-center overflow-auto rounded-2xl border border-border/70 bg-muted/30 p-3">
                   <div
-                    className="absolute border-2 border-violet-500 bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.32)]"
-                    style={{
-                      left: `${crop.x}%`,
-                      top: `${crop.y}%`,
-                      width: `${crop.w}%`,
-                      height: `${crop.h}%`,
-                    }}
-                    onPointerDown={(event) => beginCropDrag(event, "move")}
-                    role="presentation"
+                    ref={cropAreaRef}
+                    className="relative max-w-full touch-none select-none"
+                    onPointerMove={handleCropPointerMove}
+                    onPointerUp={endCropDrag}
+                    onPointerCancel={endCropDrag}
                   >
-                    {CROP_HANDLES.map((handle) => (
-                      <button
-                        key={handle}
-                        type="button"
-                        className={handleClassName(handle)}
-                        onPointerDown={(event) => beginCropDrag(event, "resize", handle)}
-                        aria-label={`Redimensionar recorte ${handle}`}
-                      />
-                    ))}
+                    <img src={previewUrl} alt="Recorte de firma" className="block max-h-[500px] max-w-full" draggable={false} />
+                    <div
+                      className="absolute border-2 border-violet-500 bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.32)]"
+                      style={{
+                        left: `${crop.x}%`,
+                        top: `${crop.y}%`,
+                        width: `${crop.w}%`,
+                        height: `${crop.h}%`,
+                      }}
+                      onPointerDown={(event) => beginCropDrag(event, "move")}
+                      role="presentation"
+                    >
+                      {CROP_HANDLES.map((handle) => (
+                        <button
+                          key={handle}
+                          type="button"
+                          className={handleClassName(handle)}
+                          onPointerDown={(event) => beginCropDrag(event, "resize", handle)}
+                          aria-label={`Redimensionar recorte ${handle}`}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
 
