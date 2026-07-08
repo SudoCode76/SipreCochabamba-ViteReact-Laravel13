@@ -1344,10 +1344,35 @@ class ProjectReportSignatureService
 
     private function requestApproval(ProjectReportSignature $signature, array $parameters): ProjectReportSignature
     {
-        if ($signature->status === 'sent' && $this->storedRedirectUrl($signature)) {
-            return $signature;
+        if ($resolved = $this->resolvedApprovalSignature($signature)) {
+            return $resolved;
         }
 
+        $lock = Cache::lock('ciudadania_digital_approval:'.$signature->id, 60);
+
+        if (! $lock->get()) {
+            return $this->waitForApprovalSignature($signature);
+        }
+
+        try {
+            $signature = $signature->fresh() ?: $signature;
+
+            if ($resolved = $this->resolvedApprovalSignature($signature)) {
+                return $resolved;
+            }
+
+            return $this->requestApprovalUnlocked($signature, $parameters);
+        } finally {
+            try {
+                $lock->release();
+            } catch (\Throwable) {
+                // ponytail: lock may expire before release; nothing useful to recover here.
+            }
+        }
+    }
+
+    private function requestApprovalUnlocked(ProjectReportSignature $signature, array $parameters): ProjectReportSignature
+    {
         $accessToken = $this->accessTokenFrom($parameters);
         $signatureCode = $this->signatureCode($signature);
         $validFrom = now();
@@ -1434,6 +1459,45 @@ class ProjectReportSignatureService
                 'signature' => [$this->messageWithTrace($exception->getMessage(), $signature)],
             ]);
         }
+    }
+
+    private function resolvedApprovalSignature(ProjectReportSignature $signature): ?ProjectReportSignature
+    {
+        $signature = $signature->fresh() ?: $signature;
+
+        if ($signature->status === 'signed') {
+            return $signature;
+        }
+
+        if ($signature->status === 'sent' && $this->storedRedirectUrl($signature)) {
+            return $signature;
+        }
+
+        return null;
+    }
+
+    private function waitForApprovalSignature(ProjectReportSignature $signature): ProjectReportSignature
+    {
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            usleep(250_000);
+
+            if ($resolved = $this->resolvedApprovalSignature($signature)) {
+                return $resolved;
+            }
+
+            $signature = $signature->fresh() ?: $signature;
+
+            if ($signature->status === 'error') {
+                throw new RuntimeException(
+                    $signature->error_message ?: $this->messageWithTrace('La solicitud de firma tiene un error previo.', $signature)
+                );
+            }
+        }
+
+        throw new RuntimeException($this->messageWithTrace(
+            'La solicitud de firma está en proceso. Intente nuevamente en unos segundos.',
+            $signature->fresh() ?: $signature
+        ));
     }
 
     private function redirectUrlFromResponse(array $response, bool $required = true): ?string
