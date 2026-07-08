@@ -14,6 +14,11 @@ class ProjectReportPhysicalSignature extends Model
         'logical_document_hash',
         'id_usuario',
         'signature_image_path',
+        'page',
+        'x',
+        'y',
+        'width',
+        'height',
         'marked_at',
     ];
 
@@ -21,6 +26,11 @@ class ProjectReportPhysicalSignature extends Model
     {
         return [
             'marked_at' => 'datetime',
+            'page' => 'integer',
+            'x' => 'float',
+            'y' => 'float',
+            'width' => 'float',
+            'height' => 'float',
         ];
     }
 

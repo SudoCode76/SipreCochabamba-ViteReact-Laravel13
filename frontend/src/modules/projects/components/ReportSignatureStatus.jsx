@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, ExternalLink, FileSignature, History, Loader2, X } from "lucide-react";
+import { CheckCircle2, ExternalLink, FileSignature, History, Loader2, Move, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -123,6 +123,20 @@ export default function ReportSignatureStatus({ projectId, reportKey, parameters
     }));
   };
 
+  const openAdjustPhysicalSignatures = () => {
+    if (!latestSigned?.has_signed_file) {
+      return;
+    }
+
+    const url = projectService.latestSignedReportUrl(projectId, reportKey, normalizedParameters);
+
+    openUrlInNewTab(buildPdfViewerUrl(url, {
+      title: "Ajustar firmas físicas",
+      adjustPhysicalSignatures: true,
+      signature: { projectId, reportKey, parameters: normalizedParameters },
+    }));
+  };
+
   const handleMarkPhysicalSignature = async () => {
     if (!physicalStatus?.can_mark || markingPhysical) {
       return;
@@ -164,6 +178,12 @@ export default function ReportSignatureStatus({ projectId, reportKey, parameters
               <Button type="button" variant="outline" size="sm" className="rounded-full gap-2" onClick={openPhysicalSignedPdf}>
                 <ExternalLink className="h-4 w-4" />
                 PDF con firmas físicas
+              </Button>
+            ) : null}
+            {canUsePhysicalSignatures && physicalSignatureCount > 0 ? (
+              <Button type="button" variant="outline" size="sm" className="rounded-full gap-2" onClick={openAdjustPhysicalSignatures}>
+                <Move className="h-4 w-4" />
+                Ajustar firmas
               </Button>
             ) : null}
             {canUsePhysicalSignatures ? (

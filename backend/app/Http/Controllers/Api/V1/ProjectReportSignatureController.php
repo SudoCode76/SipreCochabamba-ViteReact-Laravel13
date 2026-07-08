@@ -259,6 +259,36 @@ class ProjectReportSignatureController extends Controller
         );
     }
 
+    public function updatePhysicalSignaturePositions(Request $request, Project $project, string $reportKey): JsonResponse
+    {
+        if (! array_key_exists($reportKey, ProjectSignableReportService::REPORTS)) {
+            return ApiResponse::error('El reporte solicitado no existe.', [
+                'report_key' => ['El reporte solicitado no existe.'],
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'format' => ['nullable', 'string'],
+            'type' => ['nullable', 'integer'],
+            'fecha' => ['nullable', 'date'],
+            'positions' => ['required', 'array'],
+            'positions.*.id' => ['required', 'integer'],
+            'positions.*.page' => ['required', 'integer', 'min:1'],
+            'positions.*.x' => ['required', 'numeric', 'min:0'],
+            'positions.*.y' => ['required', 'numeric', 'min:0'],
+            'positions.*.width' => ['required', 'numeric', 'min:1'],
+            'positions.*.height' => ['required', 'numeric', 'min:1'],
+        ]);
+
+        $positions = $validated['positions'];
+        unset($validated['positions']);
+
+        return ApiResponse::success(
+            $this->signatureService->updatePhysicalSignaturePositions($project, $reportKey, $validated, $positions, $request->user()),
+            'Posiciones de firmas fisicas actualizadas correctamente.'
+        );
+    }
+
     public function physicalSignaturesPdf(Request $request, Project $project, string $reportKey)
     {
         if (! array_key_exists($reportKey, ProjectSignableReportService::REPORTS)) {

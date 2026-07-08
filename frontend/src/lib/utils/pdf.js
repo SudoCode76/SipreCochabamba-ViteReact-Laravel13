@@ -46,6 +46,10 @@ export function buildPdfViewerUrl(url, options = {}) {
     viewerUrl.searchParams.set("chrome", "0");
   }
 
+  if (options.adjustPhysicalSignatures) {
+    viewerUrl.searchParams.set("adjust_physical", "1");
+  }
+
   if (signature?.projectId && signature?.reportKey) {
     viewerUrl.searchParams.set("sign_project", String(signature.projectId));
     viewerUrl.searchParams.set("sign_report", signature.reportKey);

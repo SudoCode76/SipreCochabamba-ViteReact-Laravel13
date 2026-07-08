@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle2, ExternalLink, FileSignature, FileText, History, Loader2, RefreshCw, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, AlertTriangle, CheckCircle2, ExternalLink, FileSignature, FileText, History, Loader2, RefreshCw, Save, X } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 import { apiOrigin } from "@/lib/api/client";
@@ -143,11 +143,27 @@ function resolveAllowedPdfUrl(rawUrl) {
   }
 }
 
+function boxesOverlap(a, b) {
+  return Number(a.page) === Number(b.page)
+    && a.x < b.x + b.width
+    && a.x + a.width > b.x
+    && a.y < b.y + b.height
+    && a.y + a.height > b.y;
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+const MIN_PHYSICAL_SIGNATURE_WIDTH = 20;
+const MIN_PHYSICAL_SIGNATURE_HEIGHT = 12;
+
 export default function PdfViewerPage() {
   const [searchParams] = useSearchParams();
   const pdfUrl = useMemo(() => resolveAllowedPdfUrl(searchParams.get("url")), [searchParams]);
   const title = searchParams.get("title") || "Documento PDF";
   const isPhysicalSignedPdfView = title === "PDF con firmas físicas";
+  const isAdjustPhysicalMode = searchParams.get("adjust_physical") === "1";
   const fallbackMessage = searchParams.get("message") || DEFAULT_ERROR_MESSAGE;
   const showChrome = searchParams.get("chrome") !== "0";
   const signatureProjectId = searchParams.get("sign_project");
@@ -172,13 +188,17 @@ export default function PdfViewerPage() {
   const [physicalStatus, setPhysicalStatus] = useState(null);
   const [physicalLoading, setPhysicalLoading] = useState(false);
   const [physicalError, setPhysicalError] = useState("");
-  const [markingPhysical, setMarkingPhysical] = useState(false);
+  const [physicalPositions, setPhysicalPositions] = useState([]);
+  const [selectedPhysicalPage, setSelectedPhysicalPage] = useState(1);
+  const [savingPhysicalPositions, setSavingPhysicalPositions] = useState(false);
+  const [physicalPositionMessage, setPhysicalPositionMessage] = useState("");
+  const physicalCanvasRef = useRef(null);
+  const dragRef = useRef(null);
 
   const latestSigned = signatureStatus?.latest_signed;
   const hasSignedPdf = Boolean(latestSigned?.has_signed_file);
   const isSignedStale = Boolean(signatureStatus?.is_signed_stale);
   const physicalSignatures = physicalStatus?.items ?? [];
-  const physicalSignatureCount = physicalStatus?.count ?? 0;
   const staleNoticeKey = `${pdfUrl || ""}|${reloadKey}|${signatureProjectId || ""}|${signatureReportKey || ""}|${signatureParametersRaw}`;
   const staleNoticeAccepted = acceptedStaleNoticeKey === staleNoticeKey;
   const canRenderPdf = Boolean(
@@ -190,7 +210,7 @@ export default function PdfViewerPage() {
   );
   const statusMeta = signatureStatusMeta(signatureStatus);
 
-  const showSignatureToolbar = Boolean(hasSignatureContext && !isPhysicalSignedPdfView);
+  const showSignatureToolbar = Boolean(hasSignatureContext && !isPhysicalSignedPdfView && !isAdjustPhysicalMode);
   const canSignPdf = Boolean(
     showSignatureToolbar
       && !error
@@ -218,6 +238,25 @@ export default function PdfViewerPage() {
     return "";
   }, [showSignatureToolbar, signatureError, signatureLoading, signatureStatus]);
 
+  const applyPhysicalStatus = (status) => {
+    const pageSizes = status?.page_sizes ?? [];
+    const items = status?.items ?? [];
+
+    setPhysicalStatus(status);
+    setPhysicalPositions(items.map((item) => ({
+      ...item,
+      page: Number(item.page || pageSizes.at(-1)?.page || 1),
+      x: Number(item.x || 10),
+      y: Number(item.y || 10),
+      width: Number(item.width || 56),
+      height: Number(item.height || 28),
+    })));
+
+    if (pageSizes.length > 0) {
+      setSelectedPhysicalPage((page) => pageSizes.some((size) => Number(size.page) === Number(page)) ? page : Number(pageSizes.at(-1).page));
+    }
+  };
+
   const openSignedPdf = (signature = latestSigned) => {
     if (!signature?.has_signed_file) {
       return;
@@ -236,14 +275,6 @@ export default function PdfViewerPage() {
         reportKey: signature.report_key || signatureReportKey,
         parameters: signature.parameters || signatureParameters,
       },
-    }));
-  };
-
-  const openPhysicalSignedPdf = () => {
-    const signedUrl = projectService.physicalSignaturesPdfUrl(signatureProjectId, signatureReportKey, signatureParameters);
-
-    openUrlInNewTab(buildPdfViewerUrl(signedUrl, {
-      title: "PDF con firmas físicas",
     }));
   };
 
@@ -372,7 +403,7 @@ export default function PdfViewerPage() {
     let cancelled = false;
 
     async function loadPhysicalStatus() {
-      if (!showSignatureToolbar || !hasSignedPdf || isSignedStale) {
+      if (!isAdjustPhysicalMode && (!showSignatureToolbar || !hasSignedPdf || isSignedStale)) {
         setPhysicalStatus(null);
         setPhysicalError("");
         return;
@@ -385,7 +416,7 @@ export default function PdfViewerPage() {
         const response = await projectService.physicalSignatures(signatureProjectId, signatureReportKey, signatureParameters);
 
         if (!cancelled) {
-          setPhysicalStatus(response?.data ?? null);
+          applyPhysicalStatus(response?.data ?? null);
         }
       } catch (loadError) {
         if (!cancelled) {
@@ -404,7 +435,7 @@ export default function PdfViewerPage() {
     return () => {
       cancelled = true;
     };
-  }, [showSignatureToolbar, hasSignedPdf, isSignedStale, signatureParameters, signatureProjectId, signatureReportKey]);
+  }, [isAdjustPhysicalMode, showSignatureToolbar, hasSignedPdf, isSignedStale, signatureParameters, signatureProjectId, signatureReportKey]);
 
   const handleSignPdf = async () => {
     if (!canSignPdf || signing) {
@@ -466,21 +497,124 @@ export default function PdfViewerPage() {
     }
   };
 
-  const handleMarkPhysicalSignature = async () => {
-    if (!physicalStatus?.can_mark || markingPhysical) {
+  const currentPhysicalPageSize = useMemo(
+    () => (physicalStatus?.page_sizes ?? []).find((page) => Number(page.page) === Number(selectedPhysicalPage)),
+    [physicalStatus, selectedPhysicalPage],
+  );
+
+  const hasPhysicalOverlap = (positions) => positions.some((position, index) => (
+    positions.slice(index + 1).some((next) => boxesOverlap(position, next))
+  ));
+
+  const updatePhysicalPosition = (id, updater) => {
+    setPhysicalPositions((positions) => positions.map((position) => (
+      position.id === id ? updater(position) : position
+    )));
+  };
+
+  const handlePhysicalPointerDown = (event, position) => {
+    if (!currentPhysicalPageSize || !physicalCanvasRef.current) {
       return;
     }
 
-    setMarkingPhysical(true);
+    const rect = physicalCanvasRef.current.getBoundingClientRect();
+    const pointerX = ((event.clientX - rect.left) / rect.width) * currentPhysicalPageSize.width;
+    const pointerY = ((event.clientY - rect.top) / rect.height) * currentPhysicalPageSize.height;
+
+    dragRef.current = {
+      mode: "move",
+      id: position.id,
+      offsetX: pointerX - position.x,
+      offsetY: pointerY - position.y,
+      previous: position,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePhysicalPointerMove = (event) => {
+    const drag = dragRef.current;
+
+    if (!drag || !currentPhysicalPageSize || !physicalCanvasRef.current) {
+      return;
+    }
+
+    const rect = physicalCanvasRef.current.getBoundingClientRect();
+    const pointerX = ((event.clientX - rect.left) / rect.width) * currentPhysicalPageSize.width;
+    const pointerY = ((event.clientY - rect.top) / rect.height) * currentPhysicalPageSize.height;
+
+    updatePhysicalPosition(drag.id, (position) => {
+      if (drag.mode === "resize") {
+        return {
+          ...position,
+          page: Number(selectedPhysicalPage),
+          width: Number(clamp(pointerX - position.x, MIN_PHYSICAL_SIGNATURE_WIDTH, currentPhysicalPageSize.width - position.x).toFixed(2)),
+          height: Number(clamp(pointerY - position.y, MIN_PHYSICAL_SIGNATURE_HEIGHT, currentPhysicalPageSize.height - position.y).toFixed(2)),
+        };
+      }
+
+      return {
+        ...position,
+        page: Number(selectedPhysicalPage),
+        x: Number(clamp(pointerX - drag.offsetX, 0, currentPhysicalPageSize.width - position.width).toFixed(2)),
+        y: Number(clamp(pointerY - drag.offsetY, 0, currentPhysicalPageSize.height - position.height).toFixed(2)),
+      };
+    });
+  };
+
+  const handlePhysicalResizePointerDown = (event, position) => {
+    event.stopPropagation();
+
+    if (!physicalCanvasRef.current) {
+      return;
+    }
+
+    dragRef.current = {
+      mode: "resize",
+      id: position.id,
+      previous: position,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePhysicalPointerUp = () => {
+    const drag = dragRef.current;
+
+    if (!drag) {
+      return;
+    }
+
+    setPhysicalPositions((positions) => {
+      if (!hasPhysicalOverlap(positions)) {
+        return positions;
+      }
+
+      setPhysicalPositionMessage("Las firmas físicas no pueden superponerse.");
+      return positions.map((position) => (position.id === drag.id ? drag.previous : position));
+    });
+    dragRef.current = null;
+  };
+
+  const handleSavePhysicalPositions = async () => {
+    if (hasPhysicalOverlap(physicalPositions)) {
+      setPhysicalPositionMessage("Las firmas físicas no pueden superponerse.");
+      return;
+    }
+
+    setSavingPhysicalPositions(true);
+    setPhysicalPositionMessage("");
     setPhysicalError("");
 
     try {
-      const response = await projectService.markPhysicalSignature(signatureProjectId, signatureReportKey, signatureParameters);
-      setPhysicalStatus(response?.data ?? null);
-    } catch (markError) {
-      setPhysicalError(readApiError(markError, "No se pudo marcar la firma física."));
+      const response = await projectService.updatePhysicalSignaturePositions(signatureProjectId, signatureReportKey, {
+        ...signatureParameters,
+        positions: physicalPositions.map(({ id, page, x, y, width, height }) => ({ id, page, x, y, width, height })),
+      });
+      applyPhysicalStatus(response?.data ?? null);
+      setPhysicalPositionMessage("Posiciones guardadas.");
+    } catch (saveError) {
+      setPhysicalError(readApiError(saveError, "No se pudo guardar las posiciones."));
     } finally {
-      setMarkingPhysical(false);
+      setSavingPhysicalPositions(false);
     }
   };
 
@@ -513,52 +647,27 @@ export default function PdfViewerPage() {
             {!error && showSignatureToolbar && signatureError ? (
               <span className="max-w-sm text-right text-xs leading-5 text-red-600">{signatureError}</span>
             ) : null}
-            {!error && showSignatureToolbar && physicalError ? (
+            {!error && isAdjustPhysicalMode && physicalError ? (
               <span className="max-w-sm text-right text-xs leading-5 text-red-600">{physicalError}</span>
             ) : null}
             {!error && signatureRestrictionMessage ? (
               <span className="max-w-sm text-right text-xs leading-5 text-slate-500">{signatureRestrictionMessage}</span>
             ) : null}
-            {!error && showSignatureToolbar && hasSignedPdf ? (
-              <button
-                type="button"
-                onClick={() => openSignedPdf()}
-                className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 shadow-sm transition hover:bg-emerald-100"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Abrir PDF firmado
-              </button>
-            ) : null}
-            {!error && showSignatureToolbar && hasSignedPdf && !isSignedStale ? (
-              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm">
-                {physicalLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSignature className="h-3.5 w-3.5" />}
-                Firmas físicas: {physicalSignatureCount}
+            {!error && isAdjustPhysicalMode && physicalLoading ? (
+              <span className="inline-flex items-center gap-2 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Cargando firmas
               </span>
             ) : null}
-            {!error && showSignatureToolbar && hasSignedPdf && !isSignedStale && physicalStatus?.already_marked ? (
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-                Ya marcaste este documento
-              </span>
-            ) : null}
-            {!error && showSignatureToolbar && hasSignedPdf && !isSignedStale && physicalStatus?.can_mark ? (
+            {!error && isAdjustPhysicalMode ? (
               <button
                 type="button"
-                onClick={handleMarkPhysicalSignature}
-                disabled={markingPhysical}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                onClick={handleSavePhysicalPositions}
+                disabled={savingPhysicalPositions || physicalPositions.length === 0}
+                className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {markingPhysical ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
-                Marcar firma física
-              </button>
-            ) : null}
-            {!error && showSignatureToolbar && hasSignedPdf && !isSignedStale && physicalSignatureCount > 0 ? (
-              <button
-                type="button"
-                onClick={openPhysicalSignedPdf}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
-              >
-                <ExternalLink className="h-4 w-4" />
-                PDF con firmas físicas
+                {savingPhysicalPositions ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Guardar posiciones
               </button>
             ) : null}
             {!error && showSignatureToolbar ? (
@@ -629,7 +738,104 @@ export default function PdfViewerPage() {
           </div>
         ) : null}
 
-        {canRenderPdf ? (
+        {canRenderPdf && isAdjustPhysicalMode ? (
+          <div className="flex flex-1 flex-col overflow-hidden bg-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-white px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-slate-700">Página</span>
+                <select
+                  value={selectedPhysicalPage}
+                  onChange={(event) => setSelectedPhysicalPage(Number(event.target.value))}
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                >
+                  {(physicalStatus?.page_sizes ?? []).map((page) => (
+                    <option key={page.page} value={page.page}>{page.page}</option>
+                  ))}
+                </select>
+              </div>
+              {physicalPositionMessage ? (
+                <span className={`text-sm ${physicalPositionMessage.includes("guardadas") ? "text-emerald-700" : "text-red-600"}`}>
+                  {physicalPositionMessage}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto p-6">
+              {currentPhysicalPageSize ? (
+                <div
+                  ref={physicalCanvasRef}
+                  className="relative mx-auto bg-white shadow-2xl"
+                  style={{
+                    width: "min(100%, 920px)",
+                    aspectRatio: `${currentPhysicalPageSize.width} / ${currentPhysicalPageSize.height}`,
+                  }}
+                >
+                  <object
+                    title="PDF firmado"
+                    data={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=0&page=${selectedPhysicalPage}&view=Fit`}
+                    type="application/pdf"
+                    className="absolute inset-0 h-full w-full pointer-events-none"
+                  />
+                  {physicalPositions
+                    .filter((position) => Number(position.page) === Number(selectedPhysicalPage))
+                    .map((position) => (
+                      <div
+                        key={position.id}
+                        role="button"
+                        tabIndex={0}
+                        onPointerDown={(event) => handlePhysicalPointerDown(event, position)}
+                        onPointerMove={handlePhysicalPointerMove}
+                        onPointerUp={handlePhysicalPointerUp}
+                        onPointerCancel={handlePhysicalPointerUp}
+                        className="absolute z-10 touch-none cursor-move overflow-hidden border-2 border-emerald-500 bg-white/80 shadow-lg"
+                        style={{
+                          left: `${(position.x / currentPhysicalPageSize.width) * 100}%`,
+                          top: `${(position.y / currentPhysicalPageSize.height) * 100}%`,
+                          width: `${(position.width / currentPhysicalPageSize.width) * 100}%`,
+                          height: `${(position.height / currentPhysicalPageSize.height) * 100}%`,
+                        }}
+                        title={position.user_name || "Firma física"}
+                      >
+                        <div className="flex h-full w-full flex-col">
+                          <div className="min-h-0 flex-1">
+                            {position.signature_image_url ? (
+                              <img
+                                src={position.signature_image_url}
+                                alt=""
+                                className="h-full w-full object-contain"
+                                draggable="false"
+                              />
+                            ) : (
+                              <span className="text-xs text-slate-600">{position.user_name || "Firma"}</span>
+                            )}
+                          </div>
+                          <div className="truncate px-0.5 text-center text-[8px] leading-none text-slate-900">
+                            {position.user_name || "Usuario"}
+                          </div>
+                        </div>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          aria-label="Cambiar tamaño"
+                          onPointerDown={(event) => handlePhysicalResizePointerDown(event, position)}
+                          onPointerMove={handlePhysicalPointerMove}
+                          onPointerUp={handlePhysicalPointerUp}
+                          onPointerCancel={handlePhysicalPointerUp}
+                          className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize rounded-tl bg-emerald-500 shadow"
+                        />
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+                  No hay firmas físicas para ajustar.
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {canRenderPdf && !isAdjustPhysicalMode ? (
           <iframe
             title={title}
             src={blobUrl}

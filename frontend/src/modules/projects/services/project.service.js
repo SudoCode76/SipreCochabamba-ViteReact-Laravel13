@@ -117,6 +117,11 @@ export const projectService = {
     return response.data;
   },
 
+  updatePhysicalSignaturePositions: async (projectId, reportKey, payload = {}) => {
+    const response = await apiClient.put(`/v1/projects/${projectId}/reports/${reportKey}/physical-signatures/positions`, payload);
+    return response.data;
+  },
+
   physicalSignaturesPdfUrl: (projectId, reportKey, params = {}) => buildApiUrl(`/v1/projects/${projectId}/reports/${reportKey}/physical-signatures/pdf`, params),
 
   update: async (projectId, payload) => {

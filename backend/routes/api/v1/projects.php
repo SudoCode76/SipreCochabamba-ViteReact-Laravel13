@@ -61,6 +61,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/projects/{project}/reports/{reportKey}/signed/latest', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'latestSigned']);
     Route::get('/projects/{project}/reports/{reportKey}/physical-signatures', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'physicalSignatures']);
     Route::post('/projects/{project}/reports/{reportKey}/physical-signatures', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'markPhysicalSignature']);
+    Route::put('/projects/{project}/reports/{reportKey}/physical-signatures/positions', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'updatePhysicalSignaturePositions']);
     Route::get('/projects/{project}/reports/{reportKey}/physical-signatures/pdf', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'physicalSignaturesPdf']);
     Route::get('/search/items', [SearchController::class, 'items']);
     Route::get('/users/{user}/display-name', [UserController::class, 'displayName']);

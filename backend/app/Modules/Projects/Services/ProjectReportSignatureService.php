@@ -21,6 +21,9 @@ use setasign\Fpdi\Tcpdf\Fpdi;
 
 class ProjectReportSignatureService
 {
+    private const DEFAULT_PHYSICAL_SIGNATURE_WIDTH = 56.0;
+    private const DEFAULT_PHYSICAL_SIGNATURE_HEIGHT = 28.0;
+
     public function __construct(
         private readonly ProjectSignableReportService $signableReportService,
         private readonly ProjectReportPdfResolver $pdfResolver,
@@ -210,6 +213,9 @@ class ProjectReportSignatureService
         $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalizedParameters);
         $latestSigned = $this->latestSignedForHash($project, $reportKey, $parametersHash, $logicalHash);
         $items = $this->physicalSignatures($project, $reportKey, $parametersHash, $logicalHash);
+        $pageSizes = $latestSigned ? $this->signedPdfPageSizes($latestSigned) : [];
+        $this->assignMissingPhysicalPlacements($items, $pageSizes);
+        $items = $items->fresh(['user']);
 
         return [
             'count' => $items->count(),
@@ -217,6 +223,7 @@ class ProjectReportSignatureService
             'can_mark' => (bool) $latestSigned && filled($user->firma_imagen_path),
             'needs_signature_image' => blank($user->firma_imagen_path),
             'latest_signed' => $latestSigned ? $this->serialize($latestSigned) : null,
+            'page_sizes' => $pageSizes,
             'items' => $items->map(fn (ProjectReportPhysicalSignature $signature): array => $this->serializePhysicalSignature($signature))->all(),
         ];
     }
@@ -265,6 +272,11 @@ class ProjectReportSignatureService
             Storage::disk('public')->delete($existing->signature_image_path);
             $existing->forceFill([
                 'signature_image_path' => $snapshotPath,
+                'page' => null,
+                'x' => null,
+                'y' => null,
+                'width' => null,
+                'height' => null,
                 'marked_at' => now(),
             ])->save();
         } else {
@@ -278,6 +290,83 @@ class ProjectReportSignatureService
                 'marked_at' => now(),
             ]);
         }
+
+        return $this->physicalSignatureStatus($project, $reportKey, $normalizedParameters, $user);
+    }
+
+    public function updatePhysicalSignaturePositions(Project $project, string $reportKey, array $parameters, array $positions, User $user): array
+    {
+        $normalizedParameters = $this->normalizeParameters($parameters);
+        $parametersHash = $this->parametersHash($normalizedParameters);
+        $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalizedParameters);
+        $latestSigned = $this->latestSignedForHash($project, $reportKey, $parametersHash, $logicalHash);
+
+        if (! $latestSigned) {
+            throw ValidationException::withMessages([
+                'signature' => ['No existe un PDF firmado digitalmente vigente para ajustar firmas físicas.'],
+            ]);
+        }
+
+        $items = $this->physicalSignatures($project, $reportKey, $parametersHash, $logicalHash);
+        $byId = $items->keyBy('id');
+        $pageSizes = $this->signedPdfPageSizes($latestSigned);
+        $this->assignMissingPhysicalPlacements($items, $pageSizes);
+        $items = $items->fresh(['user']);
+        $byId = $items->keyBy('id');
+        $normalized = [];
+        $seenIds = [];
+
+        foreach ($positions as $position) {
+            $id = (int) ($position['id'] ?? 0);
+
+            if (in_array($id, $seenIds, true)) {
+                throw ValidationException::withMessages([
+                    'positions' => ['Una firma física fue enviada más de una vez.'],
+                ]);
+            }
+
+            if (! $byId->has($id)) {
+                throw ValidationException::withMessages([
+                    'positions' => ['Una de las firmas no pertenece a este documento.'],
+                ]);
+            }
+
+            $placement = [
+                'id' => $id,
+                'page' => (int) ($position['page'] ?? 1),
+                'x' => round((float) ($position['x'] ?? 0), 2),
+                'y' => round((float) ($position['y'] ?? 0), 2),
+                'width' => round((float) ($position['width'] ?? self::DEFAULT_PHYSICAL_SIGNATURE_WIDTH), 2),
+                'height' => round((float) ($position['height'] ?? self::DEFAULT_PHYSICAL_SIGNATURE_HEIGHT), 2),
+            ];
+
+            if (! $this->placementInsidePage($placement, $pageSizes)) {
+                throw ValidationException::withMessages([
+                    'positions' => ['Una de las firmas queda fuera de la página.'],
+                ]);
+            }
+
+            $normalized[] = $placement;
+            $seenIds[] = $id;
+        }
+
+        $submittedById = collect($normalized)->keyBy('id');
+        $allPlacements = $items
+            ->map(fn (ProjectReportPhysicalSignature $signature): array => $submittedById->get($signature->id) ?: $this->placementFromSignature($signature))
+            ->values()
+            ->all();
+
+        if ($this->placementsOverlap($allPlacements)) {
+            throw ValidationException::withMessages([
+                'positions' => ['Las firmas físicas no pueden superponerse.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($byId, $normalized): void {
+            foreach ($normalized as $placement) {
+                $byId[$placement['id']]->forceFill(Arr::except($placement, ['id']))->save();
+            }
+        });
 
         return $this->physicalSignatureStatus($project, $reportKey, $normalizedParameters, $user);
     }
@@ -390,8 +479,168 @@ class ProjectReportSignatureService
             'id' => $signature->id,
             'user_id' => $signature->id_usuario,
             'user_name' => $signature->user?->funcionario ?: 'Usuario',
+            'signature_image_url' => $signature->signature_image_path ? url(Storage::url($signature->signature_image_path)) : null,
+            'page' => $signature->page,
+            'x' => $signature->x,
+            'y' => $signature->y,
+            'width' => $signature->width,
+            'height' => $signature->height,
             'marked_at' => $signature->marked_at?->toIso8601String(),
         ];
+    }
+
+    private function signedPdfPageSizes(ProjectReportSignature $signature): array
+    {
+        return $this->pdfPageSizes($this->signedPdfContent($signature));
+    }
+
+    private function pdfPageSizes(string $sourcePdf): array
+    {
+        $sourcePath = tempnam(sys_get_temp_dir(), 'sipre_pages_');
+
+        if ($sourcePath === false) {
+            return [];
+        }
+
+        file_put_contents($sourcePath, $sourcePdf);
+        $compatiblePath = $this->fpdiCompatiblePdfPath($sourcePath);
+
+        try {
+            $pdf = new Fpdi();
+            $pageCount = $pdf->setSourceFile($compatiblePath);
+            $sizes = [];
+
+            for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
+                $templateId = $pdf->importPage($pageNumber);
+                $size = $pdf->getTemplateSize($templateId);
+                $sizes[] = [
+                    'page' => $pageNumber,
+                    'width' => round((float) $size['width'], 2),
+                    'height' => round((float) $size['height'], 2),
+                    'orientation' => (string) $size['orientation'],
+                ];
+            }
+
+            return $sizes;
+        } finally {
+            @unlink($sourcePath);
+            if ($compatiblePath !== $sourcePath) {
+                @unlink($compatiblePath);
+            }
+        }
+    }
+
+    private function assignMissingPhysicalPlacements($signatures, array $pageSizes): void
+    {
+        if ($signatures->isEmpty() || $pageSizes === []) {
+            return;
+        }
+
+        $lastPage = $pageSizes[array_key_last($pageSizes)];
+        $existing = $signatures
+            ->filter(fn (ProjectReportPhysicalSignature $signature): bool => filled($signature->page))
+            ->map(fn (ProjectReportPhysicalSignature $signature): array => $this->placementFromSignature($signature))
+            ->values()
+            ->all();
+
+        foreach ($signatures as $signature) {
+            if (filled($signature->page)) {
+                continue;
+            }
+
+            $placement = $this->nextDefaultPlacement($lastPage, $existing);
+            $signature->forceFill($placement)->save();
+            $existing[] = ['id' => $signature->id, ...$placement];
+        }
+    }
+
+    private function nextDefaultPlacement(array $pageSize, array $existing): array
+    {
+        $width = self::DEFAULT_PHYSICAL_SIGNATURE_WIDTH;
+        $height = self::DEFAULT_PHYSICAL_SIGNATURE_HEIGHT;
+        $margin = 10.0;
+        $gap = 4.0;
+        $page = (int) $pageSize['page'];
+        $pageWidth = (float) $pageSize['width'];
+        $pageHeight = (float) $pageSize['height'];
+        $columns = max(1, (int) floor(($pageWidth - ($margin * 2) + $gap) / ($width + $gap)));
+
+        for ($row = 0; $row < 10; $row++) {
+            for ($column = 0; $column < $columns; $column++) {
+                $candidate = [
+                    'page' => $page,
+                    'x' => round($margin + ($column * ($width + $gap)), 2),
+                    'y' => round($pageHeight - $margin - $height - ($row * ($height + $gap)), 2),
+                    'width' => $width,
+                    'height' => $height,
+                ];
+
+                if (! $this->placementsOverlap([['id' => 0, ...$candidate], ...$existing])) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return [
+            'page' => $page,
+            'x' => $margin,
+            'y' => max($margin, $pageHeight - $margin - $height),
+            'width' => $width,
+            'height' => $height,
+        ];
+    }
+
+    private function placementFromSignature(ProjectReportPhysicalSignature $signature): array
+    {
+        return [
+            'id' => $signature->id,
+            'page' => (int) $signature->page,
+            'x' => (float) $signature->x,
+            'y' => (float) $signature->y,
+            'width' => (float) $signature->width,
+            'height' => (float) $signature->height,
+        ];
+    }
+
+    private function placementInsidePage(array $placement, array $pageSizes): bool
+    {
+        $page = collect($pageSizes)->firstWhere('page', (int) $placement['page']);
+
+        if (! $page) {
+            return false;
+        }
+
+        return $placement['width'] > 0
+            && $placement['height'] > 0
+            && $placement['x'] >= 0
+            && $placement['y'] >= 0
+            && ($placement['x'] + $placement['width']) <= ((float) $page['width'] + 0.01)
+            && ($placement['y'] + $placement['height']) <= ((float) $page['height'] + 0.01);
+    }
+
+    private function placementsOverlap(array $placements): bool
+    {
+        for ($i = 0; $i < count($placements); $i++) {
+            for ($j = $i + 1; $j < count($placements); $j++) {
+                $a = $placements[$i];
+                $b = $placements[$j];
+
+                if ((int) $a['page'] !== (int) $b['page']) {
+                    continue;
+                }
+
+                if (
+                    $a['x'] < $b['x'] + $b['width']
+                    && $a['x'] + $a['width'] > $b['x']
+                    && $a['y'] < $b['y'] + $b['height']
+                    && $a['y'] + $a['height'] > $b['y']
+                ) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     public function serialize(ProjectReportSignature $signature): array
@@ -631,29 +880,52 @@ class ProjectReportSignatureService
             $pdf->SetAutoPageBreak(false);
             $pdf->SetMargins(0, 0, 0);
             $pageCount = $pdf->setSourceFile($compatiblePath);
-            $visibleSignatures = $signatures->take(4)->values();
-            $hiddenCount = max(0, $signatures->count() - $visibleSignatures->count());
+            $templateSizes = [];
 
             for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
                 $templateId = $pdf->importPage($pageNumber);
-                $size = $pdf->getTemplateSize($templateId);
+                $templateSizes[$pageNumber] = $pdf->getTemplateSize($templateId);
+            }
+
+            $lastPage = [
+                'page' => $pageCount,
+                'width' => (float) $templateSizes[$pageCount]['width'],
+                'height' => (float) $templateSizes[$pageCount]['height'],
+            ];
+            $placements = [];
+
+            foreach ($signatures as $signature) {
+                $placement = filled($signature->page)
+                    ? $this->placementFromSignature($signature)
+                    : ['id' => $signature->id, ...$this->nextDefaultPlacement($lastPage, $placements)];
+                $placements[] = $placement;
+            }
+
+            for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
+                $templateId = $pdf->importPage($pageNumber);
+                $size = $templateSizes[$pageNumber];
                 $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
                 $pdf->useTemplate($templateId, 0, 0, $size['width'], $size['height']);
 
-                $left = 14.0;
-                $right = 14.0;
-                $slotCount = max(1, $visibleSignatures->count());
-                $slotWidth = ($size['width'] - $left - $right) / $slotCount;
-                $bandY = max(10.0, $size['height'] - 58.0);
+                foreach ($signatures as $index => $signature) {
+                    $placement = $placements[$index] ?? null;
 
-                foreach ($visibleSignatures as $index => $signature) {
-                    $x = $left + ($index * $slotWidth);
+                    if (! $placement || (int) $placement['page'] !== $pageNumber) {
+                        continue;
+                    }
+
+                    $x = (float) $placement['x'];
+                    $y = (float) $placement['y'];
+                    $slotWidth = (float) $placement['width'];
+                    $slotHeight = (float) $placement['height'];
+                    $nameHeight = min(4.0, max(0.0, $slotHeight * 0.25));
+                    $imageSlotHeight = max(1.0, $slotHeight - $nameHeight);
                     $imagePath = Storage::disk('public')->path($signature->signature_image_path);
 
                     if (is_readable($imagePath)) {
                         $dimensions = getimagesize($imagePath);
-                        $maxImageWidth = min(56.0, max(24.0, $slotWidth - 8.0));
-                        $maxImageHeight = 28.0;
+                        $maxImageWidth = $slotWidth;
+                        $maxImageHeight = $imageSlotHeight;
                         $imageWidth = $maxImageWidth;
                         $imageHeight = $maxImageHeight;
 
@@ -662,7 +934,7 @@ class ProjectReportSignatureService
 
                             if ($ratio >= ($maxImageWidth / $maxImageHeight)) {
                                 $imageWidth = $maxImageWidth;
-                                $imageHeight = max(14.0, $maxImageWidth / $ratio);
+                                $imageHeight = $maxImageWidth / $ratio;
                             } else {
                                 $imageHeight = $maxImageHeight;
                                 $imageWidth = min($maxImageWidth, $maxImageHeight * $ratio);
@@ -672,47 +944,26 @@ class ProjectReportSignatureService
                         $pdf->Image(
                             $imagePath,
                             $x + (($slotWidth - $imageWidth) / 2),
-                            $bandY,
+                            $y + (($slotHeight - $imageHeight) / 2),
                             $imageWidth,
                             $imageHeight
                         );
                     }
 
-                    $pdf->SetFont('helvetica', '', 6);
-                    $pdf->SetTextColor(25, 25, 25);
-                    $pdf->SetXY($x + 1, $bandY + 30);
-                    $pdf->MultiCell(
-                        $slotWidth - 2,
-                        3,
-                        (string) ($signature->user?->funcionario ?: 'Usuario'),
-                        0,
-                        'C',
-                        false,
-                        1
-                    );
-                    $pdf->SetXY($x + 1, $bandY + 34);
-                    $pdf->MultiCell(
-                        $slotWidth - 2,
-                        3,
-                        optional($signature->marked_at)->format('d/m/Y H:i') ?: '',
-                        0,
-                        'C',
-                        false,
-                        1
-                    );
-                }
-
-                if ($hiddenCount > 0) {
-                    $pdf->SetFont('helvetica', 'I', 5);
-                    $pdf->SetXY($left, $bandY + 39);
-                    $pdf->Cell(
-                        $size['width'] - $left - $right,
-                        3,
-                        sprintf('Existen %d firmantes adicionales; ver historial de firmas fisicas.', $hiddenCount),
-                        0,
-                        0,
-                        'C'
-                    );
+                    if ($nameHeight > 0) {
+                        $pdf->SetFont('helvetica', '', 5);
+                        $pdf->SetTextColor(25, 25, 25);
+                        $pdf->SetXY($x, $y + $imageSlotHeight);
+                        $pdf->MultiCell(
+                            $slotWidth,
+                            $nameHeight,
+                            (string) ($signature->user?->funcionario ?: 'Usuario'),
+                            0,
+                            'C',
+                            false,
+                            1
+                        );
+                    }
                 }
             }
 
