@@ -6,6 +6,7 @@ ENV TZ=America/La_Paz \
 
 RUN apk add --no-cache \
     bash curl git unzip zip \
+    ghostscript \
     postgresql-dev libpq \
     freetype-dev libjpeg-turbo-dev libpng-dev libwebp-dev \
     oniguruma-dev libzip-dev libxml2-dev icu-dev tzdata
