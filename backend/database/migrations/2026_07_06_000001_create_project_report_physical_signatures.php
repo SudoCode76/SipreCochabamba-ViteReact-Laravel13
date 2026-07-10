@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasColumn('usuario', 'firma_imagen_path')) {
+        if (Schema::hasTable('usuario') && ! Schema::hasColumn('usuario', 'firma_imagen_path')) {
             Schema::table('usuario', function (Blueprint $table): void {
                 $table->string('firma_imagen_path')->nullable();
             });
@@ -47,7 +47,7 @@ return new class extends Migration
     {
         Schema::dropIfExists('project_report_physical_signatures');
 
-        if (Schema::hasColumn('usuario', 'firma_imagen_path')) {
+        if (Schema::hasTable('usuario') && Schema::hasColumn('usuario', 'firma_imagen_path')) {
             Schema::table('usuario', function (Blueprint $table): void {
                 $table->dropColumn('firma_imagen_path');
             });

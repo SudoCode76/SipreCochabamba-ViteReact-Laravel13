@@ -39,6 +39,10 @@ const historyActionLabels = {
   pdf_generated: "PDF",
   template_created: "Planilla",
   created_from_template: "Planilla",
+  version_created: "Nueva version",
+  version_finalized: "Version finalizada",
+  version_synchronized: "Version sincronizada",
+  version_input_excluded: "Insumo excluido",
 };
 
 const historyActionOptions = [
@@ -48,6 +52,10 @@ const historyActionOptions = [
   { value: "items_synced", label: "Items sincronizados" },
   { value: "budget_recalculated", label: "Presupuesto recalculado" },
   { value: "pdf_generated", label: "PDF generado" },
+  { value: "version_created", label: "Nueva version" },
+  { value: "version_finalized", label: "Version finalizada" },
+  { value: "version_synchronized", label: "Version sincronizada" },
+  { value: "version_input_excluded", label: "Insumo excluido" },
   { value: "template_created", label: "Planilla creada" },
   { value: "created_from_template", label: "Creado desde planilla" },
 ];
@@ -63,6 +71,7 @@ const historyFieldLabels = {
   estado: "Estado",
   approval_status: "Aprobacion",
   aprobado: "Aprobacion",
+  fecha_aprob: "Fecha aprobacion",
   responsible: "Responsable",
   responsable: "Responsable",
   requester_id: "Solicitante",
@@ -170,9 +179,9 @@ const renderChangedFields = (changes) => {
         <div key={field} className="rounded-xl border border-border/70 bg-background px-3 py-2">
           <div className="text-sm font-medium text-foreground">{labelHistoryField(field)}</div>
           <div className="mt-1 text-sm text-muted-foreground">
-            Antes: <span className="text-foreground">{formatHistoryValue(change?.from)}</span>
+            Antes: <span className="text-foreground">{formatHistoryValue(field, change?.from)}</span>
             <span className="px-2">-&gt;</span>
-            Ahora: <span className="text-foreground">{formatHistoryValue(change?.to)}</span>
+            Ahora: <span className="text-foreground">{formatHistoryValue(field, change?.to)}</span>
           </div>
         </div>
       ))}

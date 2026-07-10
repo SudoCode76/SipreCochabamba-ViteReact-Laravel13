@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { buildPdfViewerUrl, openUrlInNewTab } from "@/lib/utils/pdf";
+import { itemsService } from "@/modules/dashboard/services/items.service";
 import { projectService } from "@/modules/projects/services/project.service";
 
 function compactParameters(parameters = {}) {
@@ -49,25 +50,46 @@ function readApiError(error, fallback) {
   return error?.response?.data?.message || fallback;
 }
 
-export default function ReportSignatureStatus({ projectId, reportKey, parameters = {} }) {
+export default function ReportSignatureStatus({ subject = "project", projectId, itemId, reportKey, parameters = {} }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [physicalOpen, setPhysicalOpen] = useState(false);
   const [physicalError, setPhysicalError] = useState("");
   const [markingPhysical, setMarkingPhysical] = useState(false);
+  const isItemSubject = subject === "item";
+  const subjectId = isItemSubject ? itemId : projectId;
+  const signatureService = isItemSubject ? itemsService : projectService;
+  const queryScope = isItemSubject ? "item" : "project";
   const normalizedParameters = useMemo(() => compactParameters(parameters), [parameters]);
   const parametersKey = useMemo(() => JSON.stringify(normalizedParameters), [normalizedParameters]);
-  const enabled = Boolean(projectId && reportKey);
+  const enabled = Boolean(subjectId && reportKey);
+
+  const buildSignatureOptions = (targetSubject = subject, targetId = subjectId, targetReportKey = reportKey, targetParameters = normalizedParameters) => {
+    if (targetSubject === "item") {
+      return {
+        subject: "item",
+        itemId: targetId,
+        reportKey: targetReportKey,
+        parameters: targetParameters,
+      };
+    }
+
+    return {
+      projectId: targetId,
+      reportKey: targetReportKey,
+      parameters: targetParameters,
+    };
+  };
 
   const statusQuery = useQuery({
-    queryKey: ["project-report-signature-status", projectId, reportKey, parametersKey],
-    queryFn: () => projectService.signatureStatus(projectId, { report_key: reportKey, ...normalizedParameters }),
+    queryKey: [`${queryScope}-report-signature-status`, subjectId, reportKey, parametersKey],
+    queryFn: () => signatureService.signatureStatus(subjectId, { report_key: reportKey, ...normalizedParameters }),
     enabled,
     staleTime: 15_000,
   });
 
   const historyQuery = useQuery({
-    queryKey: ["project-report-signatures", projectId, reportKey, parametersKey],
-    queryFn: () => projectService.reportSignatures(projectId, reportKey, normalizedParameters),
+    queryKey: [`${queryScope}-report-signatures`, subjectId, reportKey, parametersKey],
+    queryFn: () => signatureService.reportSignatures(subjectId, reportKey, normalizedParameters),
     enabled: enabled && historyOpen,
     staleTime: 15_000,
   });
@@ -77,8 +99,8 @@ export default function ReportSignatureStatus({ projectId, reportKey, parameters
   const canUsePhysicalSignatures = Boolean(latestSigned?.has_signed_file && !status?.is_signed_stale);
 
   const physicalQuery = useQuery({
-    queryKey: ["project-report-physical-signatures", projectId, reportKey, parametersKey],
-    queryFn: () => projectService.physicalSignatures(projectId, reportKey, normalizedParameters),
+    queryKey: [`${queryScope}-report-physical-signatures`, subjectId, reportKey, parametersKey],
+    queryFn: () => signatureService.physicalSignatures(subjectId, reportKey, normalizedParameters),
     enabled: enabled && canUsePhysicalSignatures,
     staleTime: 15_000,
   });
@@ -98,28 +120,34 @@ export default function ReportSignatureStatus({ projectId, reportKey, parameters
       return;
     }
 
-    const url = projectService.latestSignedReportUrl(
-      signature.project_id || projectId,
+    const signatureSubject = signature.subject || (signature.item_id ? "item" : subject);
+    const signedSubjectId = signatureSubject === "item"
+      ? (signature.item_id || signature.subject_id || itemId || subjectId)
+      : (signature.project_id || signature.subject_id || projectId || subjectId);
+    const signedService = signatureSubject === "item" ? itemsService : projectService;
+    const url = signedService.latestSignedReportUrl(
+      signedSubjectId,
       signature.report_key || reportKey,
       signature.parameters || normalizedParameters,
     );
 
     openUrlInNewTab(buildPdfViewerUrl(url, {
       title: "PDF firmado",
-      signature: {
-        projectId: signature.project_id || projectId,
-        reportKey: signature.report_key || reportKey,
-        parameters: signature.parameters || normalizedParameters,
-      },
+      signature: buildSignatureOptions(
+        signatureSubject,
+        signedSubjectId,
+        signature.report_key || reportKey,
+        signature.parameters || normalizedParameters,
+      ),
     }));
   };
 
   const openPhysicalSignedPdf = () => {
-    const url = projectService.physicalSignaturesPdfUrl(projectId, reportKey, normalizedParameters);
+    const url = signatureService.physicalSignaturesPdfUrl(subjectId, reportKey, normalizedParameters);
 
     openUrlInNewTab(buildPdfViewerUrl(url, {
       title: "PDF con firmas físicas",
-      signature: { projectId, reportKey, parameters: normalizedParameters },
+      signature: buildSignatureOptions(),
     }));
   };
 
@@ -128,12 +156,12 @@ export default function ReportSignatureStatus({ projectId, reportKey, parameters
       return;
     }
 
-    const url = projectService.latestSignedReportUrl(projectId, reportKey, normalizedParameters);
+    const url = signatureService.latestSignedReportUrl(subjectId, reportKey, normalizedParameters);
 
     openUrlInNewTab(buildPdfViewerUrl(url, {
       title: "Ajustar firmas físicas",
       adjustPhysicalSignatures: true,
-      signature: { projectId, reportKey, parameters: normalizedParameters },
+      signature: buildSignatureOptions(),
     }));
   };
 
@@ -146,7 +174,7 @@ export default function ReportSignatureStatus({ projectId, reportKey, parameters
     setMarkingPhysical(true);
 
     try {
-      await projectService.markPhysicalSignature(projectId, reportKey, normalizedParameters);
+      await signatureService.markPhysicalSignature(subjectId, reportKey, normalizedParameters);
       await physicalQuery.refetch();
     } catch (error) {
       setPhysicalError(readApiError(error, "No se pudo marcar la firma física."));
@@ -199,6 +227,12 @@ export default function ReportSignatureStatus({ projectId, reportKey, parameters
             </Button>
           </div>
         </div>
+
+        {status?.is_signed_stale ? (
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Este reporte cambió desde la última firma. Se generará el PDF actual sin firmas.
+          </p>
+        ) : null}
 
         {canUsePhysicalSignatures && physicalOpen ? (
           <div className="rounded-2xl border border-border bg-background p-3 shadow-sm">

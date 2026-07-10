@@ -269,4 +269,38 @@ export const itemsService = {
 
   machineryBreakdownPdfUrl: (itemId) => buildApiUrl(`/v1/items/${itemId}/machinery/pdf`),
   machineryBreakdownXlsxUrl: (itemId) => buildApiUrl(`/v1/items/${itemId}/machinery/xlsx`),
+
+  signReport: async (itemId, reportKey, payload = {}) => {
+    const response = await apiClient.post(`/v1/items/${itemId}/reports/${reportKey}/sign`, payload);
+    return response.data;
+  },
+
+  signatureStatus: async (itemId, params = {}) => {
+    const response = await apiClient.get(`/v1/items/${itemId}/signature-status`, { params });
+    return response.data;
+  },
+
+  reportSignatures: async (itemId, reportKey, params = {}) => {
+    const response = await apiClient.get(`/v1/items/${itemId}/reports/${reportKey}/signatures`, { params });
+    return response.data;
+  },
+
+  latestSignedReportUrl: (itemId, reportKey, params = {}) => buildApiUrl(`/v1/items/${itemId}/reports/${reportKey}/signed/latest`, params),
+
+  physicalSignatures: async (itemId, reportKey, params = {}) => {
+    const response = await apiClient.get(`/v1/items/${itemId}/reports/${reportKey}/physical-signatures`, { params });
+    return response.data;
+  },
+
+  markPhysicalSignature: async (itemId, reportKey, payload = {}) => {
+    const response = await apiClient.post(`/v1/items/${itemId}/reports/${reportKey}/physical-signatures`, payload);
+    return response.data;
+  },
+
+  updatePhysicalSignaturePositions: async (itemId, reportKey, payload = {}) => {
+    const response = await apiClient.put(`/v1/items/${itemId}/reports/${reportKey}/physical-signatures/positions`, payload);
+    return response.data;
+  },
+
+  physicalSignaturesPdfUrl: (itemId, reportKey, params = {}) => buildApiUrl(`/v1/items/${itemId}/reports/${reportKey}/physical-signatures/pdf`, params),
 };

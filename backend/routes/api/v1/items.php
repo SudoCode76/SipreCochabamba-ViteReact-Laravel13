@@ -4,6 +4,7 @@ use App\Modules\Items\Http\Controllers\ItemAnalysisController;
 use App\Modules\Items\Http\Controllers\ItemBreakdownController;
 use App\Modules\Items\Http\Controllers\ItemCatalogController;
 use App\Modules\Items\Http\Controllers\ItemCompositionController;
+use App\Http\Controllers\Api\V1\ProjectReportSignatureController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
@@ -63,4 +64,13 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::post('/items/{item}/price-recalculation', [ItemAnalysisController::class, 'priceRecalculation']);
     Route::get('/items/{item}/price-recalculation/pdf', [ItemAnalysisController::class, 'priceRecalculationPdf']);
     Route::get('/items/{item}/price-recalculation/xlsx', [ItemAnalysisController::class, 'priceRecalculationXlsx']);
+
+    Route::get('/items/{item}/signature-status', [ProjectReportSignatureController::class, 'itemStatus']);
+    Route::post('/items/{item}/reports/{reportKey}/sign', [ProjectReportSignatureController::class, 'itemSign']);
+    Route::get('/items/{item}/reports/{reportKey}/signatures', [ProjectReportSignatureController::class, 'itemSignatures']);
+    Route::get('/items/{item}/reports/{reportKey}/signed/latest', [ProjectReportSignatureController::class, 'itemLatestSigned']);
+    Route::get('/items/{item}/reports/{reportKey}/physical-signatures', [ProjectReportSignatureController::class, 'itemPhysicalSignatures']);
+    Route::post('/items/{item}/reports/{reportKey}/physical-signatures', [ProjectReportSignatureController::class, 'itemMarkPhysicalSignature']);
+    Route::patch('/items/{item}/reports/{reportKey}/physical-signatures/positions', [ProjectReportSignatureController::class, 'itemUpdatePhysicalSignaturePositions']);
+    Route::get('/items/{item}/reports/{reportKey}/physical-signatures/pdf', [ProjectReportSignatureController::class, 'itemPhysicalSignaturesPdf']);
 });

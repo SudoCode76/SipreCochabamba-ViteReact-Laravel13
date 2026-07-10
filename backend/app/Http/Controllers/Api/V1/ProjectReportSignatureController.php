@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Item;
 use App\Models\Project;
 use App\Models\ProjectReportSignature;
 use App\Models\ProjectSignableReport;
@@ -50,30 +51,50 @@ class ProjectReportSignatureController extends Controller
         }
 
         $validated = $request->validate([
-            'is_enabled' => ['required_without:requires_finalized_project', 'boolean'],
-            'requires_finalized_project' => ['required_without:is_enabled', 'boolean'],
+            'is_enabled' => ['required_without_all:requires_finalized_project,validity_days', 'boolean'],
+            'requires_finalized_project' => ['required_without_all:is_enabled,validity_days', 'boolean'],
+            'validity_days' => ['required_without_all:is_enabled,requires_finalized_project', 'integer', 'min:1', 'max:3650'],
         ]);
 
         $report = ProjectSignableReport::query()
             ->where('report_key', $reportKey)
             ->firstOrFail();
 
-        $report->forceFill(collect($validated)
-            ->map(fn ($value): bool => (bool) $value)
-            ->all())->save();
+        $updates = collect($validated)
+            ->map(fn ($value, string $key) => $key === 'validity_days' ? (int) $value : (bool) $value)
+            ->all();
+
+        $scope = ProjectSignableReportService::REPORTS[$report->report_key]['scope'] ?? 'project';
+        if ($scope === 'item') {
+            $updates['requires_finalized_project'] = false;
+        }
+
+        $report->forceFill($updates)->save();
 
         return ApiResponse::success([
             'report' => [
+                'scope' => $scope,
                 'report_key' => $report->report_key,
                 'name' => $report->name,
                 'description' => $report->description,
                 'is_enabled' => (bool) $report->is_enabled,
-                'requires_finalized_project' => (bool) $report->requires_finalized_project,
+                'requires_finalized_project' => $scope === 'item' ? false : (bool) $report->requires_finalized_project,
+                'validity_days' => (int) ($report->validity_days ?? 30),
             ],
         ], 'Configuración de firma actualizada correctamente.');
     }
 
     public function status(Request $request, Project $project): JsonResponse
+    {
+        return $this->subjectStatus($request, $project);
+    }
+
+    public function itemStatus(Request $request, Item $item): JsonResponse
+    {
+        return $this->subjectStatus($request, $item);
+    }
+
+    private function subjectStatus(Request $request, Project|Item $subject): JsonResponse
     {
         $reportKey = (string) $request->query('report_key', '');
 
@@ -82,6 +103,8 @@ class ProjectReportSignatureController extends Controller
             'format' => ['nullable', 'string'],
             'type' => ['nullable', 'integer'],
             'fecha' => ['nullable', 'date'],
+            'mode' => ['nullable', 'string'],
+            'tipo_desglose' => ['nullable', 'integer'],
         ]);
 
         $reports = $this->signableReportService->list($request->user());
@@ -89,27 +112,30 @@ class ProjectReportSignatureController extends Controller
         if ($reportKey !== '') {
             $parameters = $this->signatureService->normalizeParameters($request->query());
             $hash = $this->signatureService->parametersHash($parameters);
-            $latest = $this->signatureService->latest($project, $reportKey, $hash);
-            $latestSigned = $this->signatureService->latestSigned($project, $reportKey, $hash);
-            $report = $reports->firstWhere('report_key', $reportKey);
-            $projectIsFinalized = $project->isFrozen();
+            $latest = $this->signatureService->latest($subject, $reportKey, $hash);
+            $latestSigned = $this->signatureService->latestSigned($subject, $reportKey, $hash);
+            $report = $this->reportAllowedForSubject($reportKey, $subject)
+                ? $reports->firstWhere('report_key', $reportKey)
+                : null;
+            $projectIsFinalized = $subject instanceof Item ? true : $subject->isFrozen();
+            $subjectCanBecomeStale = $subject instanceof Item || ! $projectIsFinalized;
             $currentDocumentHash = $latestSigned
-                ? $this->signatureService->currentDocumentHash($project, $reportKey, $parameters)
+                ? $this->signatureService->currentDocumentHash($subject, $reportKey, $parameters)
                 : null;
             $signedDocumentHash = $latestSigned?->base_document_hash;
             $isCurrentPdfSigned = filled($currentDocumentHash)
                 && filled($signedDocumentHash)
                 && hash_equals((string) $signedDocumentHash, (string) $currentDocumentHash);
             $isSignedStale = (bool) $latestSigned
-                && ! $projectIsFinalized
+                && $subjectCanBecomeStale
                 && (! filled($signedDocumentHash) || ! $isCurrentPdfSigned);
 
             return ApiResponse::success([
                 'project_is_finalized' => $projectIsFinalized,
                 'project_is_frozen' => $projectIsFinalized,
-                'project_status_allows_signing' => $report
-                    ? (! ($report['requires_finalized_project'] ?? true) || $projectIsFinalized)
-                    : false,
+                'project_status_allows_signing' => $subject instanceof Item
+                    ? (bool) ($report['is_enabled'] ?? false)
+                    : ($report ? (! ($report['requires_finalized_project'] ?? true) || $projectIsFinalized) : false),
                 'report' => $report,
                 'latest_signature' => $latest ? $this->signatureService->serialize($latest) : null,
                 'latest_signed' => $latestSigned ? $this->signatureService->serialize($latestSigned) : null,
@@ -120,7 +146,7 @@ class ProjectReportSignatureController extends Controller
             ], 'Estado de firma obtenido correctamente.');
         }
 
-        $projectIsFinalized = $project->isFrozen();
+        $projectIsFinalized = $subject instanceof Item ? true : $subject->isFrozen();
 
         return ApiResponse::success([
             'project_is_finalized' => $projectIsFinalized,
@@ -130,7 +156,17 @@ class ProjectReportSignatureController extends Controller
 
     public function sign(Request $request, Project $project, string $reportKey): JsonResponse
     {
-        if (! array_key_exists($reportKey, ProjectSignableReportService::REPORTS)) {
+        return $this->subjectSign($request, $project, $reportKey);
+    }
+
+    public function itemSign(Request $request, Item $item, string $reportKey): JsonResponse
+    {
+        return $this->subjectSign($request, $item, $reportKey);
+    }
+
+    private function subjectSign(Request $request, Project|Item $subject, string $reportKey): JsonResponse
+    {
+        if (! $this->reportAllowedForSubject($reportKey, $subject)) {
             return ApiResponse::error('El reporte solicitado no existe.', [
                 'report_key' => ['El reporte solicitado no existe.'],
             ], 404);
@@ -146,12 +182,14 @@ class ProjectReportSignatureController extends Controller
             'format' => ['nullable', 'string', 'in:PCA,PC_FPS,PC_UPRE,PC_FNDR,PC_OBRAS'],
             'type' => ['nullable', 'integer', 'in:1,2,3'],
             'fecha' => ['nullable', 'date'],
+            'mode' => ['nullable', 'string'],
+            'tipo_desglose' => ['nullable', 'integer'],
             'access_token' => ['nullable', 'string'],
             'acces_token' => ['nullable', 'string'],
         ]);
 
         try {
-            $signature = $this->signatureService->start($project, $reportKey, $validated, $request->user());
+            $signature = $this->signatureService->start($subject, $reportKey, $validated, $request->user());
         } catch (AuthorizationException $exception) {
             return ApiResponse::error($exception->getMessage() ?: 'No tiene permisos para firmar este reporte.', [
                 'authorization' => [$exception->getMessage() ?: 'No tiene permisos para firmar este reporte.'],
@@ -176,7 +214,17 @@ class ProjectReportSignatureController extends Controller
 
     public function signatures(Request $request, Project $project, string $reportKey): JsonResponse
     {
-        if (! array_key_exists($reportKey, ProjectSignableReportService::REPORTS)) {
+        return $this->subjectSignatures($request, $project, $reportKey);
+    }
+
+    public function itemSignatures(Request $request, Item $item, string $reportKey): JsonResponse
+    {
+        return $this->subjectSignatures($request, $item, $reportKey);
+    }
+
+    private function subjectSignatures(Request $request, Project|Item $subject, string $reportKey): JsonResponse
+    {
+        if (! $this->reportAllowedForSubject($reportKey, $subject)) {
             return ApiResponse::error('El reporte solicitado no existe.', [
                 'report_key' => ['El reporte solicitado no existe.'],
             ], 404);
@@ -186,28 +234,42 @@ class ProjectReportSignatureController extends Controller
             'format' => ['nullable', 'string'],
             'type' => ['nullable', 'integer'],
             'fecha' => ['nullable', 'date'],
+            'mode' => ['nullable', 'string'],
+            'tipo_desglose' => ['nullable', 'integer'],
         ]);
         $parameters = $this->signatureService->normalizeParameters($validated);
         $hash = $this->signatureService->parametersHash($parameters);
-        $latestSigned = $this->signatureService->latestSigned($project, $reportKey, $hash);
+        $latestSigned = $this->signatureService->latestSigned($subject, $reportKey, $hash);
 
         return ApiResponse::success([
-            'items' => $this->signatureService->history($project, $reportKey, $hash),
+            'items' => $this->signatureService->history($subject, $reportKey, $hash),
             'latest_signed' => $latestSigned ? $this->signatureService->serialize($latestSigned) : null,
-            'signers' => $this->signatureService->latestSignedSigners($project, $reportKey, $hash),
+            'signers' => $this->signatureService->latestSignedSigners($subject, $reportKey, $hash),
         ], 'Historial de firmas obtenido correctamente.');
     }
 
     public function latestSigned(Request $request, Project $project, string $reportKey)
     {
+        return $this->subjectLatestSigned($request, $project, $reportKey);
+    }
+
+    public function itemLatestSigned(Request $request, Item $item, string $reportKey)
+    {
+        return $this->subjectLatestSigned($request, $item, $reportKey);
+    }
+
+    private function subjectLatestSigned(Request $request, Project|Item $subject, string $reportKey)
+    {
         $validated = $request->validate([
             'format' => ['nullable', 'string'],
             'type' => ['nullable', 'integer'],
             'fecha' => ['nullable', 'date'],
+            'mode' => ['nullable', 'string'],
+            'tipo_desglose' => ['nullable', 'integer'],
         ]);
 
         $parameters = $this->signatureService->normalizeParameters($validated);
-        $signature = $this->signatureService->latestSigned($project, $reportKey, $this->signatureService->parametersHash($parameters));
+        $signature = $this->signatureService->latestSigned($subject, $reportKey, $this->signatureService->parametersHash($parameters));
 
         if (! $signature?->signed_file_path || ! Storage::disk('local')->exists($signature->signed_file_path)) {
             return ApiResponse::error('No existe un documento firmado para este reporte.', null, 404);
@@ -221,7 +283,17 @@ class ProjectReportSignatureController extends Controller
 
     public function physicalSignatures(Request $request, Project $project, string $reportKey): JsonResponse
     {
-        if (! array_key_exists($reportKey, ProjectSignableReportService::REPORTS)) {
+        return $this->subjectPhysicalSignatures($request, $project, $reportKey);
+    }
+
+    public function itemPhysicalSignatures(Request $request, Item $item, string $reportKey): JsonResponse
+    {
+        return $this->subjectPhysicalSignatures($request, $item, $reportKey);
+    }
+
+    private function subjectPhysicalSignatures(Request $request, Project|Item $subject, string $reportKey): JsonResponse
+    {
+        if (! $this->reportAllowedForSubject($reportKey, $subject)) {
             return ApiResponse::error('El reporte solicitado no existe.', [
                 'report_key' => ['El reporte solicitado no existe.'],
             ], 404);
@@ -231,17 +303,29 @@ class ProjectReportSignatureController extends Controller
             'format' => ['nullable', 'string'],
             'type' => ['nullable', 'integer'],
             'fecha' => ['nullable', 'date'],
+            'mode' => ['nullable', 'string'],
+            'tipo_desglose' => ['nullable', 'integer'],
         ]);
 
         return ApiResponse::success(
-            $this->signatureService->physicalSignatureStatus($project, $reportKey, $validated, $request->user()),
+            $this->signatureService->physicalSignatureStatus($subject, $reportKey, $validated, $request->user()),
             'Firmas fisicas obtenidas correctamente.'
         );
     }
 
     public function markPhysicalSignature(Request $request, Project $project, string $reportKey): JsonResponse
     {
-        if (! array_key_exists($reportKey, ProjectSignableReportService::REPORTS)) {
+        return $this->subjectMarkPhysicalSignature($request, $project, $reportKey);
+    }
+
+    public function itemMarkPhysicalSignature(Request $request, Item $item, string $reportKey): JsonResponse
+    {
+        return $this->subjectMarkPhysicalSignature($request, $item, $reportKey);
+    }
+
+    private function subjectMarkPhysicalSignature(Request $request, Project|Item $subject, string $reportKey): JsonResponse
+    {
+        if (! $this->reportAllowedForSubject($reportKey, $subject)) {
             return ApiResponse::error('El reporte solicitado no existe.', [
                 'report_key' => ['El reporte solicitado no existe.'],
             ], 404);
@@ -251,17 +335,29 @@ class ProjectReportSignatureController extends Controller
             'format' => ['nullable', 'string'],
             'type' => ['nullable', 'integer'],
             'fecha' => ['nullable', 'date'],
+            'mode' => ['nullable', 'string'],
+            'tipo_desglose' => ['nullable', 'integer'],
         ]);
 
         return ApiResponse::success(
-            $this->signatureService->markPhysicalSignature($project, $reportKey, $validated, $request->user()),
+            $this->signatureService->markPhysicalSignature($subject, $reportKey, $validated, $request->user()),
             'Firma fisica marcada correctamente.'
         );
     }
 
     public function updatePhysicalSignaturePositions(Request $request, Project $project, string $reportKey): JsonResponse
     {
-        if (! array_key_exists($reportKey, ProjectSignableReportService::REPORTS)) {
+        return $this->subjectUpdatePhysicalSignaturePositions($request, $project, $reportKey);
+    }
+
+    public function itemUpdatePhysicalSignaturePositions(Request $request, Item $item, string $reportKey): JsonResponse
+    {
+        return $this->subjectUpdatePhysicalSignaturePositions($request, $item, $reportKey);
+    }
+
+    private function subjectUpdatePhysicalSignaturePositions(Request $request, Project|Item $subject, string $reportKey): JsonResponse
+    {
+        if (! $this->reportAllowedForSubject($reportKey, $subject)) {
             return ApiResponse::error('El reporte solicitado no existe.', [
                 'report_key' => ['El reporte solicitado no existe.'],
             ], 404);
@@ -271,6 +367,8 @@ class ProjectReportSignatureController extends Controller
             'format' => ['nullable', 'string'],
             'type' => ['nullable', 'integer'],
             'fecha' => ['nullable', 'date'],
+            'mode' => ['nullable', 'string'],
+            'tipo_desglose' => ['nullable', 'integer'],
             'positions' => ['required', 'array'],
             'positions.*.id' => ['required', 'integer'],
             'positions.*.page' => ['required', 'integer', 'min:1'],
@@ -284,14 +382,24 @@ class ProjectReportSignatureController extends Controller
         unset($validated['positions']);
 
         return ApiResponse::success(
-            $this->signatureService->updatePhysicalSignaturePositions($project, $reportKey, $validated, $positions, $request->user()),
+            $this->signatureService->updatePhysicalSignaturePositions($subject, $reportKey, $validated, $positions, $request->user()),
             'Posiciones de firmas fisicas actualizadas correctamente.'
         );
     }
 
     public function physicalSignaturesPdf(Request $request, Project $project, string $reportKey)
     {
-        if (! array_key_exists($reportKey, ProjectSignableReportService::REPORTS)) {
+        return $this->subjectPhysicalSignaturesPdf($request, $project, $reportKey);
+    }
+
+    public function itemPhysicalSignaturesPdf(Request $request, Item $item, string $reportKey)
+    {
+        return $this->subjectPhysicalSignaturesPdf($request, $item, $reportKey);
+    }
+
+    private function subjectPhysicalSignaturesPdf(Request $request, Project|Item $subject, string $reportKey)
+    {
+        if (! $this->reportAllowedForSubject($reportKey, $subject)) {
             return ApiResponse::error('El reporte solicitado no existe.', [
                 'report_key' => ['El reporte solicitado no existe.'],
             ], 404);
@@ -301,13 +409,28 @@ class ProjectReportSignatureController extends Controller
             'format' => ['nullable', 'string'],
             'type' => ['nullable', 'integer'],
             'fecha' => ['nullable', 'date'],
+            'mode' => ['nullable', 'string'],
+            'tipo_desglose' => ['nullable', 'integer'],
         ]);
-        $pdf = $this->signatureService->physicalSignedPdf($project, $reportKey, $validated);
+        $pdf = $this->signatureService->physicalSignedPdf($subject, $reportKey, $validated);
 
         return response($pdf['content'], 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.$pdf['filename'].'"',
         ]);
+    }
+
+    private function reportAllowedForSubject(string $reportKey, Project|Item $subject): bool
+    {
+        $definition = ProjectSignableReportService::REPORTS[$reportKey] ?? null;
+
+        if (! $definition) {
+            return false;
+        }
+
+        $scope = $definition['scope'] ?? 'project';
+
+        return $subject instanceof Item ? $scope === 'item' : $scope === 'project';
     }
 
     public function citizenshipSession(Request $request): JsonResponse

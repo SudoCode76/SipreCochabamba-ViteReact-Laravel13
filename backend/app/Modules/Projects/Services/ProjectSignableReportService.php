@@ -11,40 +11,67 @@ class ProjectSignableReportService
 {
     public const REPORTS = [
         'budget_by_group' => [
+            'scope' => 'project',
             'permission' => 'can_view_budget_by_group',
             'function' => 'PRESUPUESTO_RUBRO',
         ],
         'budget_recalculation' => [
+            'scope' => 'project',
             'permission' => 'can_recalculate_budget',
             'function' => 'RECAL_PRESUPUESTO_RUBRO',
         ],
         'incidence_summary' => [
+            'scope' => 'project',
             'permission' => 'can_view_incidence_summary',
             'function' => 'RESUMEN_INCIDENCIA',
         ],
         'general_budget' => [
+            'scope' => 'project',
             'permission' => 'can_view_general_budget',
             'function' => 'PRESUPUESTO_GENERAL',
         ],
         'input_breakdown' => [
+            'scope' => 'project',
             'permission' => 'can_view_input_breakdown',
             'function' => 'DESGLOSE_ITEMS',
         ],
         'inputs_report' => [
+            'scope' => 'project',
             'permission' => 'can_view_inputs_report',
             'function' => 'REPORTE_INSUMOS',
         ],
         'grouped_inputs_report' => [
+            'scope' => 'project',
             'permission' => 'can_view_inputs_report',
             'function' => 'REPORTE_INSUMOS',
         ],
         'unit_prices' => [
+            'scope' => 'project',
             'permission' => 'can_view_unit_prices',
             'function' => 'PRECIOS_UNITARIOS',
         ],
         'specifications' => [
+            'scope' => 'project',
             'permission' => 'can_view',
             'function' => 'INDEX',
+        ],
+        'item_unit_price_analysis' => [
+            'scope' => 'item',
+        ],
+        'item_price_recalculation' => [
+            'scope' => 'item',
+        ],
+        'item_material_breakdown' => [
+            'scope' => 'item',
+        ],
+        'item_labor_breakdown' => [
+            'scope' => 'item',
+        ],
+        'item_machinery_breakdown' => [
+            'scope' => 'item',
+        ],
+        'item_breakdown_recalculation' => [
+            'scope' => 'item',
         ],
     ];
 
@@ -65,16 +92,22 @@ class ProjectSignableReportService
             ->map(function (ProjectSignableReport $report) use ($permissions, $canManage, $canSignReports): array {
                 $definition = self::REPORTS[$report->report_key] ?? [];
                 $reportPermission = (string) ($definition['permission'] ?? '');
+                $scope = (string) ($definition['scope'] ?? 'project');
+                $canViewReport = $scope === 'item'
+                    ? true
+                    : (bool) ($permissions[$reportPermission] ?? false);
 
                 return [
                     'report_key' => $report->report_key,
+                    'scope' => $scope,
                     'name' => $report->name,
                     'description' => $report->description,
                     'is_enabled' => (bool) $report->is_enabled,
-                    'requires_finalized_project' => (bool) $report->requires_finalized_project,
+                    'requires_finalized_project' => $scope === 'item' ? false : (bool) $report->requires_finalized_project,
+                    'validity_days' => (int) ($report->validity_days ?? 30),
                     'can_sign' => (bool) $report->is_enabled
                         && $canSignReports
-                        && (bool) ($permissions[$reportPermission] ?? false),
+                        && $canViewReport,
                     'available_actions' => [
                         'manage' => $canManage,
                     ],
@@ -103,8 +136,13 @@ class ProjectSignableReportService
         }
 
         $permissions = $this->projectPermissionService->resolve($user);
+        $definition = self::REPORTS[$reportKey];
 
-        return (bool) ($permissions[self::REPORTS[$reportKey]['permission']] ?? false);
+        if (($definition['scope'] ?? 'project') === 'item') {
+            return true;
+        }
+
+        return (bool) ($permissions[$definition['permission']] ?? false);
     }
 
     public function findEnabled(string $reportKey): ?ProjectSignableReport

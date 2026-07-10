@@ -50,8 +50,14 @@ export function buildPdfViewerUrl(url, options = {}) {
     viewerUrl.searchParams.set("adjust_physical", "1");
   }
 
-  if (signature?.projectId && signature?.reportKey) {
-    viewerUrl.searchParams.set("sign_project", String(signature.projectId));
+  if (signature?.reportKey && (signature?.projectId || signature?.itemId)) {
+    const subject = signature.subject || (signature.itemId ? "item" : "project");
+    viewerUrl.searchParams.set("sign_subject", subject);
+    if (subject === "item") {
+      viewerUrl.searchParams.set("sign_item", String(signature.itemId));
+    } else {
+      viewerUrl.searchParams.set("sign_project", String(signature.projectId));
+    }
     viewerUrl.searchParams.set("sign_report", signature.reportKey);
 
     if (signature.parameters && Object.keys(signature.parameters).length > 0) {

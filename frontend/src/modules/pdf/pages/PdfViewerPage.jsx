@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { apiOrigin } from "@/lib/api/client";
 import { buildPdfViewerUrl, openUrlInNewTab } from "@/lib/utils/pdf";
+import { itemsService } from "@/modules/dashboard/services/items.service";
 import { projectService } from "@/modules/projects/services/project.service";
 
 const DEFAULT_ERROR_MESSAGE = "No se pudo generar el PDF.";
@@ -166,11 +167,15 @@ export default function PdfViewerPage() {
   const isAdjustPhysicalMode = searchParams.get("adjust_physical") === "1";
   const fallbackMessage = searchParams.get("message") || DEFAULT_ERROR_MESSAGE;
   const showChrome = searchParams.get("chrome") !== "0";
+  const signatureSubject = searchParams.get("sign_subject") || (searchParams.get("sign_item") ? "item" : "project");
   const signatureProjectId = searchParams.get("sign_project");
+  const signatureItemId = searchParams.get("sign_item");
+  const signatureSubjectId = signatureSubject === "item" ? signatureItemId : signatureProjectId;
+  const signatureService = signatureSubject === "item" ? itemsService : projectService;
   const signatureReportKey = searchParams.get("sign_report");
   const signatureParametersRaw = searchParams.get("sign_params") || "{}";
   const signatureParameters = useMemo(() => parseJsonParam(signatureParametersRaw), [signatureParametersRaw]);
-  const hasSignatureContext = Boolean(signatureProjectId && signatureReportKey);
+  const hasSignatureContext = Boolean(signatureSubjectId && signatureReportKey);
   const [blobUrl, setBlobUrl] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -199,7 +204,7 @@ export default function PdfViewerPage() {
   const hasSignedPdf = Boolean(latestSigned?.has_signed_file);
   const isSignedStale = Boolean(signatureStatus?.is_signed_stale);
   const physicalSignatures = physicalStatus?.items ?? [];
-  const staleNoticeKey = `${pdfUrl || ""}|${reloadKey}|${signatureProjectId || ""}|${signatureReportKey || ""}|${signatureParametersRaw}`;
+  const staleNoticeKey = `${pdfUrl || ""}|${reloadKey}|${signatureSubject || ""}|${signatureSubjectId || ""}|${signatureReportKey || ""}|${signatureParametersRaw}`;
   const staleNoticeAccepted = acceptedStaleNoticeKey === staleNoticeKey;
   const canRenderPdf = Boolean(
     !loading
@@ -262,8 +267,14 @@ export default function PdfViewerPage() {
       return;
     }
 
-    const signedUrl = projectService.latestSignedReportUrl(
-      signature.project_id || signatureProjectId,
+    const signedSubject = signature.subject || signatureSubject;
+    const signedSubjectId = signedSubject === "item"
+      ? (signature.item_id || signatureItemId)
+      : (signature.project_id || signatureProjectId);
+    const signedService = signedSubject === "item" ? itemsService : projectService;
+
+    const signedUrl = signedService.latestSignedReportUrl(
+      signedSubjectId,
       signature.report_key || signatureReportKey,
       signature.parameters || signatureParameters,
     );
@@ -271,7 +282,10 @@ export default function PdfViewerPage() {
     openUrlInNewTab(buildPdfViewerUrl(signedUrl, {
       title: "PDF firmado",
       signature: {
-        projectId: signature.project_id || signatureProjectId,
+        subject: signedSubject,
+        ...(signedSubject === "item"
+          ? { itemId: signedSubjectId }
+          : { projectId: signedSubjectId }),
         reportKey: signature.report_key || signatureReportKey,
         parameters: signature.parameters || signatureParameters,
       },
@@ -371,7 +385,7 @@ export default function PdfViewerPage() {
       setSignatureError("");
 
       try {
-        const response = await projectService.signatureStatus(signatureProjectId, {
+        const response = await signatureService.signatureStatus(signatureSubjectId, {
           report_key: signatureReportKey,
           ...signatureParameters,
         });
@@ -397,7 +411,7 @@ export default function PdfViewerPage() {
     return () => {
       cancelled = true;
     };
-  }, [hasSignatureContext, signatureParameters, signatureProjectId, signatureReportKey]);
+  }, [hasSignatureContext, signatureParameters, signatureReportKey, signatureService, signatureSubjectId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -413,7 +427,7 @@ export default function PdfViewerPage() {
       setPhysicalError("");
 
       try {
-        const response = await projectService.physicalSignatures(signatureProjectId, signatureReportKey, signatureParameters);
+        const response = await signatureService.physicalSignatures(signatureSubjectId, signatureReportKey, signatureParameters);
 
         if (!cancelled) {
           applyPhysicalStatus(response?.data ?? null);
@@ -435,7 +449,7 @@ export default function PdfViewerPage() {
     return () => {
       cancelled = true;
     };
-  }, [isAdjustPhysicalMode, showSignatureToolbar, hasSignedPdf, isSignedStale, signatureParameters, signatureProjectId, signatureReportKey]);
+  }, [isAdjustPhysicalMode, showSignatureToolbar, hasSignedPdf, isSignedStale, signatureParameters, signatureReportKey, signatureService, signatureSubjectId]);
 
   const handleSignPdf = async () => {
     if (!canSignPdf || signing) {
@@ -446,7 +460,7 @@ export default function PdfViewerPage() {
     setSignatureError("");
 
     try {
-      const response = await projectService.signReport(signatureProjectId, signatureReportKey, signatureParameters);
+      const response = await signatureService.signReport(signatureSubjectId, signatureReportKey, signatureParameters);
       const redirectUrl = response?.data?.redirect_url || response?.data?.signature?.redirect_url;
       const signature = response?.data?.signature;
 
@@ -460,7 +474,9 @@ export default function PdfViewerPage() {
           id: signature.id,
           trace_id: signature.trace_id,
           code: signatureCode,
+          subject: signature.subject || signatureSubject,
           project_id: signature.project_id,
+          item_id: signature.item_id,
           report_key: signature.report_key,
           parameters: signature.parameters || signatureParameters || {},
         });
@@ -487,7 +503,7 @@ export default function PdfViewerPage() {
     setHistoryError("");
 
     try {
-      const response = await projectService.reportSignatures(signatureProjectId, signatureReportKey, signatureParameters);
+      const response = await signatureService.reportSignatures(signatureSubjectId, signatureReportKey, signatureParameters);
       setLatestSigners(response?.data?.signers ?? []);
     } catch (historyLoadError) {
       setHistoryError(readApiError(historyLoadError, "No se pudo cargar el historial de firmas."));
@@ -605,7 +621,7 @@ export default function PdfViewerPage() {
     setPhysicalError("");
 
     try {
-      const response = await projectService.updatePhysicalSignaturePositions(signatureProjectId, signatureReportKey, {
+      const response = await signatureService.updatePhysicalSignaturePositions(signatureSubjectId, signatureReportKey, {
         ...signatureParameters,
         positions: physicalPositions.map(({ id, page, x, y, width, height }) => ({ id, page, x, y, width, height })),
       });

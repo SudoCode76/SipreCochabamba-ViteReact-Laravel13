@@ -165,16 +165,19 @@ class ProjectApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.permissions.can_manage', true)
             ->assertJsonPath('data.items.0.is_enabled', false)
-            ->assertJsonPath('data.items.0.requires_finalized_project', true);
+            ->assertJsonPath('data.items.0.requires_finalized_project', true)
+            ->assertJsonPath('data.items.0.validity_days', 30);
 
         $this->patchJson('/api/v1/signable-project-reports/general_budget', [
             'is_enabled' => true,
             'requires_finalized_project' => false,
+            'validity_days' => 15,
         ])
             ->assertOk()
             ->assertJsonPath('data.report.report_key', 'general_budget')
             ->assertJsonPath('data.report.is_enabled', true)
-            ->assertJsonPath('data.report.requires_finalized_project', false);
+            ->assertJsonPath('data.report.requires_finalized_project', false)
+            ->assertJsonPath('data.report.validity_days', 15);
 
         $this->assertTrue(ProjectSignableReport::query()
             ->where('report_key', 'general_budget')
@@ -182,6 +185,13 @@ class ProjectApiTest extends TestCase
         $this->assertFalse(ProjectSignableReport::query()
             ->where('report_key', 'general_budget')
             ->value('requires_finalized_project'));
+        $this->assertSame(15, ProjectSignableReport::query()
+            ->where('report_key', 'general_budget')
+            ->value('validity_days'));
+
+        $this->patchJson('/api/v1/signable-project-reports/general_budget', [
+            'validity_days' => 0,
+        ])->assertUnprocessable();
 
         $this->createProjectRecord(['aprobado' => 'PD']);
 
@@ -1025,6 +1035,70 @@ class ProjectApiTest extends TestCase
         $this->assertNotSame(
             $originalHash,
             $service->currentDocumentHash($project, 'general_budget', $parameters)
+        );
+    }
+
+    public function test_item_report_signature_hash_ignores_non_visible_item_metadata_but_changes_for_composition(): void
+    {
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createInput([
+            'id_insumo' => 1,
+            'descripcion' => 'Material visible',
+            'precio' => 10,
+            'tipo' => 1,
+        ]);
+        $item = $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'ITEM CON FIRMA',
+            'precio' => 20,
+            'fecha_item' => now()->subDays(10)->toDateString(),
+            'especificacion' => 'public/archivos/especificaciones/antes.pdf',
+        ]);
+        $this->createItemInputRecord([
+            'id_item_insumo' => 1,
+            'id_item' => $item->id_item,
+            'id_insumo' => 1,
+            'cantidad' => 2,
+            'tipo' => 1,
+        ]);
+
+        $service = app(ProjectReportSignatureService::class);
+        $parameters = ['format' => 'PCA'];
+        $originalHash = $service->currentDocumentHash($item, 'item_unit_price_analysis', $parameters);
+
+        DB::table('item')
+            ->where('id_item', $item->id_item)
+            ->update([
+                'fecha_item' => now()->toDateString(),
+                'especificacion' => 'public/archivos/especificaciones/despues.pdf',
+            ]);
+        DB::table('item_insumo')
+            ->where('id_item_insumo', 1)
+            ->delete();
+        $this->createItemInputRecord([
+            'id_item_insumo' => 99,
+            'id_item' => $item->id_item,
+            'id_insumo' => 1,
+            'cantidad' => 2,
+            'tipo' => 1,
+        ]);
+
+        $item->refresh();
+        $this->assertSame(
+            $originalHash,
+            $service->currentDocumentHash($item, 'item_unit_price_analysis', $parameters)
+        );
+
+        DB::table('item_insumo')
+            ->where('id_item_insumo', 99)
+            ->update(['cantidad' => 3]);
+
+        $item->refresh();
+        $this->assertNotSame(
+            $originalHash,
+            $service->currentDocumentHash($item, 'item_unit_price_analysis', $parameters)
         );
     }
 
@@ -2579,6 +2653,18 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.project.is_current_version', true);
 
         $versionTwoId = $created->json('data.project.id_proyecto');
+
+        $this->getJson('/api/v1/projects/1/history')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.action', 'version_created')
+            ->assertJsonPath('data.items.0.user_name', 'Usuario Demo')
+            ->assertJsonPath('data.items.0.project_id', $versionTwoId);
+
+        $this->getJson('/api/v1/projects/1/history?action=version_created')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.action', 'version_created')
+            ->assertJsonPath('data.items.0.user_name', 'Usuario Demo')
+            ->assertJsonPath('data.meta.total', 1);
 
         $this->getJson('/api/v1/projects/1/versions')
             ->assertOk()

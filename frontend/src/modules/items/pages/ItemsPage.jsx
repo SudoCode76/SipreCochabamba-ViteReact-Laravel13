@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/toast";
 import { downloadUrl, openPdfViewer } from "@/lib/utils/pdf";
 import { itemsService } from "@/modules/dashboard/services/items.service";
+import ReportSignatureStatus from "@/modules/projects/components/ReportSignatureStatus";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +33,25 @@ import {
 const statusClass = {
   AC: "bg-emerald-600 text-white",
   DC: "bg-rose-600 text-white",
+};
+
+const itemReportSignatureConfig = {
+  "unit-price": {
+    reportKey: "item_unit_price_analysis",
+    parameters: { mode: "general" },
+  },
+  materials: {
+    reportKey: "item_material_breakdown",
+    parameters: {},
+  },
+  labor: {
+    reportKey: "item_labor_breakdown",
+    parameters: {},
+  },
+  machinery: {
+    reportKey: "item_machinery_breakdown",
+    parameters: {},
+  },
 };
 
 const collectValidationMessages = (error, fallback) => {
@@ -578,6 +598,12 @@ export default function ItemsPage() {
       openPdfViewer(itemsService.legacyUnitPriceAnalysisPdfUrl(item.id_item), {
         title: "Análisis de precio unitario",
         errorMessage: "No se pudo generar el análisis de precio unitario.",
+        signature: {
+          subject: "item",
+          itemId: item.id_item,
+          reportKey: "item_unit_price_analysis",
+          parameters: { mode: "general" },
+        },
       });
     } catch (mutationError) {
       setReportFeedback({
@@ -599,6 +625,11 @@ export default function ItemsPage() {
       openPdfViewer(itemsService.materialBreakdownPdfUrl(item.id_item), {
         title: "Desglose de materiales",
         errorMessage: "No se pudo generar el desglose de materiales.",
+        signature: {
+          subject: "item",
+          itemId: item.id_item,
+          reportKey: "item_material_breakdown",
+        },
       });
     } catch (mutationError) {
       setReportFeedback({
@@ -620,6 +651,11 @@ export default function ItemsPage() {
       openPdfViewer(itemsService.laborBreakdownPdfUrl(item.id_item), {
         title: "Desglose de mano de obra",
         errorMessage: "No se pudo generar el desglose de mano de obra.",
+        signature: {
+          subject: "item",
+          itemId: item.id_item,
+          reportKey: "item_labor_breakdown",
+        },
       });
     } catch (mutationError) {
       setReportFeedback({
@@ -641,6 +677,11 @@ export default function ItemsPage() {
       openPdfViewer(itemsService.machineryBreakdownPdfUrl(item.id_item), {
         title: "Desglose de herramientas",
         errorMessage: "No se pudo generar el desglose de herramientas.",
+        signature: {
+          subject: "item",
+          itemId: item.id_item,
+          reportKey: "item_machinery_breakdown",
+        },
       });
     } catch (mutationError) {
       setReportFeedback({
@@ -1206,6 +1247,12 @@ export default function ItemsPage() {
       }), {
         title: "Recalcular precio item",
         errorMessage: "No se pudo generar el recálculo de precio del item.",
+        signature: {
+          subject: "item",
+          itemId: recalculateItem.id_item,
+          reportKey: "item_price_recalculation",
+          parameters: { fecha: recalculateDate, mode: "general" },
+        },
       });
       closeRecalculate();
     } catch (mutationError) {
@@ -1243,6 +1290,12 @@ export default function ItemsPage() {
       }), {
         title: "Desglose histórico",
         errorMessage: "No se pudo generar el desglose histórico.",
+        signature: {
+          subject: "item",
+          itemId: breakdownItem.id_item,
+          reportKey: "item_breakdown_recalculation",
+          parameters: { fecha: breakdownDate, type: breakdownType },
+        },
       });
       closeBreakdown();
     } catch (mutationError) {
@@ -2306,7 +2359,7 @@ export default function ItemsPage() {
 
       {exportChoice && createPortal(
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-[1px]">
-          <Card className="w-full max-w-md border border-border/70 bg-white shadow-[0_24px_90px_rgba(15,23,42,0.18)]">
+          <Card className="w-full max-w-2xl border border-border/70 bg-white shadow-[0_24px_90px_rgba(15,23,42,0.18)]">
             <CardHeader className="border-b border-border/70 bg-muted/20">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -2329,6 +2382,15 @@ export default function ItemsPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Item</p>
                 <p className="mt-2 text-sm font-semibold text-foreground">{exportChoice.item?.name ?? exportChoice.item?.item ?? "-"}</p>
               </div>
+
+              {itemReportSignatureConfig[exportChoice.report] ? (
+                <ReportSignatureStatus
+                  subject="item"
+                  itemId={exportChoice.item?.id_item}
+                  reportKey={itemReportSignatureConfig[exportChoice.report].reportKey}
+                  parameters={itemReportSignatureConfig[exportChoice.report].parameters}
+                />
+              ) : null}
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <Button type="button" className="h-12 rounded-full bg-emerald-600 text-white hover:bg-emerald-700" onClick={handleExportChoicePdf}>

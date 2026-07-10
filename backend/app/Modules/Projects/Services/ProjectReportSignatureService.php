@@ -2,10 +2,13 @@
 
 namespace App\Modules\Projects\Services;
 
+use App\Models\Item;
 use App\Models\Project;
 use App\Models\ProjectReportPhysicalSignature;
 use App\Models\ProjectReportSignature;
+use App\Models\ProjectSignableReport;
 use App\Models\User;
+use App\Modules\Items\Services\ItemReportPdfResolver;
 use App\Services\Citizenship\CiudadaniaDigitalException;
 use App\Services\Citizenship\CiudadaniaDigitalClient;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -27,10 +30,11 @@ class ProjectReportSignatureService
     public function __construct(
         private readonly ProjectSignableReportService $signableReportService,
         private readonly ProjectReportPdfResolver $pdfResolver,
+        private readonly ItemReportPdfResolver $itemPdfResolver,
         private readonly CiudadaniaDigitalClient $ciudadaniaDigitalClient,
     ) {}
 
-    public function start(Project $project, string $reportKey, array $parameters, User $user): ProjectReportSignature
+    public function start(Project|Item $project, string $reportKey, array $parameters, User $user): ProjectReportSignature
     {
         $this->assertCanStart($project, $reportKey, $user);
 
@@ -38,13 +42,15 @@ class ProjectReportSignatureService
         $hash = $this->parametersHash($normalizedParameters);
         $this->deleteIncompleteAttempts($project, $reportKey, $hash, $user);
 
-        $pdf = $this->pdfResolver->resolve($project, $reportKey, $normalizedParameters);
+        $pdf = $project instanceof Item
+            ? $this->itemPdfResolver->resolve($project, $reportKey, $normalizedParameters)
+            : $this->pdfResolver->resolve($project, $reportKey, $normalizedParameters);
         $baseDocumentHash = $this->currentDocumentHash($project, $reportKey, $normalizedParameters);
         $previous = $this->latestSigned($project, $reportKey, $hash);
         $canDeriveFromPrevious = $previous
             && (
                 ($previous->base_document_hash && hash_equals((string) $previous->base_document_hash, $baseDocumentHash))
-                || (! $previous->base_document_hash && $this->isProjectFrozen($project))
+                || (! $previous->base_document_hash && $project instanceof Project && $this->isProjectFrozen($project))
             );
 
         if ($canDeriveFromPrevious && $previous?->signed_file_path && Storage::disk('local')->exists($previous->signed_file_path)) {
@@ -56,7 +62,7 @@ class ProjectReportSignatureService
         }
 
         $signature = ProjectReportSignature::query()->create([
-            'id_proyecto' => $project->id_proyecto,
+            ...$this->subjectColumns($project),
             'trace_id' => (string) Str::uuid(),
             'report_key' => $reportKey,
             'parameters' => $normalizedParameters,
@@ -183,11 +189,10 @@ class ProjectReportSignatureService
         }
     }
 
-    public function history(Project $project, string $reportKey, ?string $parametersHash = null): array
+    public function history(Project|Item $project, string $reportKey, ?string $parametersHash = null): array
     {
-        return ProjectReportSignature::query()
+        return $this->forSubject(ProjectReportSignature::query(), $project)
             ->with('user')
-            ->where('id_proyecto', $project->id_proyecto)
             ->where('report_key', $reportKey)
             ->when($parametersHash, fn ($query) => $query->where('parameters_hash', $parametersHash))
             ->where('status', 'signed')
@@ -197,7 +202,7 @@ class ProjectReportSignatureService
             ->all();
     }
 
-    public function latestSignedSigners(Project $project, string $reportKey, ?string $parametersHash = null): array
+    public function latestSignedSigners(Project|Item $project, string $reportKey, ?string $parametersHash = null): array
     {
         $signature = $this->latestSigned($project, $reportKey, $parametersHash);
 
@@ -206,7 +211,7 @@ class ProjectReportSignatureService
             : [];
     }
 
-    public function physicalSignatureStatus(Project $project, string $reportKey, array $parameters, User $user): array
+    public function physicalSignatureStatus(Project|Item $project, string $reportKey, array $parameters, User $user): array
     {
         $normalizedParameters = $this->normalizeParameters($parameters);
         $parametersHash = $this->parametersHash($normalizedParameters);
@@ -228,7 +233,7 @@ class ProjectReportSignatureService
         ];
     }
 
-    public function markPhysicalSignature(Project $project, string $reportKey, array $parameters, User $user): array
+    public function markPhysicalSignature(Project|Item $project, string $reportKey, array $parameters, User $user): array
     {
         $normalizedParameters = $this->normalizeParameters($parameters);
         $parametersHash = $this->parametersHash($normalizedParameters);
@@ -247,8 +252,7 @@ class ProjectReportSignatureService
             ]);
         }
 
-        $existing = ProjectReportPhysicalSignature::query()
-            ->where('id_proyecto', $project->id_proyecto)
+        $existing = $this->forSubject(ProjectReportPhysicalSignature::query(), $project)
             ->where('report_key', $reportKey)
             ->where('parameters_hash', $parametersHash)
             ->where('logical_document_hash', $logicalHash)
@@ -257,8 +261,9 @@ class ProjectReportSignatureService
 
         $extension = pathinfo((string) $user->firma_imagen_path, PATHINFO_EXTENSION) ?: 'png';
         $snapshotPath = sprintf(
-            'project-physical-signatures/%d/%s/%s/%d-%s.%s',
-            $project->id_proyecto,
+            '%s-physical-signatures/%d/%s/%s/%d-%s.%s',
+            $project instanceof Item ? 'item' : 'project',
+            $this->subjectId($project),
             $reportKey,
             $parametersHash,
             $user->id_usuario,
@@ -281,7 +286,7 @@ class ProjectReportSignatureService
             ])->save();
         } else {
             ProjectReportPhysicalSignature::query()->create([
-                'id_proyecto' => $project->id_proyecto,
+                ...$this->subjectColumns($project),
                 'report_key' => $reportKey,
                 'parameters_hash' => $parametersHash,
                 'logical_document_hash' => $logicalHash,
@@ -294,7 +299,7 @@ class ProjectReportSignatureService
         return $this->physicalSignatureStatus($project, $reportKey, $normalizedParameters, $user);
     }
 
-    public function updatePhysicalSignaturePositions(Project $project, string $reportKey, array $parameters, array $positions, User $user): array
+    public function updatePhysicalSignaturePositions(Project|Item $project, string $reportKey, array $parameters, array $positions, User $user): array
     {
         $normalizedParameters = $this->normalizeParameters($parameters);
         $parametersHash = $this->parametersHash($normalizedParameters);
@@ -371,7 +376,7 @@ class ProjectReportSignatureService
         return $this->physicalSignatureStatus($project, $reportKey, $normalizedParameters, $user);
     }
 
-    public function physicalSignedPdf(Project $project, string $reportKey, array $parameters): array
+    public function physicalSignedPdf(Project|Item $project, string $reportKey, array $parameters): array
     {
         $normalizedParameters = $this->normalizeParameters($parameters);
         $parametersHash = $this->parametersHash($normalizedParameters);
@@ -397,11 +402,10 @@ class ProjectReportSignatureService
         ];
     }
 
-    public function latest(Project $project, string $reportKey, ?string $parametersHash = null): ?ProjectReportSignature
+    public function latest(Project|Item $project, string $reportKey, ?string $parametersHash = null): ?ProjectReportSignature
     {
-        return ProjectReportSignature::query()
+        return $this->forSubject(ProjectReportSignature::query(), $project)
             ->with('user')
-            ->where('id_proyecto', $project->id_proyecto)
             ->where('report_key', $reportKey)
             ->when($parametersHash, fn ($query) => $query->where('parameters_hash', $parametersHash))
             ->latest('id')
@@ -436,10 +440,9 @@ class ProjectReportSignatureService
         throw new RuntimeException('No existe un documento firmado para este reporte.');
     }
 
-    public function latestSigned(Project $project, string $reportKey, ?string $parametersHash = null): ?ProjectReportSignature
+    public function latestSigned(Project|Item $project, string $reportKey, ?string $parametersHash = null): ?ProjectReportSignature
     {
-        return ProjectReportSignature::query()
-            ->where('id_proyecto', $project->id_proyecto)
+        return $this->forSubject(ProjectReportSignature::query(), $project)
             ->where('report_key', $reportKey)
             ->when($parametersHash, fn ($query) => $query->where('parameters_hash', $parametersHash))
             ->where('status', 'signed')
@@ -448,10 +451,9 @@ class ProjectReportSignatureService
             ->first();
     }
 
-    private function latestSignedForHash(Project $project, string $reportKey, string $parametersHash, string $logicalHash): ?ProjectReportSignature
+    private function latestSignedForHash(Project|Item $project, string $reportKey, string $parametersHash, string $logicalHash): ?ProjectReportSignature
     {
-        return ProjectReportSignature::query()
-            ->where('id_proyecto', $project->id_proyecto)
+        return $this->forSubject(ProjectReportSignature::query(), $project)
             ->where('report_key', $reportKey)
             ->where('parameters_hash', $parametersHash)
             ->where('base_document_hash', $logicalHash)
@@ -461,11 +463,10 @@ class ProjectReportSignatureService
             ->first();
     }
 
-    private function physicalSignatures(Project $project, string $reportKey, string $parametersHash, string $logicalHash)
+    private function physicalSignatures(Project|Item $project, string $reportKey, string $parametersHash, string $logicalHash)
     {
-        return ProjectReportPhysicalSignature::query()
+        return $this->forSubject(ProjectReportPhysicalSignature::query(), $project)
             ->with('user')
-            ->where('id_proyecto', $project->id_proyecto)
             ->where('report_key', $reportKey)
             ->where('parameters_hash', $parametersHash)
             ->where('logical_document_hash', $logicalHash)
@@ -645,10 +646,14 @@ class ProjectReportSignatureService
 
     public function serialize(ProjectReportSignature $signature): array
     {
+        $subject = $signature->id_item ? 'item' : 'project';
+
         return [
             'id' => $signature->id,
             'trace_id' => $signature->trace_id,
+            'subject' => $subject,
             'project_id' => $signature->id_proyecto,
+            'item_id' => $signature->id_item,
             'report_key' => $signature->report_key,
             'parameters' => $signature->parameters ?? [],
             'status' => $signature->status,
@@ -768,7 +773,7 @@ class ProjectReportSignatureService
 
     public function normalizeParameters(array $parameters): array
     {
-        $allowed = Arr::only($parameters, ['format', 'type', 'fecha']);
+        $allowed = Arr::only($parameters, ['format', 'type', 'fecha', 'mode', 'tipo_desglose']);
         ksort($allowed);
 
         return array_filter($allowed, fn ($value): bool => $value !== null && $value !== '');
@@ -779,8 +784,12 @@ class ProjectReportSignatureService
         return hash('sha256', json_encode($parameters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
-    public function currentDocumentHash(Project $project, string $reportKey, array $parameters): string
+    public function currentDocumentHash(Project|Item $project, string $reportKey, array $parameters): string
     {
+        if ($project instanceof Item) {
+            return $this->currentItemDocumentHash($project, $reportKey, $parameters);
+        }
+
         $normalizedParameters = $this->normalizeParameters($parameters);
         $project = $project->fresh() ?? $project;
         $projectItems = DB::table('proyecto_item')
@@ -848,6 +857,56 @@ class ProjectReportSignatureService
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
+    private function currentItemDocumentHash(Item $item, string $reportKey, array $parameters): string
+    {
+        $normalizedParameters = $this->normalizeParameters($parameters);
+        $item = $item->fresh(['unitMeasure', 'groupCatalog', 'subgroupCatalog']) ?? $item;
+
+        $composition = DB::table('item_insumo')
+            ->leftJoin('insumo', 'insumo.id_insumo', '=', 'item_insumo.id_insumo')
+            ->leftJoin('unidad_medida', 'unidad_medida.id_unidad_medida', '=', 'insumo.unidad_medida')
+            ->where('item_insumo.id_item', $item->id_item)
+            ->where('item_insumo.estado', 'AC')
+            ->orderBy('item_insumo.tipo')
+            ->orderBy('insumo.descripcion')
+            ->orderBy('item_insumo.id_insumo')
+            ->get([
+                'item_insumo.id_insumo',
+                'item_insumo.tipo',
+                'item_insumo.cantidad',
+                'item_insumo.estado',
+                'insumo.descripcion as insumo',
+                'insumo.precio as precio_insumo',
+                'insumo.estado as estado_insumo',
+                'unidad_medida.descripcion as unidad_insumo',
+            ]);
+
+        return hash('sha256', json_encode([
+            'subject' => 'item',
+            'report_key' => $reportKey,
+            'parameters' => $normalizedParameters,
+            'item' => [
+                'id_item' => $item->id_item,
+                'item' => $item->item,
+                'precio' => $item->precio,
+                'unidad' => $item->unitMeasure?->descripcion,
+                'grupo' => $item->groupCatalog?->nombre_grupo,
+                'subgrupo' => $item->subgroupCatalog?->descripcion,
+                'estado' => $item->estado,
+            ],
+            'composition' => $this->stableHashRows($composition, [
+                'id_insumo',
+                'tipo',
+                'cantidad',
+                'estado',
+                'insumo',
+                'precio_insumo',
+                'estado_insumo',
+                'unidad_insumo',
+            ]),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
     private function stableHashRows(iterable $rows, array $keys): array
     {
         return collect($rows)
@@ -859,6 +918,34 @@ class ProjectReportSignatureService
     private function stableHashRow(array $row, array $keys): array
     {
         return Arr::only($row, $keys);
+    }
+
+    private function subjectColumns(Project|Item $subject): array
+    {
+        return $subject instanceof Item
+            ? ['id_proyecto' => null, 'id_item' => $subject->id_item]
+            : ['id_proyecto' => $subject->id_proyecto, 'id_item' => null];
+    }
+
+    private function subjectId(Project|Item $subject): int
+    {
+        return (int) ($subject instanceof Item ? $subject->id_item : $subject->id_proyecto);
+    }
+
+    private function forSubject($query, Project|Item $subject)
+    {
+        return $subject instanceof Item
+            ? $query->where('id_item', $subject->id_item)
+            : $query->where('id_proyecto', $subject->id_proyecto);
+    }
+
+    private function signatureSubject(ProjectReportSignature $signature): Project|Item
+    {
+        if ($signature->id_item) {
+            return $signature->item ?: Item::query()->findOrFail($signature->id_item);
+        }
+
+        return $signature->project ?: Project::query()->findOrFail($signature->id_proyecto);
     }
 
     private function stampPhysicalSignatures(string $sourcePdf, $signatures): string
@@ -1031,7 +1118,7 @@ class ProjectReportSignatureService
         return hash('sha256', $content);
     }
 
-    private function assertCanStart(Project $project, string $reportKey, User $user): void
+    private function assertCanStart(Project|Item $project, string $reportKey, User $user): void
     {
         $report = $this->signableReportService->findEnabled($reportKey);
 
@@ -1041,7 +1128,7 @@ class ProjectReportSignatureService
             ]);
         }
 
-        if (! $this->signableReportService->projectStatusAllowsSigning($report, $project->isFrozen())) {
+        if ($project instanceof Project && ! $this->signableReportService->projectStatusAllowsSigning($report, $project->isFrozen())) {
             throw ValidationException::withMessages([
                 'project' => ['Este reporte solo permite firma digital en proyectos FINALIZADOS.'],
             ]);
@@ -1052,11 +1139,12 @@ class ProjectReportSignatureService
         }
     }
 
-    private function storeBasePdf(Project $project, string $reportKey, string $content): string
+    private function storeBasePdf(Project|Item $project, string $reportKey, string $content): string
     {
         $path = sprintf(
-            'project-signatures/%d/%s/base-%s.pdf',
-            $project->id_proyecto,
+            '%s-signatures/%d/%s/base-%s.pdf',
+            $project instanceof Item ? 'item' : 'project',
+            $this->subjectId($project),
             $reportKey,
             Str::uuid()
         );
@@ -1066,10 +1154,9 @@ class ProjectReportSignatureService
         return $path;
     }
 
-    private function deleteIncompleteAttempts(Project $project, string $reportKey, string $parametersHash, User $user): void
+    private function deleteIncompleteAttempts(Project|Item $project, string $reportKey, string $parametersHash, User $user): void
     {
-        ProjectReportSignature::query()
-            ->where('id_proyecto', $project->id_proyecto)
+        $this->forSubject(ProjectReportSignature::query(), $project)
             ->where('report_key', $reportKey)
             ->where('parameters_hash', $parametersHash)
             ->where('id_usuario', $user->id_usuario)
@@ -1089,8 +1176,9 @@ class ProjectReportSignatureService
     private function storeSignedPdf(ProjectReportSignature $signature, string $content): string
     {
         $path = sprintf(
-            'project-signatures/%d/%s/signed-%s.pdf',
-            $signature->id_proyecto,
+            '%s-signatures/%d/%s/signed-%s.pdf',
+            $signature->id_item ? 'item' : 'project',
+            $signature->id_item ?: $signature->id_proyecto,
             $signature->report_key,
             Str::uuid()
         );
@@ -1188,8 +1276,11 @@ class ProjectReportSignatureService
 
     private function previousSignedFor(ProjectReportSignature $signature): ?ProjectReportSignature
     {
-        return ProjectReportSignature::query()
-            ->where('id_proyecto', $signature->id_proyecto)
+        $query = $signature->id_item
+            ? ProjectReportSignature::query()->where('id_item', $signature->id_item)
+            : ProjectReportSignature::query()->where('id_proyecto', $signature->id_proyecto);
+
+        return $query
             ->where('report_key', $signature->report_key)
             ->where('parameters_hash', $signature->parameters_hash)
             ->where('status', 'signed')
@@ -1197,7 +1288,7 @@ class ProjectReportSignatureService
             ->where(function ($query) use ($signature): void {
                 $query->where('base_document_hash', $signature->base_document_hash);
 
-                if ($this->isProjectFrozen($signature->project)) {
+                if ($signature->project && $this->isProjectFrozen($signature->project)) {
                     $query->orWhereNull('base_document_hash');
                 }
             })
@@ -1376,7 +1467,7 @@ class ProjectReportSignatureService
         $accessToken = $this->accessTokenFrom($parameters);
         $signatureCode = $this->signatureCode($signature);
         $validFrom = now();
-        $validTo = $validFrom->copy()->addMonth();
+        $validTo = $validFrom->copy()->addDays($this->validityDaysFor($signature));
         $previousSigned = $this->previousSignedFor($signature);
 
         if ($signature->code !== $signatureCode) {
@@ -1388,7 +1479,7 @@ class ProjectReportSignatureService
             'save' => 'false',
             'version' => 'V2',
             'extencion_documento' => 'PDF',
-            'descripcion_documento' => $this->description($signature->project, $signature->report_key),
+            'descripcion_documento' => $this->description($this->signatureSubject($signature), $signature->report_key),
             'nombre_documento' => $this->signedDocumentName($signature),
             'redirect_uri' => $this->approvalCallbackUrl($signature),
             'code' => $signatureCode,
@@ -1459,6 +1550,15 @@ class ProjectReportSignatureService
                 'signature' => [$this->messageWithTrace($exception->getMessage(), $signature)],
             ]);
         }
+    }
+
+    private function validityDaysFor(ProjectReportSignature $signature): int
+    {
+        $days = ProjectSignableReport::query()
+            ->where('report_key', $signature->report_key)
+            ->value('validity_days');
+
+        return max(1, min(3650, (int) ($days ?? 30)));
     }
 
     private function resolvedApprovalSignature(ProjectReportSignature $signature): ?ProjectReportSignature
@@ -1689,14 +1789,19 @@ class ProjectReportSignatureService
         return $scheme !== '' && $host !== '' ? $scheme.'://'.$host.$port : '';
     }
 
-    private function description(Project $project, string $reportKey): string
+    private function description(Project|Item $project, string $reportKey): string
     {
-        return 'Firma digital de '.$reportKey.' del proyecto '.$project->nombre_proyecto;
+        $subjectName = $project instanceof Item ? $project->item : $project->nombre_proyecto;
+        $subjectLabel = $project instanceof Item ? 'item' : 'proyecto';
+
+        return 'Firma digital de '.$reportKey.' del '.$subjectLabel.' '.$subjectName;
     }
 
-    private function filename(Project $project, string $reportKey): string
+    private function filename(Project|Item $project, string $reportKey): string
     {
-        return Str::slug($project->nombre_proyecto.'-'.$reportKey).'.pdf';
+        $subjectName = $project instanceof Item ? $project->item : $project->nombre_proyecto;
+
+        return Str::slug($subjectName.'-'.$reportKey).'.pdf';
     }
 
     private function signedDocumentName(ProjectReportSignature $signature): string
@@ -1710,15 +1815,19 @@ class ProjectReportSignatureService
             return $signature->code;
         }
 
-        $code = $this->newSignatureCode($signature->project);
+        $code = $this->newSignatureCode($this->signatureSubject($signature));
         $signature->forceFill(['code' => $code])->save();
 
         return $code;
     }
 
-    private function newSignatureCode(Project $project): string
+    private function newSignatureCode(Project|Item $project): string
     {
-        return sprintf('sipre-%d-%s', $project->id_proyecto, Str::uuid());
+        if ($project instanceof Item) {
+            return sprintf('sipre-item-%d-%s', $this->subjectId($project), Str::uuid());
+        }
+
+        return sprintf('sipre-%d-%s', $this->subjectId($project), Str::uuid());
     }
 
     private function accessTokenFrom(array $payload): ?string
@@ -1762,7 +1871,9 @@ class ProjectReportSignatureService
         Log::warning('FirmaGAMC rechazó una solicitud de firma.', [
             'trace_id' => $signature->trace_id,
             'signature_id' => $signature->id,
+            'subject' => $signature->id_item ? 'item' : 'project',
             'project_id' => $signature->id_proyecto,
+            'item_id' => $signature->id_item,
             'report_key' => $signature->report_key,
             'phase' => $exception->phase(),
             'endpoint' => $exception->endpoint(),

@@ -9,6 +9,7 @@ class ProjectReportPhysicalSignature extends Model
 {
     protected $fillable = [
         'id_proyecto',
+        'id_item',
         'report_key',
         'parameters_hash',
         'logical_document_hash',
@@ -37,6 +38,11 @@ class ProjectReportPhysicalSignature extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class, 'id_proyecto', 'id_proyecto');
+    }
+
+    public function item(): BelongsTo
+    {
+        return $this->belongsTo(Item::class, 'id_item', 'id_item');
     }
 
     public function user(): BelongsTo

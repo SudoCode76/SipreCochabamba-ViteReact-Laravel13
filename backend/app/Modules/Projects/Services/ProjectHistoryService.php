@@ -12,8 +12,14 @@ class ProjectHistoryService
 {
     public function list(Project $project, array $filters): LengthAwarePaginator
     {
+        $rootId = $project->id_proyecto_raiz ?: $project->id_proyecto;
+        $projectIds = Project::query()
+            ->where('id_proyecto', $rootId)
+            ->orWhere('id_proyecto_raiz', $rootId)
+            ->pluck('id_proyecto');
+
         return ProjectHistory::query()
-            ->where('id_proyecto', $project->id_proyecto)
+            ->whereIn('id_proyecto', $projectIds)
             ->when($filters['action'] ?? null, fn ($query, string $action) => $query->where('accion', $action))
             ->when($filters['user'] ?? null, fn ($query, string $user) => $query->whereRaw('LOWER(usuario_nombre) LIKE ?', ['%'.mb_strtolower(trim($user)).'%']))
             ->when($filters['date_from'] ?? null, fn ($query, string $date) => $query->whereDate('fecha_hora', '>=', $date))

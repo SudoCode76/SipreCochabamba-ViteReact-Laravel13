@@ -11,6 +11,7 @@ class ProjectReportSignature extends Model
 
     protected $fillable = [
         'id_proyecto',
+        'id_item',
         'trace_id',
         'report_key',
         'parameters',
@@ -50,6 +51,11 @@ class ProjectReportSignature extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class, 'id_proyecto', 'id_proyecto');
+    }
+
+    public function item(): BelongsTo
+    {
+        return $this->belongsTo(Item::class, 'id_item', 'id_item');
     }
 
     public function user(): BelongsTo

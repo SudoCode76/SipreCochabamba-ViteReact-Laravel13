@@ -14,6 +14,7 @@ class ProjectSignableReport extends Model
         'description',
         'is_enabled',
         'requires_finalized_project',
+        'validity_days',
     ];
 
     protected function casts(): array
@@ -21,6 +22,7 @@ class ProjectSignableReport extends Model
         return [
             'is_enabled' => 'boolean',
             'requires_finalized_project' => 'boolean',
+            'validity_days' => 'integer',
         ];
     }
 }
