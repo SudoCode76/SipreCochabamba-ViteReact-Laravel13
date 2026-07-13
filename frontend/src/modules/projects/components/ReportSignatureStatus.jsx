@@ -112,6 +112,7 @@ export default function ReportSignatureStatus({ subject = "project", projectId, 
   const meta = statusMeta(status);
   const latestSigners = historyQuery.data?.data?.signers ?? latestSigned?.validation_records ?? [];
   const physicalStatus = physicalQuery.data?.data;
+  const signatureAccess = status?.signature_access;
   const physicalSignatures = physicalStatus?.items ?? [];
   const physicalSignatureCount = physicalStatus?.count ?? 0;
 
@@ -234,6 +235,12 @@ export default function ReportSignatureStatus({ subject = "project", projectId, 
           </p>
         ) : null}
 
+        {signatureAccess?.allowed === false ? (
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            {signatureAccess.message || "No está autorizado para firmar documentos de este proyecto."}
+          </p>
+        ) : null}
+
         {canUsePhysicalSignatures && physicalOpen ? (
           <div className="rounded-2xl border border-border bg-background p-3 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -271,6 +278,11 @@ export default function ReportSignatureStatus({ subject = "project", projectId, 
             {physicalStatus?.needs_signature_image ? (
               <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
                 Carga tu firma en Perfil para marcar este documento.
+              </p>
+            ) : null}
+            {physicalStatus?.signature_access?.allowed === false ? (
+              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                {physicalStatus.signature_access.message}
               </p>
             ) : null}
             {physicalError ? (

@@ -80,6 +80,16 @@ export const projectService = {
     return response.data;
   },
 
+  signatureAccess: async (projectId) => {
+    const response = await apiClient.get(`/v1/projects/${projectId}/signature-access`);
+    return response.data;
+  },
+
+  updateSignatureAccess: async (projectId, payload) => {
+    const response = await apiClient.put(`/v1/projects/${projectId}/signature-access`, payload);
+    return response.data;
+  },
+
   signableReports: async () => {
     const response = await apiClient.get("/v1/signable-project-reports");
     return response.data;

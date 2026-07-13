@@ -13,7 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 class ProjectTemplateService
 {
-    public function __construct(private readonly ProjectHistoryService $projectHistoryService) {}
+    public function __construct(
+        private readonly ProjectHistoryService $projectHistoryService,
+        private readonly ProjectSignatureAccessService $signatureAccessService,
+    ) {}
 
     public function list(array $filters): LengthAwarePaginator
     {
@@ -121,6 +124,8 @@ class ProjectTemplateService
                 'fecha_version' => now(),
             ]);
             $project->update(['id_proyecto_raiz' => $project->id_proyecto]);
+            $project->refresh();
+            $this->signatureAccessService->initialize($project, $user, $request->input('signature_access'));
 
             $this->copyActiveItems($template, $project, $user);
             $this->recalculateProjectPrice($project);

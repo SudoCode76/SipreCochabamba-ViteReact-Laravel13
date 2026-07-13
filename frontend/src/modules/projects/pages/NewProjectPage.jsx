@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
+import ProjectSignatureAccessSection from "../components/ProjectSignatureAccessSection";
 import { projectService } from "../services/project.service";
 
 const ProjectLocationMap = lazy(() => import("../components/ProjectLocationMap"));
@@ -33,6 +34,7 @@ export default function NewProjectPage() {
   });
   const [creationMode, setCreationMode] = useState("blank");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [signatureAccess, setSignatureAccess] = useState({ mode: "selected", user_ids: [] });
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -53,6 +55,8 @@ export default function NewProjectPage() {
   const statuses = data?.data?.statuses ?? [];
   const conditions = (data?.data?.conditions ?? []).filter((condition) => condition.code === "PD");
   const templates = templatesData?.data?.items ?? [];
+  const people = data?.data?.people ?? [];
+  const creatorId = Number(data?.data?.metadata?.creator_user_id || 0);
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -102,6 +106,10 @@ export default function NewProjectPage() {
         latitud: formData.latitud?.trim() || null,
         longitud: formData.longitud?.trim() || null,
         observaciones: formData.observaciones?.trim() || null,
+        signature_access: {
+          mode: signatureAccess.mode,
+          user_ids: [...new Set([creatorId, ...signatureAccess.user_ids.map(Number)].filter(Boolean))],
+        },
       };
       delete payload.subdistrito;
 
@@ -403,6 +411,13 @@ export default function NewProjectPage() {
                 </select>
               </div>
             </div>
+
+            <ProjectSignatureAccessSection
+              people={people}
+              creatorId={creatorId}
+              draftValue={signatureAccess}
+              onDraftChange={setSignatureAccess}
+            />
 
             <div className="flex gap-3 pt-4">
               <Button

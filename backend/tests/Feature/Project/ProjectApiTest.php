@@ -3,16 +3,24 @@
 namespace Tests\Feature\Project;
 
 use App\Models\Permission;
+use App\Models\Project;
 use App\Models\ProjectItem;
+use App\Models\ProjectReportPhysicalSignature;
 use App\Models\ProjectReportSignature;
 use App\Models\ProjectSignableReport;
 use App\Models\Role;
 use App\Models\SystemFunction;
 use App\Models\Unit;
 use App\Models\User;
+use App\Modules\Projects\Services\ProjectBudgetService;
+use App\Modules\Projects\Services\ProjectInputBreakdownPdfService;
+use App\Modules\Projects\Services\ProjectInputsGroupedReportPdfService;
+use App\Modules\Projects\Services\ProjectInputsReportPdfService;
+use App\Modules\Projects\Services\ProjectLegacyUnitPriceService;
+use App\Modules\Projects\Services\ProjectReportSignatureService;
 use App\Services\Citizenship\CiudadaniaDigitalClient;
 use App\Services\Citizenship\CiudadaniaDigitalException;
-use App\Modules\Projects\Services\ProjectReportSignatureService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -110,6 +118,15 @@ class ProjectApiTest extends TestCase
         ]);
 
         $projectId = $create->json('data.project.id_proyecto');
+
+        $this->assertDatabaseHas('proyecto', [
+            'id_proyecto' => $projectId,
+            'signature_access_mode' => 'selected',
+        ]);
+        $this->assertDatabaseHas('project_signature_authorized_users', [
+            'id_proyecto_raiz' => $projectId,
+            'id_usuario' => 1,
+        ]);
 
         $this->assertDatabaseHas('proyecto_historial', [
             'id_proyecto' => $projectId,
@@ -274,6 +291,276 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.report.can_sign', true);
     }
 
+    public function test_signature_access_is_shared_by_the_project_family_and_only_root_creator_or_admin_can_manage_it(): void
+    {
+        $admin = $this->createLegacyAuthUser();
+        $rootCreator = $this->createProjectUserWithPermissions(['INDEX']);
+        $versionCreator = User::query()->create([
+            'funcionario' => 'Creador Version',
+            'ci' => '11223344',
+            'username' => 'version.creator',
+            'clave' => Hash::make('secret123'),
+            'estado' => 'AC',
+            'id_unidad' => $rootCreator->id_unidad,
+            'rol' => $rootCreator->rol,
+            'fecha' => now()->toDateString(),
+        ]);
+        $root = $this->createProjectRecord([
+            'id_proyecto' => 1,
+            'id_proyecto_raiz' => 1,
+            'id_usuario' => $rootCreator->id_usuario,
+        ]);
+        $version = $this->createProjectRecord([
+            'id_proyecto' => 2,
+            'id_proyecto_raiz' => 1,
+            'id_version_origen' => 1,
+            'numero_version' => 2,
+            'id_usuario' => $versionCreator->id_usuario,
+        ]);
+
+        Sanctum::actingAs($rootCreator);
+
+        $this->putJson("/api/v1/projects/{$version->id_proyecto}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$rootCreator->id_usuario],
+        ])->assertOk()
+            ->assertJsonPath('data.root_project_id', $root->id_proyecto)
+            ->assertJsonPath('data.can_manage', true);
+
+        Sanctum::actingAs($versionCreator);
+
+        $this->getJson("/api/v1/projects/{$version->id_proyecto}/signature-access")
+            ->assertOk()
+            ->assertJsonPath('data.root_project_id', $root->id_proyecto)
+            ->assertJsonPath('data.creator.id', $rootCreator->id_usuario)
+            ->assertJsonPath('data.authorized_users.0.id', $rootCreator->id_usuario)
+            ->assertJsonPath('data.can_manage', false);
+
+        $this->putJson("/api/v1/projects/{$version->id_proyecto}/signature-access", [
+            'mode' => 'all',
+            'user_ids' => [$rootCreator->id_usuario],
+        ])->assertForbidden();
+
+        Sanctum::actingAs($admin);
+
+        $this->putJson("/api/v1/projects/{$version->id_proyecto}/signature-access", [
+            'mode' => 'all',
+            'user_ids' => [$rootCreator->id_usuario],
+        ])->assertOk()
+            ->assertJsonPath('data.mode', 'all');
+
+        $this->getJson("/api/v1/projects/{$root->id_proyecto}/signature-access")
+            ->assertOk()
+            ->assertJsonPath('data.mode', 'all')
+            ->assertJsonPath('data.root_project_id', $root->id_proyecto);
+        $this->assertSame('selected', $version->fresh()->signature_access_mode);
+    }
+
+    public function test_selected_mode_blocks_new_digital_and_physical_signatures_while_all_mode_keeps_global_permissions_required(): void
+    {
+        $admin = $this->createLegacyAuthUser();
+        ProjectSignableReport::query()
+            ->where('report_key', 'general_budget')
+            ->update(['is_enabled' => true]);
+        $project = $this->createProjectRecord([
+            'aprobado' => 'RV',
+            'fecha_aprob' => now()->toDateString(),
+            'fecha_finalizacion' => now(),
+        ]);
+        $signer = $this->createProjectUserWithPermissions([
+            'PRESUPUESTO_GENERAL',
+            'FIRMAR_REPORTES',
+        ]);
+        DB::table('project_signature_authorized_users')
+            ->where('id_proyecto_raiz', $project->id_proyecto)
+            ->where('id_usuario', $signer->id_usuario)
+            ->delete();
+
+        Sanctum::actingAs($signer);
+
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget&format=PCA")
+            ->assertOk()
+            ->assertJsonPath('data.report.can_sign', false)
+            ->assertJsonPath('data.signature_access.mode', 'selected')
+            ->assertJsonPath('data.signature_access.allowed', false);
+
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/sign", [
+            'format' => 'PCA',
+            'access_token' => 'token-ciudadania',
+        ])->assertForbidden()
+            ->assertJsonPath('message', 'No está autorizado para firmar documentos de este proyecto.');
+
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures", [
+            'format' => 'PCA',
+        ])->assertForbidden()
+            ->assertJsonPath('message', 'No está autorizado para firmar documentos de este proyecto.');
+
+        Sanctum::actingAs($admin);
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/signature-access", [
+            'mode' => 'all',
+            'user_ids' => [1],
+        ])->assertOk();
+
+        Sanctum::actingAs($signer);
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget&format=PCA")
+            ->assertOk()
+            ->assertJsonPath('data.report.can_sign', true)
+            ->assertJsonPath('data.signature_access.allowed', true);
+
+        Permission::query()
+            ->where('id_rol', $signer->rol)
+            ->where('id_funcion', SystemFunction::query()->where('nombre_funcion', 'FIRMAR_REPORTES')->value('id_funcion'))
+            ->delete();
+
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget&format=PCA")
+            ->assertOk()
+            ->assertJsonPath('data.report.can_sign', false)
+            ->assertJsonPath('data.signature_access.allowed', true);
+    }
+
+    public function test_removing_signed_users_requires_confirmation_and_preserves_signatures_across_versions(): void
+    {
+        $admin = $this->createLegacyAuthUser();
+        $root = $this->createProjectRecord(['id_proyecto' => 1, 'id_proyecto_raiz' => 1]);
+        $version = $this->createProjectRecord([
+            'id_proyecto' => 2,
+            'id_proyecto_raiz' => 1,
+            'id_version_origen' => 1,
+            'numero_version' => 2,
+        ]);
+        $signer = $this->createProjectUserWithPermissions(['PRESUPUESTO_GENERAL', 'FIRMAR_REPORTES']);
+        $digital = ProjectReportSignature::query()->create([
+            'id_proyecto' => $root->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters_hash' => hash('sha256', 'parameters'),
+            'status' => 'signed',
+            'id_usuario' => $signer->id_usuario,
+            'base_file_path' => 'project-signatures/base.pdf',
+            'signed_file_path' => 'project-signatures/signed.pdf',
+            'signed_at' => now(),
+        ]);
+        $physical = ProjectReportPhysicalSignature::query()->create([
+            'id_proyecto' => $version->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters_hash' => hash('sha256', 'parameters'),
+            'logical_document_hash' => hash('sha256', 'document'),
+            'id_usuario' => $signer->id_usuario,
+            'signature_image_path' => 'signatures/signer.png',
+            'marked_at' => now(),
+        ]);
+        $root->forceFill(['signature_access_mode' => 'all'])->save();
+        DB::table('project_signature_authorized_users')
+            ->where('id_proyecto_raiz', $root->id_proyecto)
+            ->where('id_usuario', $signer->id_usuario)
+            ->delete();
+
+        Sanctum::actingAs($admin);
+
+        $payload = [
+            'mode' => 'selected',
+            'user_ids' => [$admin->id_usuario],
+        ];
+        $this->putJson("/api/v1/projects/{$version->id_proyecto}/signature-access", $payload)
+            ->assertStatus(409)
+            ->assertJsonPath('data.requires_confirmation', true)
+            ->assertJsonPath('data.affected_users.0.id', $signer->id_usuario)
+            ->assertJsonPath('data.affected_users.0.digital_signatures', 1)
+            ->assertJsonPath('data.affected_users.0.physical_signatures', 1);
+
+        $this->assertDatabaseMissing('project_signature_authorized_users', [
+            'id_proyecto_raiz' => $root->id_proyecto,
+            'id_usuario' => $signer->id_usuario,
+        ]);
+
+        $this->putJson("/api/v1/projects/{$root->id_proyecto}/signature-access", [
+            ...$payload,
+            'confirm_signed_removals' => true,
+        ])->assertOk()
+            ->assertJsonPath('data.mode', 'selected');
+
+        $this->assertDatabaseMissing('project_signature_authorized_users', [
+            'id_proyecto_raiz' => $root->id_proyecto,
+            'id_usuario' => $signer->id_usuario,
+        ]);
+        $this->assertDatabaseHas('project_report_signatures', ['id' => $digital->id, 'status' => 'signed']);
+        $this->assertDatabaseHas('project_report_physical_signatures', ['id' => $physical->id]);
+        $this->assertDatabaseHas('proyecto_historial', [
+            'id_proyecto' => $root->id_proyecto,
+            'accion' => 'signature_access_updated',
+        ]);
+    }
+
+    public function test_project_creation_stores_signature_access_and_rolls_back_invalid_selected_configuration(): void
+    {
+        $creator = $this->createLegacyAuthUser();
+        $signer = $this->createProjectUserWithPermissions(['INDEX']);
+        Sanctum::actingAs($creator);
+        $payload = [
+            'fecha' => '2026-07-13',
+            'ubicacion' => 'CENTRO',
+            'responsable' => $creator->id_usuario,
+            'solicitante' => $creator->id_usuario,
+            'estado' => 'AC',
+            'aprobado' => 'PD',
+        ];
+
+        $selected = $this->postJson('/api/v1/projects', [
+            ...$payload,
+            'nombre_proyecto' => 'PROYECTO FIRMANTES SELECCIONADOS',
+            'signature_access' => [
+                'mode' => 'selected',
+                'user_ids' => [$creator->id_usuario, $signer->id_usuario],
+            ],
+        ])->assertCreated();
+        $selectedId = $selected->json('data.project.id_proyecto');
+
+        $this->assertDatabaseHas('proyecto', [
+            'id_proyecto' => $selectedId,
+            'signature_access_mode' => 'selected',
+        ]);
+        $this->assertDatabaseHas('project_signature_authorized_users', [
+            'id_proyecto_raiz' => $selectedId,
+            'id_usuario' => $signer->id_usuario,
+        ]);
+
+        $all = $this->postJson('/api/v1/projects', [
+            ...$payload,
+            'nombre_proyecto' => 'PROYECTO FIRMA ABIERTA',
+            'signature_access' => [
+                'mode' => 'all',
+                'user_ids' => [$signer->id_usuario],
+            ],
+        ])->assertCreated();
+        $allId = $all->json('data.project.id_proyecto');
+
+        $this->assertDatabaseHas('proyecto', [
+            'id_proyecto' => $allId,
+            'signature_access_mode' => 'all',
+        ]);
+        $this->assertDatabaseHas('project_signature_authorized_users', [
+            'id_proyecto_raiz' => $allId,
+            'id_usuario' => $creator->id_usuario,
+        ]);
+        $this->assertDatabaseHas('project_signature_authorized_users', [
+            'id_proyecto_raiz' => $allId,
+            'id_usuario' => $signer->id_usuario,
+        ]);
+
+        $this->postJson('/api/v1/projects', [
+            ...$payload,
+            'nombre_proyecto' => 'PROYECTO CONFIGURACION INVALIDA',
+            'signature_access' => [
+                'mode' => 'selected',
+                'user_ids' => [$signer->id_usuario],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['signature_access.user_ids']);
+
+        $this->assertDatabaseMissing('proyecto', [
+            'nombre_proyecto' => 'PROYECTO CONFIGURACION INVALIDA',
+        ]);
+    }
+
     public function test_report_signing_sends_derivation_code_and_validity_to_firmagamc(): void
     {
         ProjectSignableReport::query()
@@ -341,8 +628,8 @@ class ProjectApiTest extends TestCase
         $this->assertSame($capturedPayload['valid_from'], $signature->request_payload['valid_from']);
         $this->assertSame($capturedPayload['valid_to'], $signature->request_payload['valid_to']);
         $this->assertArrayNotHasKey('acces_token', $signature->request_payload);
-        $this->assertTrue(\Carbon\Carbon::parse($capturedPayload['valid_to'])->greaterThan(
-            \Carbon\Carbon::parse($capturedPayload['valid_from'])
+        $this->assertTrue(Carbon::parse($capturedPayload['valid_to'])->greaterThan(
+            Carbon::parse($capturedPayload['valid_from'])
         ));
     }
 
@@ -1077,7 +1364,7 @@ class ProjectApiTest extends TestCase
         DB::table('item_insumo')
             ->where('id_item_insumo', 1)
             ->delete();
-        $this->createItemInputRecord([
+        $replacement = $this->createItemInputRecord([
             'id_item_insumo' => 99,
             'id_item' => $item->id_item,
             'id_insumo' => 1,
@@ -1092,7 +1379,7 @@ class ProjectApiTest extends TestCase
         );
 
         DB::table('item_insumo')
-            ->where('id_item_insumo', 99)
+            ->where('id_item_insumo', $replacement->id_item_insumo)
             ->update(['cantidad' => 3]);
 
         $item->refresh();
@@ -1248,11 +1535,13 @@ class ProjectApiTest extends TestCase
 
     public function test_signature_approval_callback_uses_document_approval_to_store_signed_pdf(): void
     {
+        $this->createLegacyAuthUser();
         $project = $this->createProjectRecord([
             'aprobado' => 'RV',
             'fecha_aprob' => now()->toDateString(),
             'fecha_finalizacion' => now(),
         ]);
+        $signer = $this->createProjectUserWithPermissions(['PRESUPUESTO_GENERAL', 'FIRMAR_REPORTES']);
 
         $signature = ProjectReportSignature::query()->create([
             'id_proyecto' => $project->id_proyecto,
@@ -1262,9 +1551,14 @@ class ProjectApiTest extends TestCase
             'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
             'status' => 'sent',
             'code' => 'code-complete',
-            'id_usuario' => 1,
+            'id_usuario' => $signer->id_usuario,
             'base_file_path' => 'project-signatures/base.pdf',
         ]);
+
+        DB::table('project_signature_authorized_users')
+            ->where('id_proyecto_raiz', $project->id_proyecto)
+            ->where('id_usuario', $signer->id_usuario)
+            ->delete();
 
         $client = Mockery::mock(CiudadaniaDigitalClient::class);
         $client->shouldReceive('approvedDocument')
@@ -1662,7 +1956,7 @@ class ProjectApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 3]);
         $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
 
-        \Illuminate\Support\Facades\DB::table('modulo')->insert([
+        DB::table('modulo')->insert([
             ['id_modulo' => 2, 'nombre_modulo' => 'Modulo 1', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
             ['id_modulo' => 3, 'nombre_modulo' => 'Modulo 2', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
         ]);
@@ -1911,8 +2205,8 @@ class ProjectApiTest extends TestCase
         $this->createItemRecord();
         $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 1, 'precio' => 0, 'prioridad' => 1]);
 
-        $data = app(\App\Modules\Projects\Services\ProjectBudgetService::class)
-            ->budgetByGroupPdfData(\App\Models\Project::findOrFail(1));
+        $data = app(ProjectBudgetService::class)
+            ->budgetByGroupPdfData(Project::findOrFail(1));
 
         $this->assertSame(1, $data['items_proyecto_count']);
         $this->assertSame([], $data['items']);
@@ -1940,8 +2234,8 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 1, 'precio' => 0, 'prioridad' => 1]);
         $this->createInputLog(['id_log' => 1, 'id_insumo' => 1, 'precio' => 8, 'tipo' => 1, 'descripcion' => 'Material 1', 'fecha' => '2026-04-01']);
 
-        $data = app(\App\Modules\Projects\Services\ProjectBudgetService::class)
-            ->budgetRecalculation(\App\Models\Project::findOrFail(1), \Carbon\Carbon::parse('2026-04-30'));
+        $data = app(ProjectBudgetService::class)
+            ->budgetRecalculation(Project::findOrFail(1), Carbon::parse('2026-04-30'));
 
         $this->assertCount(1, $data['items']);
         $this->assertSame('ITEM FNDR TEST', $data['items'][0]['descripcion']);
@@ -1956,7 +2250,7 @@ class ProjectApiTest extends TestCase
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
         $this->createUnitMeasure();
-        \Illuminate\Support\Facades\DB::table('tipo_insumo')->insert([
+        DB::table('tipo_insumo')->insert([
             ['id_tipo' => 1, 'descripcion' => 'MATERIAL', 'estado' => 'AC'],
             ['id_tipo' => 2, 'descripcion' => 'MANO DE OBRA', 'estado' => 'AC'],
             ['id_tipo' => 3, 'descripcion' => 'HERRAMIENTA', 'estado' => 'AC'],
@@ -1970,14 +2264,14 @@ class ProjectApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 1, 'id_item' => 1, 'id_insumo' => 1, 'cantidad' => 1]);
         $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 1]);
         $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 1, 'precio' => 0, 'prioridad' => 1]);
-        \Illuminate\Support\Facades\DB::table('log_insumo')->insert([
+        DB::table('log_insumo')->insert([
             ['id_log' => 10, 'id_insumo' => 1, 'precio' => 100, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-04-01', 'estado' => 'AC'],
             ['id_log' => 11, 'id_insumo' => 1, 'precio' => 50, 'tipo' => 3, 'descripcion' => 'Herramienta 1', 'fecha' => '2026-04-02', 'estado' => 'AC'],
             ['id_log' => 5, 'id_insumo' => 2, 'precio' => 999, 'tipo' => 3, 'descripcion' => 'Herramienta 2', 'fecha' => '2026-04-03', 'estado' => 'AC'],
         ]);
 
-        $data = app(\App\Modules\Projects\Services\ProjectBudgetService::class)
-            ->budgetRecalculation(\App\Models\Project::findOrFail(1), \Carbon\Carbon::parse('2026-04-30'));
+        $data = app(ProjectBudgetService::class)
+            ->budgetRecalculation(Project::findOrFail(1), Carbon::parse('2026-04-30'));
 
         $this->assertSame(50.0, $data['items'][0]['herramientas']);
         $this->assertSame(50.0, $data['totals']['herramientas']);
@@ -2000,8 +2294,8 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'prioridad' => 1]);
         $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'prioridad' => 99]);
 
-        $data = app(\App\Modules\Projects\Services\ProjectBudgetService::class)
-            ->budgetByGroupPdfData(\App\Models\Project::findOrFail(1));
+        $data = app(ProjectBudgetService::class)
+            ->budgetByGroupPdfData(Project::findOrFail(1));
 
         $this->assertSame(['ITEM ALFA', 'ITEM ZETA'], array_column($data['items'], 'descripcion'));
         $this->assertSame(['ALFA', 'ZETA'], array_column($data['items'], 'grupo'));
@@ -2061,10 +2355,10 @@ class ProjectApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
         $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 2, 'precio' => 9999, 'prioridad' => 1]);
 
-        $items = app(\App\Modules\Projects\Services\ProjectBudgetService::class)->generalBudgetPdfItems(
-            \App\Models\Project::findOrFail(1),
+        $items = app(ProjectBudgetService::class)->generalBudgetPdfItems(
+            Project::findOrFail(1),
             'PCA',
-            app(\App\Modules\Projects\Services\ProjectLegacyUnitPriceService::class),
+            app(ProjectLegacyUnitPriceService::class),
         );
 
         $this->assertEqualsWithDelta(63.826645668056706, $items[0]['precio'], 0.000001);
@@ -2092,7 +2386,7 @@ class ProjectApiTest extends TestCase
         $this->createSubgroup();
         $this->seedGeneralPercentages();
         $this->createProjectRecord();
-        \Illuminate\Support\Facades\DB::table('modulo')->insert([
+        DB::table('modulo')->insert([
             ['id_modulo' => 2, 'nombre_modulo' => 'Modulo A', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
             ['id_modulo' => 3, 'nombre_modulo' => 'Modulo B', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
         ]);
@@ -2105,10 +2399,10 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'id_modulo' => 2, 'cantidad' => 2, 'prioridad' => 2]);
         $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'id_modulo' => 3, 'cantidad' => 1, 'prioridad' => 1]);
 
-        $items = app(\App\Modules\Projects\Services\ProjectBudgetService::class)->generalBudgetPdfItems(
-            \App\Models\Project::findOrFail(1),
+        $items = app(ProjectBudgetService::class)->generalBudgetPdfItems(
+            Project::findOrFail(1),
             'PCA',
-            app(\App\Modules\Projects\Services\ProjectLegacyUnitPriceService::class),
+            app(ProjectLegacyUnitPriceService::class),
         );
 
         $this->assertSame(['Modulo A', 'Modulo B'], array_column($items, 'modulo'));
@@ -2153,7 +2447,7 @@ class ProjectApiTest extends TestCase
         $this->createGroup();
         $this->createSubgroup();
         $this->createProjectRecord();
-        \Illuminate\Support\Facades\DB::table('modulo')->insert([
+        DB::table('modulo')->insert([
             ['id_modulo' => 2, 'nombre_modulo' => 'Modulo A', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
             ['id_modulo' => 3, 'nombre_modulo' => 'Modulo B', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
         ]);
@@ -2168,8 +2462,8 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'id_modulo' => 2, 'prioridad' => 2]);
         $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'id_modulo' => 3, 'prioridad' => 1]);
 
-        $data = app(\App\Modules\Projects\Services\ProjectBudgetService::class)
-            ->budgetRecalculation(\App\Models\Project::findOrFail(1), \Carbon\Carbon::parse('2026-04-30'));
+        $data = app(ProjectBudgetService::class)
+            ->budgetRecalculation(Project::findOrFail(1), Carbon::parse('2026-04-30'));
 
         $this->assertSame(['Modulo A', 'Modulo B'], array_column($data['items'], 'modulo'));
         $moduleTotals = collect($data['items'])
@@ -2218,11 +2512,11 @@ class ProjectApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 3, 'id_item' => 1, 'id_insumo' => 3, 'cantidad' => 1]);
         $this->createProjectItemRecord(['id_item' => 1, 'cantidad' => 2, 'prioridad' => 1]);
 
-        $service = app(\App\Modules\Projects\Services\ProjectInputBreakdownPdfService::class);
-        $this->assertSame('Material 1', $service->rows(\App\Models\Project::findOrFail(1), 1)[0]['descripcion']);
-        $this->assertSame(20.0, $service->rows(\App\Models\Project::findOrFail(1), 1)[0]['parcial']);
-        $this->assertSame('Mano 1', $service->rows(\App\Models\Project::findOrFail(1), 2)[0]['descripcion']);
-        $this->assertSame('Herramienta 1', $service->rows(\App\Models\Project::findOrFail(1), 3)[0]['descripcion']);
+        $service = app(ProjectInputBreakdownPdfService::class);
+        $this->assertSame('Material 1', $service->rows(Project::findOrFail(1), 1)[0]['descripcion']);
+        $this->assertSame(20.0, $service->rows(Project::findOrFail(1), 1)[0]['parcial']);
+        $this->assertSame('Mano 1', $service->rows(Project::findOrFail(1), 2)[0]['descripcion']);
+        $this->assertSame('Herramienta 1', $service->rows(Project::findOrFail(1), 3)[0]['descripcion']);
 
         foreach ([1 => 'desglose_materiales.pdf', 2 => 'desglose_mano_obra.pdf', 3 => 'desglose_maquinaria.pdf'] as $type => $filename) {
             $response = $this->get('/api/v1/projects/1/input-breakdown/pdf?type='.$type);
@@ -2256,8 +2550,8 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'prioridad' => 20]);
         $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'prioridad' => 10]);
 
-        $rows = app(\App\Modules\Projects\Services\ProjectInputBreakdownPdfService::class)
-            ->rows(\App\Models\Project::findOrFail(1), 1);
+        $rows = app(ProjectInputBreakdownPdfService::class)
+            ->rows(Project::findOrFail(1), 1);
 
         $this->assertSame(['ITEM DOS', 'ITEM UNO'], array_column($rows, 'nombre_item'));
         $this->assertSame([10, 20], array_column($rows, 'prioridad'));
@@ -2270,7 +2564,7 @@ class ProjectApiTest extends TestCase
         $this->createGroup();
         $this->createSubgroup();
         $this->createProjectRecord();
-        \Illuminate\Support\Facades\DB::table('modulo')->insert([
+        DB::table('modulo')->insert([
             ['id_modulo' => 2, 'nombre_modulo' => 'Modulo A', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
             ['id_modulo' => 3, 'nombre_modulo' => 'Modulo B', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
         ]);
@@ -2283,8 +2577,8 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'id_modulo' => 2, 'prioridad' => 2]);
         $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'id_modulo' => 3, 'prioridad' => 1]);
 
-        $rows = app(\App\Modules\Projects\Services\ProjectInputBreakdownPdfService::class)
-            ->rows(\App\Models\Project::findOrFail(1), 1);
+        $rows = app(ProjectInputBreakdownPdfService::class)
+            ->rows(Project::findOrFail(1), 1);
 
         $this->assertSame(['Modulo A', 'Modulo B'], array_column($rows, 'modulo'));
         $this->assertSame([20.0, 60.0], array_map(fn (array $row): float => $row['parcial'], $rows));
@@ -2315,8 +2609,8 @@ class ProjectApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 2, 'id_item' => 1, 'id_insumo' => 2, 'cantidad' => 1]);
         $this->createProjectItemRecord(['id_item' => 1, 'prioridad' => 1]);
 
-        $rows = app(\App\Modules\Projects\Services\ProjectInputBreakdownPdfService::class)
-            ->rows(\App\Models\Project::findOrFail(1), 1);
+        $rows = app(ProjectInputBreakdownPdfService::class)
+            ->rows(Project::findOrFail(1), 1);
 
         $this->assertSame(['Material Activo', 'Material Inactivo'], array_column($rows, 'descripcion'));
     }
@@ -2340,8 +2634,8 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'cantidad' => 2, 'prioridad' => 1]);
         $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'cantidad' => 1, 'prioridad' => 2]);
 
-        $rows = app(\App\Modules\Projects\Services\ProjectInputsReportPdfService::class)
-            ->rows(\App\Models\Project::findOrFail(1));
+        $rows = app(ProjectInputsReportPdfService::class)
+            ->rows(Project::findOrFail(1));
 
         $this->assertSame(['Material Repetido', 'Mano Consolidada', 'Herramienta Consolidada'], array_column($rows, 'descripcion'));
         $this->assertSame(7.0, $rows[0]['cantidad']);
@@ -2361,8 +2655,8 @@ class ProjectApiTest extends TestCase
             ->assertHeader('content-disposition', 'attachment; filename="reporte_consolidado_insumos.xlsx"');
         $this->assertStringStartsWith('PK', $xlsx->getContent());
 
-        $groupedRows = app(\App\Modules\Projects\Services\ProjectInputsGroupedReportPdfService::class)
-            ->rows(\App\Models\Project::findOrFail(1));
+        $groupedRows = app(ProjectInputsGroupedReportPdfService::class)
+            ->rows(Project::findOrFail(1));
 
         $this->assertSame(['Material Repetido', 'Material Repetido', 'Mano Consolidada', 'Herramienta Consolidada'], array_column($groupedRows, 'insumo'));
         $this->assertSame(4.0, $groupedRows[0]['cantidad_total']);
@@ -2409,8 +2703,8 @@ class ProjectApiTest extends TestCase
         $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'cantidad' => 2, 'estado' => 'AC']);
         $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 2, 'cantidad' => 2, 'estado' => 'DC']);
 
-        $rows = app(\App\Modules\Projects\Services\ProjectInputsReportPdfService::class)
-            ->rows(\App\Models\Project::findOrFail(1));
+        $rows = app(ProjectInputsReportPdfService::class)
+            ->rows(Project::findOrFail(1));
 
         $this->assertSame(['Insumo Inactivo', 'Material Activo'], array_column($rows, 'descripcion'));
         $this->assertSame(2.0, $rows[0]['cantidad']);
@@ -2514,6 +2808,10 @@ class ProjectApiTest extends TestCase
             'distrito' => 'D1',
             'zona' => 'ZONA NUEVA',
             'otb' => 'OTB NUEVA',
+            'signature_access' => [
+                'mode' => 'selected',
+                'user_ids' => [1],
+            ],
         ])->assertCreated()
             ->assertJsonPath('data.project.nombre_proyecto', 'PROYECTO DESDE PLANILLA')
             ->assertJsonPath('data.project.es_plantilla', false)
@@ -2522,6 +2820,29 @@ class ProjectApiTest extends TestCase
         $projectId = $projectResponse->json('data.project.id_proyecto');
 
         $this->assertSame(1, ProjectItem::query()->where('id_proyecto', $projectId)->where('estado', 'AC')->count());
+        $this->assertDatabaseHas('project_signature_authorized_users', [
+            'id_proyecto_raiz' => $projectId,
+            'id_usuario' => 1,
+        ]);
+
+        $allProjectResponse = $this->postJson("/api/v1/project-templates/{$templateId}/create-project", [
+            'nombre_proyecto' => 'proyecto abierto desde planilla',
+            'fecha' => '2026-05-22',
+            'ubicacion' => 'ubicacion nueva',
+            'responsable' => 1,
+            'solicitante' => 1,
+            'estado' => 'AC',
+            'aprobado' => 'PD',
+            'signature_access' => [
+                'mode' => 'all',
+                'user_ids' => [1],
+            ],
+        ])->assertCreated();
+        $allProjectId = $allProjectResponse->json('data.project.id_proyecto');
+        $this->assertDatabaseHas('proyecto', [
+            'id_proyecto' => $allProjectId,
+            'signature_access_mode' => 'all',
+        ]);
         $this->assertDatabaseHas('proyecto_historial', [
             'id_proyecto' => 1,
             'accion' => 'template_created',
@@ -2594,7 +2915,7 @@ class ProjectApiTest extends TestCase
             ]);
         }
 
-        return User::query()->create([
+        $user = User::query()->create([
             'id_usuario' => 2,
             'funcionario' => 'Usuario Proyecto',
             'ci' => '87654321',
@@ -2606,11 +2927,31 @@ class ProjectApiTest extends TestCase
             'fecha' => now()->toDateString(),
             'subalcaldia' => null,
         ]);
+
+        $authorizationRows = Project::query()
+            ->where(function ($query): void {
+                $query->whereColumn('id_proyecto', 'id_proyecto_raiz')
+                    ->orWhereNull('id_proyecto_raiz');
+            })
+            ->get()
+            ->map(fn (Project $project): array => [
+                'id_proyecto_raiz' => $project->id_proyecto_raiz ?: $project->id_proyecto,
+                'id_usuario' => $user->id_usuario,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ])
+            ->all();
+
+        if ($authorizationRows !== []) {
+            DB::table('project_signature_authorized_users')->insertOrIgnore($authorizationRows);
+        }
+
+        return $user;
     }
 
     private function fakePdf(string $text): string
     {
-        $pdf = new \TCPDF();
+        $pdf = new \TCPDF;
         $pdf->SetPrintHeader(false);
         $pdf->SetPrintFooter(false);
         $pdf->AddPage();
@@ -2653,6 +2994,13 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.project.is_current_version', true);
 
         $versionTwoId = $created->json('data.project.id_proyecto');
+
+        $this->getJson('/api/v1/projects/'.$versionTwoId.'/signature-access')
+            ->assertOk()
+            ->assertJsonPath('data.root_project_id', 1)
+            ->assertJsonPath('data.mode', 'selected')
+            ->assertJsonPath('data.creator.id', 1)
+            ->assertJsonPath('data.authorized_users.0.id', 1);
 
         $this->getJson('/api/v1/projects/1/history')
             ->assertOk()

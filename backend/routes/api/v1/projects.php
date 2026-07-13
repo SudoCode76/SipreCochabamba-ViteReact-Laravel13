@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\ProjectReportSignatureController;
 use App\Http\Controllers\Api\V1\SearchController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Modules\Projects\Http\Controllers\ProjectBudgetController;
@@ -29,7 +30,9 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::post('/projects/{project}/synchronize', [ProjectCatalogController::class, 'synchronizeVersion']);
     Route::post('/projects/{project}/input-snapshots/{snapshot}/exclude', [ProjectCatalogController::class, 'excludeVersionInput']);
     Route::get('/projects/{project}/report-warnings', [ProjectReportController::class, 'reportWarnings']);
-    Route::get('/projects/{project}/signature-status', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'status']);
+    Route::get('/projects/{project}/signature-access', [ProjectReportSignatureController::class, 'projectAccess']);
+    Route::put('/projects/{project}/signature-access', [ProjectReportSignatureController::class, 'updateProjectAccess']);
+    Route::get('/projects/{project}/signature-status', [ProjectReportSignatureController::class, 'status']);
     Route::get('/projects/{project}', [ProjectCatalogController::class, 'show']);
     Route::put('/projects/{project}', [ProjectCatalogController::class, 'update']);
     Route::post('/projects/{project}/items/sync', [ProjectItemsController::class, 'syncItems']);
@@ -56,13 +59,13 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/projects/{project}/unit-prices', [ProjectBudgetController::class, 'unitPrices']);
     Route::get('/projects/{project}/unit-prices/pdf', [ProjectReportController::class, 'unitPricesPdf']);
     Route::get('/projects/{project}/specifications/pdf', [ProjectReportController::class, 'specificationsPdf']);
-    Route::post('/projects/{project}/reports/{reportKey}/sign', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'sign']);
-    Route::get('/projects/{project}/reports/{reportKey}/signatures', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'signatures']);
-    Route::get('/projects/{project}/reports/{reportKey}/signed/latest', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'latestSigned']);
-    Route::get('/projects/{project}/reports/{reportKey}/physical-signatures', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'physicalSignatures']);
-    Route::post('/projects/{project}/reports/{reportKey}/physical-signatures', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'markPhysicalSignature']);
-    Route::put('/projects/{project}/reports/{reportKey}/physical-signatures/positions', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'updatePhysicalSignaturePositions']);
-    Route::get('/projects/{project}/reports/{reportKey}/physical-signatures/pdf', [\App\Http\Controllers\Api\V1\ProjectReportSignatureController::class, 'physicalSignaturesPdf']);
+    Route::post('/projects/{project}/reports/{reportKey}/sign', [ProjectReportSignatureController::class, 'sign']);
+    Route::get('/projects/{project}/reports/{reportKey}/signatures', [ProjectReportSignatureController::class, 'signatures']);
+    Route::get('/projects/{project}/reports/{reportKey}/signed/latest', [ProjectReportSignatureController::class, 'latestSigned']);
+    Route::get('/projects/{project}/reports/{reportKey}/physical-signatures', [ProjectReportSignatureController::class, 'physicalSignatures']);
+    Route::post('/projects/{project}/reports/{reportKey}/physical-signatures', [ProjectReportSignatureController::class, 'markPhysicalSignature']);
+    Route::put('/projects/{project}/reports/{reportKey}/physical-signatures/positions', [ProjectReportSignatureController::class, 'updatePhysicalSignaturePositions']);
+    Route::get('/projects/{project}/reports/{reportKey}/physical-signatures/pdf', [ProjectReportSignatureController::class, 'physicalSignaturesPdf']);
     Route::get('/search/items', [SearchController::class, 'items']);
     Route::get('/users/{user}/display-name', [UserController::class, 'displayName']);
 });

@@ -13,6 +13,7 @@ trait InteractsWithLegacyProjects
     protected function setUpLegacyProjectSchema(): void
     {
         Schema::disableForeignKeyConstraints();
+        Schema::dropIfExists('project_signature_authorized_users');
         Schema::dropIfExists('proyecto_historial');
         Schema::dropIfExists('proyecto_item');
         Schema::dropIfExists('proyecto');
@@ -45,6 +46,15 @@ trait InteractsWithLegacyProjects
             $table->boolean('es_version_actual')->default(true);
             $table->timestamp('fecha_version')->nullable();
             $table->timestamp('fecha_finalizacion')->nullable();
+            $table->string('signature_access_mode', 20)->default('selected');
+        });
+
+        Schema::create('project_signature_authorized_users', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedInteger('id_proyecto_raiz');
+            $table->unsignedInteger('id_usuario');
+            $table->timestamps();
+            $table->unique(['id_proyecto_raiz', 'id_usuario']);
         });
 
         Schema::create('modulo', function (Blueprint $table): void {
@@ -107,7 +117,7 @@ trait InteractsWithLegacyProjects
 
     protected function createProjectRecord(array $overrides = []): Project
     {
-        return Project::query()->create(array_merge([
+        $project = Project::query()->create(array_merge([
             'id_proyecto' => 1,
             'nombre_proyecto' => 'PROYECTO TEST',
             'fecha' => now()->toDateString(),
@@ -134,6 +144,18 @@ trait InteractsWithLegacyProjects
             'fecha_version' => now(),
             'fecha_finalizacion' => null,
         ], $overrides));
+
+        $rootId = (int) ($project->id_proyecto_raiz ?: $project->id_proyecto);
+        if ($project->id_proyecto === $rootId && $project->id_usuario) {
+            DB::table('project_signature_authorized_users')->insertOrIgnore([
+                'id_proyecto_raiz' => $rootId,
+                'id_usuario' => $project->id_usuario,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return $project;
     }
 
     protected function createProjectItemRecord(array $overrides = []): ProjectItem

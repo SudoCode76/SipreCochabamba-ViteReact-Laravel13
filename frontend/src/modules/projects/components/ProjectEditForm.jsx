@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/toast";
 import { getProjectApprovalLabel } from "../lib/project-status";
 import { projectService } from "../services/project.service";
+import ProjectSignatureAccessSection from "./ProjectSignatureAccessSection";
 import { UpdatedProjectExitDialog } from "./UpdatedProjectExitDialog";
 
 const emptyForm = {
@@ -87,6 +88,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
   const toast = useToast();
   const [selectedProjectId, setSelectedProjectId] = useState(projectId);
   const [draftFormData, setFormData] = useState(null);
+  const [signatureAccessDraft, setSignatureAccessDraft] = useState(null);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [versioning, setVersioning] = useState(false);
@@ -111,9 +113,16 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
     enabled: Boolean(selectedProjectId),
   });
 
+  const { data: signatureAccessData } = useQuery({
+    queryKey: ["project-signature-access", selectedProjectId],
+    queryFn: () => projectService.signatureAccess(selectedProjectId),
+    enabled: Boolean(selectedProjectId),
+  });
+
   const project = projectData?.data?.project;
   const versions = versionsData?.data?.items ?? [];
   const isReadOnly = Boolean(project && (!project.is_current_version || project.is_frozen));
+  const canManageSignatureAccess = Boolean(signatureAccessData?.data?.can_manage);
   const hasPreviousVersion = versions.length > 1 && Number(project?.version_number || 1) > 1;
   const shouldAskBeforeLeavingUpdatedVersion = Boolean(
     project?.aprobado === "AP"
@@ -187,10 +196,53 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
         }
       }
 
-      const response = await projectService.update(selectedProjectId, {
-        ...formData,
-        observaciones: formData.observaciones?.trim() || null,
-      });
+      const currentSignatureDraft = signatureAccessDraft?.projectId === selectedProjectId
+        ? signatureAccessDraft
+        : null;
+
+      if (currentSignatureDraft) {
+        const signaturePayload = {
+          mode: currentSignatureDraft.mode,
+          user_ids: currentSignatureDraft.user_ids,
+        };
+
+        try {
+          await projectService.updateSignatureAccess(selectedProjectId, signaturePayload);
+        } catch (signatureError) {
+          const confirmation = signatureError.response?.data?.data;
+
+          if (signatureError.response?.status !== 409 || !confirmation?.requires_confirmation) {
+            throw signatureError;
+          }
+
+          const affected = (confirmation.affected_users ?? [])
+            .map((user) => `${user.full_name}: ${user.digital_signatures} digital(es), ${user.physical_signatures} física(s)`)
+            .join("\n");
+          const confirmed = window.confirm(`Estas personas ya tienen firmas registradas:\n\n${affected}\n\nSus firmas existentes permanecerán. ¿Desea retirar su autorización?`);
+
+          if (!confirmed) {
+            setSaving(false);
+            return;
+          }
+
+          await projectService.updateSignatureAccess(selectedProjectId, {
+            ...signaturePayload,
+            confirm_signed_removals: true,
+          });
+        }
+
+        await queryClient.invalidateQueries({ queryKey: ["project-signature-access", selectedProjectId] });
+        await queryClient.invalidateQueries({ queryKey: ["project-report-signature-status"] });
+        await queryClient.invalidateQueries({ queryKey: ["project-report-physical-signatures"] });
+        setSignatureAccessDraft(null);
+      }
+
+      const response = isReadOnly
+        ? null
+        : await projectService.update(selectedProjectId, {
+            ...formData,
+            observaciones: formData.observaciones?.trim() || null,
+          });
 
       const updatedProject = response?.data?.project;
 
@@ -216,9 +268,11 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
         };
       });
 
-      queryClient.setQueryData(["project", selectedProjectId], response);
-      queryClient.invalidateQueries({ queryKey: ["project-versions", projectId] });
-      toast.success("Proyecto actualizado correctamente.");
+      if (response) {
+        queryClient.setQueryData(["project", selectedProjectId], response);
+        queryClient.invalidateQueries({ queryKey: ["project-versions", projectId] });
+      }
+      toast.success("Cambios guardados correctamente.");
       onSuccess?.();
     } catch (err) {
       const fieldErrors = err.response?.data?.errors;
@@ -492,6 +546,12 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
       </div>
       </fieldset>
 
+      <ProjectSignatureAccessSection
+        projectId={selectedProjectId}
+        people={contextData?.data?.people ?? []}
+        onDraftChange={(value) => setSignatureAccessDraft({ projectId: selectedProjectId, ...value })}
+      />
+
       <Separator className="bg-border/70" />
 
       <div className="flex flex-wrap justify-end gap-2">
@@ -504,7 +564,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
             Crear versión actualizada
           </Button>
         )}
-        {!isReadOnly && (
+        {(!isReadOnly || canManageSignatureAccess) && (
         <Button type="submit" className="rounded-full bg-foreground text-background hover:bg-foreground/90" disabled={saving}>
           {saving ? (
             <>

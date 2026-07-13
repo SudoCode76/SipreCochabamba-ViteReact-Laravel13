@@ -7,8 +7,10 @@ use App\Models\Item;
 use App\Models\Project;
 use App\Models\ProjectReportSignature;
 use App\Models\ProjectSignableReport;
+use App\Modules\Projects\Services\ProjectPermissionService;
 use App\Modules\Projects\Services\ProjectReportSignatureService;
 use App\Modules\Projects\Services\ProjectSignableReportService;
+use App\Modules\Projects\Services\ProjectSignatureAccessService;
 use App\Support\ApiResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Encryption\DecryptException;
@@ -30,7 +32,71 @@ class ProjectReportSignatureController extends Controller
     public function __construct(
         private readonly ProjectSignableReportService $signableReportService,
         private readonly ProjectReportSignatureService $signatureService,
+        private readonly ProjectSignatureAccessService $signatureAccessService,
+        private readonly ProjectPermissionService $projectPermissionService,
     ) {}
+
+    public function projectAccess(Request $request, Project $project): JsonResponse
+    {
+        $permissions = $this->projectPermissionService->resolve($request->user());
+
+        if (! $this->signatureAccessService->canManage($project, $request->user())
+            && ! ($permissions['can_view'] ?? false)
+            && ! ($permissions['can_edit'] ?? false)) {
+            return ApiResponse::error('No tiene permisos para consultar esta configuración.', [
+                'authorization' => ['No tiene permisos para consultar esta configuración.'],
+            ], 403);
+        }
+
+        return ApiResponse::success(
+            $this->signatureAccessService->configuration($project, $request->user()),
+            'Configuración de firmantes obtenida correctamente.'
+        );
+    }
+
+    public function updateProjectAccess(Request $request, Project $project): JsonResponse
+    {
+        $validated = $request->validate([
+            'mode' => ['required', 'string', Rule::in([
+                ProjectSignatureAccessService::MODE_ALL,
+                ProjectSignatureAccessService::MODE_SELECTED,
+            ])],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['integer', 'distinct', 'exists:usuario,id_usuario'],
+            'confirm_signed_removals' => ['nullable', 'boolean'],
+        ]);
+
+        try {
+            $result = $this->signatureAccessService->update(
+                $project,
+                $request->user(),
+                $validated['mode'],
+                $validated['user_ids'] ?? [],
+                (bool) ($validated['confirm_signed_removals'] ?? false),
+                $request->ip()
+            );
+        } catch (AuthorizationException $exception) {
+            return ApiResponse::error($exception->getMessage(), [
+                'authorization' => [$exception->getMessage()],
+            ], 403);
+        }
+
+        if ($result['requires_confirmation'] ?? false) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Algunas personas que se retirarán ya tienen firmas registradas.',
+                'errors' => [
+                    'confirmation' => ['Confirme que desea retirar su autorización sin eliminar sus firmas existentes.'],
+                ],
+                'data' => $result,
+            ], 409);
+        }
+
+        return ApiResponse::success(
+            $result['configuration'],
+            'Configuración de firmantes actualizada correctamente.'
+        );
+    }
 
     public function index(Request $request): JsonResponse
     {
@@ -117,6 +183,12 @@ class ProjectReportSignatureController extends Controller
             $report = $this->reportAllowedForSubject($reportKey, $subject)
                 ? $reports->firstWhere('report_key', $reportKey)
                 : null;
+            $signatureAccess = $subject instanceof Project
+                ? $this->signatureAccessService->decision($subject, $request->user())
+                : ['mode' => null, 'allowed' => true, 'message' => null];
+            if ($report) {
+                $report['can_sign'] = (bool) ($report['can_sign'] ?? false) && $signatureAccess['allowed'];
+            }
             $projectIsFinalized = $subject instanceof Item ? true : $subject->isFrozen();
             $subjectCanBecomeStale = $subject instanceof Item || ! $projectIsFinalized;
             $currentDocumentHash = $latestSigned
@@ -143,6 +215,7 @@ class ProjectReportSignatureController extends Controller
                 'signed_document_hash' => $signedDocumentHash,
                 'is_current_pdf_signed' => $isCurrentPdfSigned,
                 'is_signed_stale' => $isSignedStale,
+                'signature_access' => $signatureAccess,
             ], 'Estado de firma obtenido correctamente.');
         }
 
@@ -340,10 +413,15 @@ class ProjectReportSignatureController extends Controller
             'tipo_desglose' => ['nullable', 'integer'],
         ]);
 
-        return ApiResponse::success(
-            $this->signatureService->markPhysicalSignature($subject, $reportKey, $validated, $request->user()),
-            'Firma fisica marcada correctamente.'
-        );
+        try {
+            $status = $this->signatureService->markPhysicalSignature($subject, $reportKey, $validated, $request->user());
+        } catch (AuthorizationException $exception) {
+            return ApiResponse::error($exception->getMessage(), [
+                'authorization' => [$exception->getMessage()],
+            ], 403);
+        }
+
+        return ApiResponse::success($status, 'Firma fisica marcada correctamente.');
     }
 
     public function updatePhysicalSignaturePositions(Request $request, Project $project, string $reportKey): JsonResponse

@@ -146,6 +146,19 @@ class ProjectHistoryService
         ]);
     }
 
+    public function recordSignatureAccessUpdated(Project $project, ?User $actor, ?string $ip, array $changes): void
+    {
+        $this->record(
+            $project,
+            $actor,
+            $ip,
+            'signature_access_updated',
+            'Se actualizó la configuración de firmantes',
+            'Se modificó quién puede firmar documentos de la familia del proyecto.',
+            $changes
+        );
+    }
+
     private function record(Project $project, ?User $actor, ?string $ip, string $action, string $title, ?string $detail, array $metadata = []): void
     {
         ProjectHistory::query()->create([

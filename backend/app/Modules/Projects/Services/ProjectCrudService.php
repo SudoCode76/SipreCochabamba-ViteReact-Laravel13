@@ -6,6 +6,7 @@ use App\Http\Requests\Project\StoreProjectRequest;
 use App\Http\Requests\Project\UpdateProjectRequest;
 use App\Models\Project;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ProjectCrudService
@@ -13,6 +14,7 @@ class ProjectCrudService
     public function __construct(
         private readonly ProjectHistoryService $projectHistoryService,
         private readonly ProjectVersionService $projectVersionService,
+        private readonly ProjectSignatureAccessService $signatureAccessService,
     ) {}
 
     public function create(StoreProjectRequest $request, User $user): Project
@@ -21,34 +23,37 @@ class ProjectCrudService
 
         $responsable = User::query()->find((int) $request->integer('responsable'));
 
-        $project = Project::query()->create([
-            'nombre_proyecto' => $request->string('nombre_proyecto')->toString(),
-            'fecha' => $request->date('fecha')->toDateString(),
-            'ubicacion' => $request->string('ubicacion')->toString(),
-            'responsable' => (string) $request->integer('responsable'),
-            'solicitante' => (int) $request->integer('solicitante'),
-            'observaciones' => $request->filled('observaciones') ? $request->string('observaciones')->toString() : null,
-            'aprobado' => strtoupper($request->string('aprobado')->toString()),
-            'fecha_aprob' => $request->filled('fecha_aprob') ? $request->date('fecha_aprob')->toDateString() : null,
-            'id_usuario' => $user->id_usuario,
-            'estado' => strtoupper($request->string('estado')->toString()),
-            'es_plantilla' => false,
-            'nombre_responsable' => $responsable?->funcionario,
-            'latitud' => $request->filled('latitud') ? $request->string('latitud')->toString() : null,
-            'longitud' => $request->filled('longitud') ? $request->string('longitud')->toString() : null,
-            'precio' => 0,
-            'distrito' => $request->filled('distrito') ? $request->string('distrito')->toString() : null,
-            'zona' => $request->filled('zona') ? $request->string('zona')->toString() : null,
-            'otb' => $request->filled('otb') ? $request->string('otb')->toString() : null,
-            'numero_version' => 1,
-            'es_version_actual' => true,
-            'fecha_version' => now(),
-        ]);
-        $project->update(['id_proyecto_raiz' => $project->id_proyecto]);
+        return DB::transaction(function () use ($request, $user, $responsable): Project {
+            $project = Project::query()->create([
+                'nombre_proyecto' => $request->string('nombre_proyecto')->toString(),
+                'fecha' => $request->date('fecha')->toDateString(),
+                'ubicacion' => $request->string('ubicacion')->toString(),
+                'responsable' => (string) $request->integer('responsable'),
+                'solicitante' => (int) $request->integer('solicitante'),
+                'observaciones' => $request->filled('observaciones') ? $request->string('observaciones')->toString() : null,
+                'aprobado' => strtoupper($request->string('aprobado')->toString()),
+                'fecha_aprob' => $request->filled('fecha_aprob') ? $request->date('fecha_aprob')->toDateString() : null,
+                'id_usuario' => $user->id_usuario,
+                'estado' => strtoupper($request->string('estado')->toString()),
+                'es_plantilla' => false,
+                'nombre_responsable' => $responsable?->funcionario,
+                'latitud' => $request->filled('latitud') ? $request->string('latitud')->toString() : null,
+                'longitud' => $request->filled('longitud') ? $request->string('longitud')->toString() : null,
+                'precio' => 0,
+                'distrito' => $request->filled('distrito') ? $request->string('distrito')->toString() : null,
+                'zona' => $request->filled('zona') ? $request->string('zona')->toString() : null,
+                'otb' => $request->filled('otb') ? $request->string('otb')->toString() : null,
+                'numero_version' => 1,
+                'es_version_actual' => true,
+                'fecha_version' => now(),
+            ]);
+            $project->update(['id_proyecto_raiz' => $project->id_proyecto]);
+            $project->refresh();
+            $this->signatureAccessService->initialize($project, $user, $request->input('signature_access'));
+            $this->projectHistoryService->recordCreated($project, $user, $request->ip());
 
-        $this->projectHistoryService->recordCreated($project, $user, $request->ip());
-
-        return $project;
+            return $project->refresh();
+        });
     }
 
     public function update(UpdateProjectRequest $request, Project $project, User $user): Project

@@ -229,6 +229,10 @@ export default function PdfViewerPage() {
       return "";
     }
 
+    if (signatureStatus.signature_access?.allowed === false) {
+      return signatureStatus.signature_access.message || "No está autorizado para firmar documentos de este proyecto.";
+    }
+
     if (!signatureStatus.report.is_enabled) {
       return "La firma digital no está habilitada para este reporte.";
     }

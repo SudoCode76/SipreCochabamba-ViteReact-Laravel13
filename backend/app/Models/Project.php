@@ -61,6 +61,7 @@ class Project extends Model
             'es_version_actual' => 'boolean',
             'fecha_version' => 'datetime',
             'fecha_finalizacion' => 'datetime',
+            'signature_access_mode' => 'string',
         ];
     }
 

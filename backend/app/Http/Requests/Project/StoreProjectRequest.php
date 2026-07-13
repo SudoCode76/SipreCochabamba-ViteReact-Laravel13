@@ -44,6 +44,10 @@ class StoreProjectRequest extends FormRequest
             'distrito' => ['nullable', 'string', 'max:50'],
             'zona' => ['nullable', 'string', 'max:150'],
             'otb' => ['nullable', 'string', 'max:150'],
+            'signature_access' => ['nullable', 'array'],
+            'signature_access.mode' => ['required_with:signature_access', 'string', 'in:selected,all'],
+            'signature_access.user_ids' => ['nullable', 'array'],
+            'signature_access.user_ids.*' => ['integer', 'distinct', 'exists:usuario,id_usuario'],
         ];
     }
 

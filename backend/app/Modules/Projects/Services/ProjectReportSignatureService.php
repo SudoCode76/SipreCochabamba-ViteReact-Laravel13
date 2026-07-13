@@ -9,8 +9,8 @@ use App\Models\ProjectReportSignature;
 use App\Models\ProjectSignableReport;
 use App\Models\User;
 use App\Modules\Items\Services\ItemReportPdfResolver;
-use App\Services\Citizenship\CiudadaniaDigitalException;
 use App\Services\Citizenship\CiudadaniaDigitalClient;
+use App\Services\Citizenship\CiudadaniaDigitalException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
@@ -25,10 +25,12 @@ use setasign\Fpdi\Tcpdf\Fpdi;
 class ProjectReportSignatureService
 {
     private const DEFAULT_PHYSICAL_SIGNATURE_WIDTH = 56.0;
+
     private const DEFAULT_PHYSICAL_SIGNATURE_HEIGHT = 28.0;
 
     public function __construct(
         private readonly ProjectSignableReportService $signableReportService,
+        private readonly ProjectSignatureAccessService $signatureAccessService,
         private readonly ProjectReportPdfResolver $pdfResolver,
         private readonly ItemReportPdfResolver $itemPdfResolver,
         private readonly CiudadaniaDigitalClient $ciudadaniaDigitalClient,
@@ -222,14 +224,24 @@ class ProjectReportSignatureService
         $latestSigned = $this->latestSignedForHash($project, $reportKey, $parametersHash, $logicalHash);
         $items = $this->physicalSignatures($project, $reportKey, $parametersHash, $logicalHash);
         $pageSizes = $latestSigned ? $this->signedPdfPageSizes($latestSigned) : [];
+        $signatureAccess = $project instanceof Project
+            ? $this->signatureAccessService->decision($project, $user)
+            : ['mode' => null, 'allowed' => true, 'message' => null];
+        $hasSigningPermission = ! $project instanceof Project
+            || ($this->signableReportService->findEnabled($reportKey)
+                && $this->signableReportService->canSign($user, $reportKey));
         $this->assignMissingPhysicalPlacements($items, $pageSizes);
         $items = $items->fresh(['user']);
 
         return [
             'count' => $items->count(),
             'already_marked' => $items->contains('id_usuario', $user->id_usuario),
-            'can_mark' => (bool) $latestSigned && filled($user->firma_imagen_path),
+            'can_mark' => (bool) $latestSigned
+                && filled($user->firma_imagen_path)
+                && $hasSigningPermission
+                && $signatureAccess['allowed'],
             'needs_signature_image' => blank($user->firma_imagen_path),
+            'signature_access' => $signatureAccess,
             'latest_signed' => $latestSigned ? $this->serialize($latestSigned) : null,
             'page_sizes' => $pageSizes,
             'items' => $items->map(fn (ProjectReportPhysicalSignature $signature): array => $this->serializePhysicalSignature($signature))->all(),
@@ -238,6 +250,20 @@ class ProjectReportSignatureService
 
     public function markPhysicalSignature(Project|Item $project, string $reportKey, array $parameters, User $user): array
     {
+        if ($project instanceof Project && ! $this->signableReportService->findEnabled($reportKey)) {
+            throw ValidationException::withMessages([
+                'report_key' => ['Este reporte no está habilitado para firma.'],
+            ]);
+        }
+
+        if ($project instanceof Project && ! $this->signableReportService->canSign($user, $reportKey)) {
+            throw new AuthorizationException('No tiene permisos para firmar este reporte.');
+        }
+
+        if ($project instanceof Project && ! $this->signatureAccessService->allows($project, $user)) {
+            throw new AuthorizationException('No está autorizado para firmar documentos de este proyecto.');
+        }
+
         $normalizedParameters = $this->normalizeParameters($parameters);
         $parametersHash = $this->parametersHash($normalizedParameters);
         $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalizedParameters);
@@ -510,7 +536,7 @@ class ProjectReportSignatureService
         $compatiblePath = $this->fpdiCompatiblePdfPath($sourcePath);
 
         try {
-            $pdf = new Fpdi();
+            $pdf = new Fpdi;
             $pageCount = $pdf->setSourceFile($compatiblePath);
             $sizes = [];
 
@@ -635,9 +661,9 @@ class ProjectReportSignatureService
 
                 if (
                     $a['x'] < $b['x'] + $b['width']
-                    && $a['x'] + $a['width'] > $b['x']
+                    && $b['x'] < $a['x'] + $a['width']
                     && $a['y'] < $b['y'] + $b['height']
-                    && $a['y'] + $a['height'] > $b['y']
+                    && $b['y'] < $a['y'] + $a['height']
                 ) {
                     return true;
                 }
@@ -964,7 +990,7 @@ class ProjectReportSignatureService
         $compatiblePath = $this->fpdiCompatiblePdfPath($sourcePath);
 
         try {
-            $pdf = new Fpdi();
+            $pdf = new Fpdi;
             $pdf->setPrintHeader(false);
             $pdf->setPrintFooter(false);
             $pdf->SetAutoPageBreak(false);
@@ -1139,6 +1165,10 @@ class ProjectReportSignatureService
 
         if (! $this->signableReportService->canSign($user, $reportKey)) {
             throw new AuthorizationException('No tiene permisos para firmar este reporte.');
+        }
+
+        if ($project instanceof Project && ! $this->signatureAccessService->allows($project, $user)) {
+            throw new AuthorizationException('No está autorizado para firmar documentos de este proyecto.');
         }
     }
 
