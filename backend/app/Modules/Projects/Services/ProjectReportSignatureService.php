@@ -1454,10 +1454,11 @@ class ProjectReportSignatureService
             $redirectUri = $this->loginCallbackUrl($signature);
             $response = $this->ciudadaniaDigitalClient->createAuthenticationUrl($redirectUri);
             $redirectUrl = $this->redirectUrlFromResponse($response);
+            $requestPayload = is_array($signature->request_payload) ? $signature->request_payload : [];
 
             $signature->forceFill([
                 'status' => 'auth_pending',
-                'request_payload' => ['redirect_uri' => $redirectUri],
+                'request_payload' => array_merge($requestPayload, ['redirect_uri' => $redirectUri]),
                 'response_payload' => array_merge($response, [
                     'redirect_url' => $redirectUrl,
                     'auth_state' => $this->stateFromUrl($redirectUrl),
@@ -1562,7 +1563,7 @@ class ProjectReportSignatureService
             } else {
                 $payload['is_derivated'] = 'true';
                 if ($signAllPages) {
-                    $payload['page'] = 'all';
+                    $payload['page'] = 'ALL';
                 }
                 $response = $this->ciudadaniaDigitalClient->createSigningUrl($signature->base_file_path, $payload);
             }

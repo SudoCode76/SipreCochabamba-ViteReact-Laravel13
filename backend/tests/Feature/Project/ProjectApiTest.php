@@ -517,6 +517,27 @@ class ProjectApiTest extends TestCase
         $this->assertSame('selected', $version->fresh()->signature_access_mode);
     }
 
+    public function test_existing_projects_are_opened_for_all_signers_by_backfill(): void
+    {
+        $root = $this->createProjectRecord([
+            'id_proyecto' => 1,
+            'id_proyecto_raiz' => 1,
+            'signature_access_mode' => 'selected',
+        ]);
+        $version = $this->createProjectRecord([
+            'id_proyecto' => 2,
+            'id_proyecto_raiz' => 1,
+            'signature_access_mode' => 'selected',
+        ]);
+
+        $migration = require database_path('migrations/2026_07_13_000003_open_existing_projects_for_signatures.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame('all', $root->fresh()->signature_access_mode);
+        $this->assertSame('all', $version->fresh()->signature_access_mode);
+    }
+
     public function test_selected_mode_blocks_new_digital_and_physical_signatures_while_all_mode_keeps_global_permissions_required(): void
     {
         $admin = $this->createLegacyAuthUser();
