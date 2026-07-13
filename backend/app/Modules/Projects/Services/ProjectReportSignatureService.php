@@ -28,6 +28,8 @@ class ProjectReportSignatureService
 
     private const DEFAULT_PHYSICAL_SIGNATURE_HEIGHT = 28.0;
 
+    private const SIGNATURE_FOOTER_HEIGHT = 30.0;
+
     public function __construct(
         private readonly ProjectSignableReportService $signableReportService,
         private readonly ProjectSignatureAccessService $signatureAccessService,
@@ -59,7 +61,7 @@ class ProjectReportSignatureService
             $baseContent = Storage::disk('local')->get($previous->signed_file_path);
             $basePath = $previous->signed_file_path;
         } else {
-            $baseContent = $pdf['content'];
+            $baseContent = $this->reserveSignatureFooter($pdf['content']);
             $basePath = $this->storeBasePdf($project, $reportKey, $baseContent);
         }
 
@@ -605,20 +607,22 @@ class ProjectReportSignatureService
     private function nextDefaultPlacement(array $pageSize, array $existing): array
     {
         $width = self::DEFAULT_PHYSICAL_SIGNATURE_WIDTH;
-        $height = self::DEFAULT_PHYSICAL_SIGNATURE_HEIGHT;
+        $height = min(self::DEFAULT_PHYSICAL_SIGNATURE_HEIGHT, max(14.0, $this->signatureFooterHeight((float) $pageSize['height']) * 0.38));
         $margin = 10.0;
         $gap = 4.0;
         $page = (int) $pageSize['page'];
         $pageWidth = (float) $pageSize['width'];
         $pageHeight = (float) $pageSize['height'];
         $columns = max(1, (int) floor(($pageWidth - ($margin * 2) + $gap) / ($width + $gap)));
+        $footerTop = $pageHeight - $this->signatureFooterHeight($pageHeight) + 2.0;
+        $maxRows = max(1, (int) floor((($pageHeight - $margin) - $footerTop + $gap) / ($height + $gap)));
 
-        for ($row = 0; $row < 10; $row++) {
+        for ($row = 0; $row < $maxRows; $row++) {
             for ($column = 0; $column < $columns; $column++) {
                 $candidate = [
                     'page' => $page,
                     'x' => round($margin + ($column * ($width + $gap)), 2),
-                    'y' => round($pageHeight - $margin - $height - ($row * ($height + $gap)), 2),
+                    'y' => round($footerTop + ($row * ($height + $gap)), 2),
                     'width' => $width,
                     'height' => $height,
                 ];
@@ -632,7 +636,7 @@ class ProjectReportSignatureService
         return [
             'page' => $page,
             'x' => $margin,
-            'y' => max($margin, $pageHeight - $margin - $height),
+            'y' => min($footerTop, $pageHeight - $margin - $height),
             'width' => $width,
             'height' => $height,
         ];
@@ -1108,6 +1112,59 @@ class ProjectReportSignatureService
                 @unlink($compatiblePath);
             }
         }
+    }
+
+    private function reserveSignatureFooter(string $sourcePdf): string
+    {
+        $sourcePath = tempnam(sys_get_temp_dir(), 'sipre_sign_base_');
+
+        if ($sourcePath === false) {
+            throw new RuntimeException('No se pudo preparar el PDF para firma digital.');
+        }
+
+        file_put_contents($sourcePath, $sourcePdf);
+        $compatiblePath = $this->fpdiCompatiblePdfPath($sourcePath);
+
+        try {
+            $pdf = new Fpdi;
+            $pdf->setPrintHeader(false);
+            $pdf->setPrintFooter(false);
+            $pdf->SetAutoPageBreak(false);
+            $pdf->SetMargins(0, 0, 0);
+            $pageCount = $pdf->setSourceFile($compatiblePath);
+
+            for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
+                $templateId = $pdf->importPage($pageNumber);
+                $size = $pdf->getTemplateSize($templateId);
+                $pageWidth = (float) $size['width'];
+                $pageHeight = (float) $size['height'];
+                $footerHeight = $this->signatureFooterHeight($pageHeight);
+                $scale = max(0.1, min(1.0, ($pageHeight - $footerHeight) / $pageHeight));
+                $scaledWidth = $pageWidth * $scale;
+                $scaledHeight = $pageHeight * $scale;
+
+                $pdf->AddPage($size['orientation'], [$pageWidth, $pageHeight]);
+                $pdf->useTemplate(
+                    $templateId,
+                    ($pageWidth - $scaledWidth) / 2,
+                    0,
+                    $scaledWidth,
+                    $scaledHeight
+                );
+            }
+
+            return $pdf->Output('', 'S');
+        } finally {
+            @unlink($sourcePath);
+            if ($compatiblePath !== $sourcePath) {
+                @unlink($compatiblePath);
+            }
+        }
+    }
+
+    private function signatureFooterHeight(float $pageHeight): float
+    {
+        return self::SIGNATURE_FOOTER_HEIGHT;
     }
 
     private function fpdiCompatiblePdfPath(string $sourcePath): string
