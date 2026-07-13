@@ -72,6 +72,9 @@ class ProjectReportSignatureService
             'id_usuario' => $user->id_usuario,
             'base_file_path' => $basePath,
             'base_document_hash' => $baseDocumentHash,
+            'request_payload' => [
+                'sign_all_pages' => $this->shouldSignAllPages($parameters),
+            ],
         ]);
 
         if (! $this->accessTokenFrom($parameters)) {
@@ -997,7 +1000,7 @@ class ProjectReportSignatureService
                 foreach ($signatures as $index => $signature) {
                     $placement = $placements[$index] ?? null;
 
-                    if (! $placement || (int) $placement['page'] !== $pageNumber) {
+                    if (! $placement) {
                         continue;
                     }
 
@@ -1469,6 +1472,8 @@ class ProjectReportSignatureService
         $validFrom = now();
         $validTo = $validFrom->copy()->addDays($this->validityDaysFor($signature));
         $previousSigned = $this->previousSignedFor($signature);
+        $signAllPages = $this->shouldSignAllPages($parameters)
+            || (bool) data_get($signature->request_payload, 'sign_all_pages');
 
         if ($signature->code !== $signatureCode) {
             $signature->forceFill(['code' => $signatureCode])->save();
@@ -1508,6 +1513,9 @@ class ProjectReportSignatureService
                 $response = $this->ciudadaniaDigitalClient->createDerivedSigningUrl($payload);
             } else {
                 $payload['is_derivated'] = 'true';
+                if ($signAllPages) {
+                    $payload['page'] = 'all';
+                }
                 $response = $this->ciudadaniaDigitalClient->createSigningUrl($signature->base_file_path, $payload);
             }
             $safeRequestPayload = Arr::except($payload, ['acces_token']);
@@ -1839,6 +1847,11 @@ class ProjectReportSignatureService
             ?? data_get($payload, 'data.access_token')
             ?? data_get($payload, 'data.acces_token')
             ?? null;
+    }
+
+    private function shouldSignAllPages(array $payload): bool
+    {
+        return filter_var(data_get($payload, 'sign_all_pages'), FILTER_VALIDATE_BOOLEAN);
     }
 
     private function accessTokenCacheKey(ProjectReportSignature $signature): string

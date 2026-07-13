@@ -186,6 +186,7 @@ class ProjectReportSignatureController extends Controller
             'tipo_desglose' => ['nullable', 'integer'],
             'access_token' => ['nullable', 'string'],
             'acces_token' => ['nullable', 'string'],
+            'sign_all_pages' => ['nullable', 'boolean'],
         ]);
 
         try {

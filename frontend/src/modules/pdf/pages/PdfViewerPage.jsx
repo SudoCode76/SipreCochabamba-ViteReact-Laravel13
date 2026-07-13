@@ -186,6 +186,7 @@ export default function PdfViewerPage() {
   const [acceptedStaleNoticeKey, setAcceptedStaleNoticeKey] = useState("");
   const [signatureError, setSignatureError] = useState("");
   const [signing, setSigning] = useState(false);
+  const [signAllPagesDialogOpen, setSignAllPagesDialogOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [latestSigners, setLatestSigners] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -451,16 +452,25 @@ export default function PdfViewerPage() {
     };
   }, [isAdjustPhysicalMode, showSignatureToolbar, hasSignedPdf, isSignedStale, signatureParameters, signatureReportKey, signatureService, signatureSubjectId]);
 
-  const handleSignPdf = async () => {
+  const submitSignPdf = async (signAllPages) => {
     if (!canSignPdf || signing) {
       return;
     }
 
+    if (typeof signAllPages !== "boolean") {
+      setSignAllPagesDialogOpen(true);
+      return;
+    }
+
+    setSignAllPagesDialogOpen(false);
     setSigning(true);
     setSignatureError("");
 
     try {
-      const response = await signatureService.signReport(signatureSubjectId, signatureReportKey, signatureParameters);
+      const response = await signatureService.signReport(signatureSubjectId, signatureReportKey, {
+        ...signatureParameters,
+        sign_all_pages: signAllPages,
+      });
       const redirectUrl = response?.data?.redirect_url || response?.data?.signature?.redirect_url;
       const signature = response?.data?.signature;
 
@@ -491,6 +501,19 @@ export default function PdfViewerPage() {
     } finally {
       setSigning(false);
     }
+  };
+
+  const handleSignPdf = () => {
+    if (!canSignPdf || signing) {
+      return;
+    }
+
+    if (isSignedStale || !signatureStatus?.is_current_pdf_signed) {
+      setSignAllPagesDialogOpen(true);
+      return;
+    }
+
+    void submitSignPdf(false);
   };
 
   const handleOpenHistory = async () => {
@@ -859,6 +882,43 @@ export default function PdfViewerPage() {
           />
         ) : null}
       </section>
+
+      {signAllPagesDialogOpen ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-2xl">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-950 text-white">
+              <FileSignature className="h-6 w-6" />
+            </div>
+            <h2 className="mt-4 text-xl font-semibold">Firma digital</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              ¿Quieres que la firma digital de Ciudadanía Digital aparezca en todas las hojas?
+            </p>
+            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => void submitSignPdf(true)}
+                className="inline-flex items-center justify-center rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                Sí, todas las hojas
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitSignPdf(false)}
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                No, solo una
+              </button>
+              <button
+                type="button"
+                onClick={() => setSignAllPagesDialogOpen(false)}
+                className="inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {!loading && !error && blobUrl && signatureChecked && isSignedStale && !staleNoticeAccepted ? (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
