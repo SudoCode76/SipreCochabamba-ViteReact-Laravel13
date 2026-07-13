@@ -18,6 +18,7 @@ use App\Modules\Projects\Services\ProjectInputsGroupedReportPdfService;
 use App\Modules\Projects\Services\ProjectInputsReportPdfService;
 use App\Modules\Projects\Services\ProjectLegacyUnitPriceService;
 use App\Modules\Projects\Services\ProjectReportSignatureService;
+use App\Modules\Projects\Services\ProjectSignableReportService;
 use App\Services\Citizenship\CiudadaniaDigitalClient;
 use App\Services\Citizenship\CiudadaniaDigitalException;
 use Carbon\Carbon;
@@ -267,6 +268,9 @@ class ProjectApiTest extends TestCase
         $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/sign")
             ->assertForbidden()
             ->assertJsonPath('message', 'No tiene permisos para firmar este reporte.');
+
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures")
+            ->assertForbidden();
     }
 
     public function test_report_signing_requires_signing_function_and_report_permission(): void
@@ -289,6 +293,163 @@ class ProjectApiTest extends TestCase
         $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget")
             ->assertOk()
             ->assertJsonPath('data.report.can_sign', true);
+    }
+
+    public function test_legacy_digital_signature_function_still_allows_signing(): void
+    {
+        ProjectSignableReport::query()
+            ->where('report_key', 'general_budget')
+            ->update(['is_enabled' => true]);
+
+        $project = $this->createProjectRecord([
+            'aprobado' => 'RV',
+            'fecha_aprob' => now()->toDateString(),
+            'fecha_finalizacion' => now(),
+        ]);
+
+        Sanctum::actingAs($this->createProjectUserWithPermissions([
+            'PRESUPUESTO_GENERAL',
+            'FIRMAS_DIGITALES',
+        ]));
+
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget")
+            ->assertOk()
+            ->assertJsonPath('data.report.can_sign', true);
+    }
+
+    public function test_digital_and_physical_signature_permissions_are_independent_for_projects_and_items(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $admin = $this->createLegacyAuthUser();
+        ProjectSignableReport::query()
+            ->whereIn('report_key', ['general_budget', 'item_unit_price_analysis'])
+            ->update(['is_enabled' => true]);
+
+        $project = $this->createProjectRecord([
+            'aprobado' => 'RV',
+            'fecha_aprob' => now()->toDateString(),
+            'fecha_finalizacion' => now(),
+        ]);
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $item = $this->createItemRecord();
+        $signer = $this->createProjectUserWithPermissions([
+            'PRESUPUESTO_GENERAL',
+            'FIRMAR_REPORTES',
+        ]);
+        $signer->forceFill(['firma_imagen_path' => 'signatures/user.png'])->save();
+        Storage::disk('public')->put('signatures/user.png', 'signature-image');
+
+        $service = app(ProjectReportSignatureService::class);
+        $pdf = $this->fakePdf('Firmado');
+
+        foreach ([
+            [$project, 'general_budget', 'project-signatures/project.pdf'],
+            [$item, 'item_unit_price_analysis', 'item-signatures/item.pdf'],
+        ] as [$subject, $reportKey, $path]) {
+            $parameters = [];
+            Storage::disk('local')->put($path, $pdf);
+            ProjectReportSignature::query()->create([
+                'id_proyecto' => $subject instanceof Project ? $subject->id_proyecto : null,
+                'id_item' => $subject instanceof Project ? null : $subject->id_item,
+                'trace_id' => 'trace-'.$reportKey,
+                'report_key' => $reportKey,
+                'parameters' => $parameters,
+                'parameters_hash' => $service->parametersHash($parameters),
+                'status' => 'signed',
+                'id_usuario' => $admin->id_usuario,
+                'base_file_path' => $path,
+                'signed_file_path' => $path,
+                'base_document_hash' => $service->currentDocumentHash($subject, $reportKey, $parameters),
+                'signed_at' => now(),
+            ]);
+        }
+
+        Sanctum::actingAs($signer);
+
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget")
+            ->assertOk()
+            ->assertJsonPath('data.report.can_sign', true);
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures")
+            ->assertOk()
+            ->assertJsonPath('data.can_mark', false)
+            ->assertJsonPath('data.can_adjust', false);
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures")
+            ->assertForbidden();
+        $this->postJson("/api/v1/items/{$item->id_item}/reports/item_unit_price_analysis/physical-signatures")
+            ->assertForbidden();
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures/positions", [
+            'positions' => [['id' => 999, 'page' => 1, 'x' => 0, 'y' => 0, 'width' => 20, 'height' => 12]],
+        ])->assertForbidden();
+        $this->patchJson("/api/v1/items/{$item->id_item}/reports/item_unit_price_analysis/physical-signatures/positions", [
+            'positions' => [['id' => 999, 'page' => 1, 'x' => 0, 'y' => 0, 'width' => 20, 'height' => 12]],
+        ])->assertForbidden();
+
+        Permission::query()
+            ->where('id_rol', $signer->rol)
+            ->where('id_funcion', SystemFunction::query()->where('nombre_funcion', 'FIRMAR_REPORTES')->value('id_funcion'))
+            ->delete();
+        $physicalFunction = SystemFunction::query()->create([
+            'id_funcion' => 202,
+            'nombre_funcion' => 'FIRMAR_REPORTES_FISICOS',
+            'descripcion' => 'Firmar reportes fisicamente',
+            'clase' => 'PROYECTO',
+            'estado' => 'AC',
+        ]);
+        Permission::query()->create([
+            'id_permiso' => 202,
+            'id_rol' => $signer->rol,
+            'nombre_rol' => 'Tecnico Proyecto',
+            'id_funcion' => $physicalFunction->id_funcion,
+            'descripcion' => $physicalFunction->descripcion,
+            'estado' => 'AC',
+        ]);
+
+        $this->assertTrue(app(ProjectSignableReportService::class)->canSignPhysically($admin, 'general_budget'));
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget")
+            ->assertOk()
+            ->assertJsonPath('data.report.can_sign', false);
+
+        $projectPhysical = $this->getJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures")
+            ->assertOk()
+            ->assertJsonPath('data.can_mark', true)
+            ->assertJsonPath('data.can_adjust', true);
+        $itemPhysical = $this->getJson("/api/v1/items/{$item->id_item}/reports/item_unit_price_analysis/physical-signatures")
+            ->assertOk()
+            ->assertJsonPath('data.can_mark', true)
+            ->assertJsonPath('data.can_adjust', true);
+
+        $projectPhysical = $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures")
+            ->assertOk();
+        $itemPhysical = $this->postJson("/api/v1/items/{$item->id_item}/reports/item_unit_price_analysis/physical-signatures")
+            ->assertOk();
+
+        $projectPosition = $projectPhysical->json('data.items.0');
+        $itemPosition = $itemPhysical->json('data.items.0');
+
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures/positions", [
+            'positions' => [[
+                'id' => $projectPosition['id'],
+                'page' => $projectPosition['page'],
+                'x' => $projectPosition['x'],
+                'y' => $projectPosition['y'],
+                'width' => $projectPosition['width'],
+                'height' => $projectPosition['height'],
+            ]],
+        ])->assertOk();
+        $this->patchJson("/api/v1/items/{$item->id_item}/reports/item_unit_price_analysis/physical-signatures/positions", [
+            'positions' => [[
+                'id' => $itemPosition['id'],
+                'page' => $itemPosition['page'],
+                'x' => $itemPosition['x'],
+                'y' => $itemPosition['y'],
+                'width' => $itemPosition['width'],
+                'height' => $itemPosition['height'],
+            ]],
+        ])->assertOk();
     }
 
     public function test_signature_access_is_shared_by_the_project_family_and_only_root_creator_or_admin_can_manage_it(): void
@@ -370,6 +531,7 @@ class ProjectApiTest extends TestCase
         $signer = $this->createProjectUserWithPermissions([
             'PRESUPUESTO_GENERAL',
             'FIRMAR_REPORTES',
+            'FIRMAR_REPORTES_FISICOS',
         ]);
         DB::table('project_signature_authorized_users')
             ->where('id_proyecto_raiz', $project->id_proyecto)

@@ -23,6 +23,7 @@ class RolePermissionController extends Controller
         $assignedFunctionIds = Permission::query()
             ->active()
             ->where('id_rol', $role->id_rol)
+            ->whereNotNull('id_funcion')
             ->pluck('id_funcion');
 
         $availableFunctions = SystemFunction::query()
@@ -60,6 +61,7 @@ class RolePermissionController extends Controller
     {
         $query = $role->permissions()
             ->active()
+            ->whereNotNull('id_funcion')
             ->with('systemFunction')
             ->orderBy('id_funcion');
 
@@ -80,6 +82,7 @@ class RolePermissionController extends Controller
         $assignedFunctionIds = Permission::query()
             ->active()
             ->where('id_rol', $role->id_rol)
+            ->whereNotNull('id_funcion')
             ->pluck('id_funcion');
 
         $availableFunctions = SystemFunction::query()

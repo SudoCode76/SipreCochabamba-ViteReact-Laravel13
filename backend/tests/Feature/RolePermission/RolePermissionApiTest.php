@@ -97,6 +97,70 @@ class RolePermissionApiTest extends TestCase
             ->assertJsonPath('data.endpoints.attach', "/api/v1/roles/{$role->id_rol}/permissions/attach");
     }
 
+    public function test_null_legacy_permission_does_not_hide_available_functions(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $role = Role::query()->create([
+            'id_rol' => 2,
+            'nombre_rol' => 'Tecnico',
+            'estado' => 'AC',
+        ]);
+        SystemFunction::query()->create([
+            'id_funcion' => 2,
+            'nombre_funcion' => 'FIRMAR_REPORTES',
+            'descripcion' => 'Firmar reportes digitalmente',
+            'clase' => 'PROYECTO',
+            'estado' => 'AC',
+        ]);
+        Permission::query()->create([
+            'id_permiso' => 2,
+            'id_rol' => $role->id_rol,
+            'nombre_rol' => $role->nombre_rol,
+            'id_funcion' => null,
+            'descripcion' => 'Permiso legacy sin funcion',
+            'estado' => 'AC',
+        ]);
+
+        $this->getJson("/api/v1/roles/{$role->id_rol}/permissions/context")
+            ->assertOk()
+            ->assertJsonFragment(['name' => 'FIRMAR_REPORTES']);
+
+        $this->getJson("/api/v1/roles/{$role->id_rol}/permissions")
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 0)
+            ->assertJsonFragment(['name' => 'FIRMAR_REPORTES']);
+    }
+
+    public function test_role_permissions_context_exposes_digital_and_physical_signature_functions(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $migration = require database_path('migrations/2026_07_13_000002_ensure_separate_report_signature_functions.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, SystemFunction::query()
+            ->where('clase', 'PROYECTO')
+            ->where('nombre_funcion', 'FIRMAR_REPORTES')
+            ->count());
+        $this->assertSame(1, SystemFunction::query()
+            ->where('clase', 'PROYECTO')
+            ->where('nombre_funcion', 'FIRMAR_REPORTES_FISICOS')
+            ->count());
+
+        $role = Role::query()->create([
+            'id_rol' => 2,
+            'nombre_rol' => 'Tecnico',
+            'estado' => 'AC',
+        ]);
+
+        $this->getJson("/api/v1/roles/{$role->id_rol}/permissions/context")
+            ->assertOk()
+            ->assertJsonFragment(['name' => 'FIRMAR_REPORTES'])
+            ->assertJsonFragment(['name' => 'FIRMAR_REPORTES_FISICOS']);
+    }
+
     public function test_authenticated_user_can_sync_role_permissions(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());
@@ -311,6 +375,14 @@ class RolePermissionApiTest extends TestCase
             'nombre_funcion' => 'insumos.index',
             'descripcion' => 'Listar insumos',
             'clase' => 'Insumos',
+            'estado' => 'AC',
+        ]);
+        Permission::query()->create([
+            'id_permiso' => 2,
+            'id_rol' => $role->id_rol,
+            'nombre_rol' => $role->nombre_rol,
+            'id_funcion' => null,
+            'descripcion' => 'Permiso legacy sin funcion',
             'estado' => 'AC',
         ]);
 

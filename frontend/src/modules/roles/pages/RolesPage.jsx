@@ -46,6 +46,31 @@ const initialRoleForm = {
   status: "ACTIVO",
 };
 
+const functionDisplayNames = {
+  "ADMINISTRADOR:REPORTES_FIRMABLES": "Administrar reportes disponibles para firma",
+  "PROYECTO:CONFIGURAR_FIRMAS": "Configurar reportes firmables de proyectos",
+  "PROYECTO:FIRMAR_REPORTES": "Firmar reportes digitalmente",
+  "PROYECTO:FIRMAR_REPORTES_FISICOS": "Registrar y ajustar firmas físicas",
+};
+
+const functionAreaNames = {
+  ADMINISTRADOR: "Administración general",
+  PROYECTO: "Proyectos",
+};
+
+function getFunctionDisplayName(item) {
+  return functionDisplayNames[`${item?.class}:${item?.name}`] ?? item?.description ?? item?.name ?? "";
+}
+
+function getFunctionAreaName(className) {
+  return functionAreaNames[className] ?? className ?? "";
+}
+
+function isLegacySignatureFunction(item) {
+  return item?.name === "FIRMAS_DIGITALES"
+    && (item?.class === "PROYECTO" || item?.class === "ADMINISTRADOR");
+}
+
 function buildRoleForm(role) {
   return {
     role: role?.name ?? role?.nombre_rol ?? "",
@@ -75,6 +100,7 @@ export default function RolesPage() {
   const [permissionsSearch, setPermissionsSearch] = useState("");
   const [selectedFunctionLabel, setSelectedFunctionLabel] = useState("");
   const [selectedFunctionId, setSelectedFunctionId] = useState("");
+  const [isFunctionComboboxOpen, setIsFunctionComboboxOpen] = useState(false);
 
   const deferredSearchTerm = useDeferredValue(searchTerm.trim());
   const deferredPermissionsSearch = useDeferredValue(permissionsSearch.trim());
@@ -119,8 +145,29 @@ export default function RolesPage() {
 
   const permissionsRole = permissionsQuery.data?.data?.role || permissionsContextQuery.data?.data?.role || null;
   const permissions = permissionsQuery.data?.data?.permissions ?? [];
-  const availableFunctions = permissionsQuery.data?.data?.available_functions ?? permissionsContextQuery.data?.data?.available_functions ?? [];
+  const availableFunctions = useMemo(
+    () => (permissionsQuery.data?.data?.available_functions ?? permissionsContextQuery.data?.data?.available_functions ?? [])
+      .filter((item) => !isLegacySignatureFunction(item)),
+    [permissionsContextQuery.data, permissionsQuery.data],
+  );
   const permissionsMeta = permissionsQuery.data?.data?.meta ?? { current_page: 1, per_page: permissionsPerPage, total: 0, from: 0, to: 0, last_page: 1 };
+  const filteredAvailableFunctions = useMemo(() => {
+    const term = selectedFunctionId ? "" : selectedFunctionLabel.trim().toLocaleLowerCase("es");
+
+    if (!term) {
+      return availableFunctions;
+    }
+
+    return availableFunctions.filter((item) => [
+      item.name,
+      item.description,
+      item.class,
+      item.label,
+      getFunctionDisplayName(item),
+      getFunctionAreaName(item.class),
+    ]
+      .some((value) => String(value || "").toLocaleLowerCase("es").includes(term)));
+  }, [availableFunctions, selectedFunctionId, selectedFunctionLabel]);
 
   const totalPages = Math.max(1, meta.last_page || Math.ceil((meta.total || 0) / (meta.per_page || perPage)));
   const visiblePages = useMemo(() => {
@@ -188,6 +235,7 @@ export default function RolesPage() {
     setPermissionsSearch("");
     setSelectedFunctionLabel("");
     setSelectedFunctionId("");
+    setIsFunctionComboboxOpen(false);
     setIsPermissionsOpen(true);
   };
 
@@ -197,6 +245,7 @@ export default function RolesPage() {
     setPermissionsSearch("");
     setSelectedFunctionLabel("");
     setSelectedFunctionId("");
+    setIsFunctionComboboxOpen(false);
   };
 
   const createRoleMutation = useMutation({
@@ -263,6 +312,7 @@ export default function RolesPage() {
       toast.success("Función asignada correctamente al rol.");
       setSelectedFunctionId("");
       setSelectedFunctionLabel("");
+      setIsFunctionComboboxOpen(false);
       queryClient.invalidateQueries({ queryKey: ["role-permissions-context", selectedRoleId] });
       queryClient.invalidateQueries({ queryKey: ["role-permissions"] });
     },
@@ -331,11 +381,15 @@ export default function RolesPage() {
   };
 
   const handleFunctionLabelChange = (event) => {
-    const value = event.target.value;
-    setSelectedFunctionLabel(value);
+    setSelectedFunctionLabel(event.target.value);
+    setSelectedFunctionId("");
+    setIsFunctionComboboxOpen(true);
+  };
 
-    const matched = availableFunctions.find((item) => item.label === value);
-    setSelectedFunctionId(matched ? String(matched.id) : "");
+  const handleFunctionSelect = (item) => {
+    setSelectedFunctionLabel(getFunctionDisplayName(item));
+    setSelectedFunctionId(String(item.id));
+    setIsFunctionComboboxOpen(false);
   };
 
   const handleAttachFunction = () => {
@@ -735,19 +789,68 @@ export default function RolesPage() {
                     <Label htmlFor="selectedFunctionLabel" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                       Función disponible
                     </Label>
-                    <Input
-                      id="selectedFunctionLabel"
-                      value={selectedFunctionLabel}
-                      onChange={handleFunctionLabelChange}
-                      className="h-12 rounded-2xl border-border/80 bg-background/90"
-                      list="available-role-functions"
-                      placeholder="Selecciona o escribe una función disponible"
-                    />
-                    <datalist id="available-role-functions">
-                      {availableFunctions.map((item) => (
-                        <option key={item.id} value={item.label} />
-                      ))}
-                    </datalist>
+                    <div
+                      className="relative"
+                      onBlur={(event) => {
+                        if (!event.currentTarget.contains(event.relatedTarget)) {
+                          setIsFunctionComboboxOpen(false);
+                        }
+                      }}
+                    >
+                      <ClearableSearchInput
+                        id="selectedFunctionLabel"
+                        role="combobox"
+                        aria-autocomplete="list"
+                        aria-controls="available-role-functions"
+                        aria-expanded={isFunctionComboboxOpen}
+                        value={selectedFunctionLabel}
+                        onChange={handleFunctionLabelChange}
+                        onFocus={() => setIsFunctionComboboxOpen(true)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            setIsFunctionComboboxOpen(false);
+                          }
+                        }}
+                        onClear={() => {
+                          setSelectedFunctionLabel("");
+                          setSelectedFunctionId("");
+                          setIsFunctionComboboxOpen(true);
+                        }}
+                        className="h-12 rounded-2xl border-border/80 bg-background/90"
+                        placeholder="Buscar por función, descripción o controlador"
+                        autoComplete="off"
+                      />
+
+                      {isFunctionComboboxOpen && (
+                        <div
+                          id="available-role-functions"
+                          role="listbox"
+                          className="absolute z-30 mt-2 max-h-64 w-full overflow-y-auto rounded-2xl border border-border/80 bg-white p-1 shadow-xl"
+                        >
+                          {filteredAvailableFunctions.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              role="option"
+                              aria-selected={String(item.id) === selectedFunctionId}
+                              className={`w-full rounded-xl px-3 py-2 text-left transition hover:bg-muted ${String(item.id) === selectedFunctionId ? "bg-muted" : ""}`}
+                              onClick={() => handleFunctionSelect(item)}
+                            >
+                              <span className="block text-sm font-medium text-foreground">{getFunctionDisplayName(item)}</span>
+                              <span className="block text-xs text-muted-foreground">
+                                Área: {getFunctionAreaName(item.class)} · Código: {item.name}
+                              </span>
+                            </button>
+                          ))}
+
+                          {filteredAvailableFunctions.length === 0 && (
+                            <div className="px-3 py-3 text-sm text-muted-foreground">
+                              No se encontraron funciones disponibles.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <Button className="rounded-full bg-foreground text-background hover:bg-foreground/90" onClick={handleAttachFunction} disabled={!selectedFunctionId || attachMutation.isPending}>
@@ -815,9 +918,9 @@ export default function RolesPage() {
                           <thead>
                             <tr className="border-b border-border/70 bg-muted/30 text-left">
                               <th className="px-5 py-4 font-semibold text-foreground">N°</th>
-                              <th className="px-5 py-4 font-semibold text-foreground">Descripción</th>
-                              <th className="px-5 py-4 font-semibold text-foreground">Controlador</th>
-                              <th className="px-5 py-4 font-semibold text-foreground">Nombre de la función</th>
+                              <th className="px-5 py-4 font-semibold text-foreground">Función</th>
+                              <th className="px-5 py-4 font-semibold text-foreground">Área</th>
+                              <th className="px-5 py-4 font-semibold text-foreground">Código interno</th>
                               <th className="px-5 py-4 font-semibold text-foreground">Estado</th>
                               <th className="px-5 py-4 font-semibold text-foreground text-right">Quitar</th>
                             </tr>
@@ -826,8 +929,14 @@ export default function RolesPage() {
                             {permissions.map((permission, index) => (
                               <tr key={permission.id} className={index < permissions.length - 1 ? "border-b border-border/60" : ""}>
                                 <td className="px-5 py-4 align-top text-foreground">{(permissionsMeta.from || 1) + index}</td>
-                                <td className="px-5 py-4 align-top text-foreground">{permission.description}</td>
-                                <td className="px-5 py-4 align-top text-muted-foreground">{permission.function?.class}</td>
+                                <td className="px-5 py-4 align-top text-foreground">
+                                  {getFunctionDisplayName({
+                                    class: permission.function?.class,
+                                    name: permission.function?.name,
+                                    description: permission.description,
+                                  })}
+                                </td>
+                                <td className="px-5 py-4 align-top text-muted-foreground">{getFunctionAreaName(permission.function?.class)}</td>
                                 <td className="px-5 py-4 align-top text-muted-foreground">{permission.function?.name}</td>
                                 <td className="px-5 py-4 align-top">
                                   <Badge className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${permission.status === "AC" ? "bg-emerald-600 text-white" : "bg-slate-900 text-white"}`}>

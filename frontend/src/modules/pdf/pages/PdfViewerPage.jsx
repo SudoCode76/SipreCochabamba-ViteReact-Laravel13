@@ -556,7 +556,7 @@ export default function PdfViewerPage() {
   };
 
   const handlePhysicalPointerDown = (event, position) => {
-    if (!currentPhysicalPageSize || !physicalCanvasRef.current) {
+    if (!physicalStatus?.can_adjust || !currentPhysicalPageSize || !physicalCanvasRef.current) {
       return;
     }
 
@@ -607,7 +607,7 @@ export default function PdfViewerPage() {
   const handlePhysicalResizePointerDown = (event, position) => {
     event.stopPropagation();
 
-    if (!physicalCanvasRef.current) {
+    if (!physicalStatus?.can_adjust || !physicalCanvasRef.current) {
       return;
     }
 
@@ -638,6 +638,11 @@ export default function PdfViewerPage() {
   };
 
   const handleSavePhysicalPositions = async () => {
+    if (!physicalStatus?.can_adjust) {
+      setPhysicalError("Su rol no tiene permiso para ajustar firmas físicas.");
+      return;
+    }
+
     if (hasPhysicalOverlap(physicalPositions)) {
       setPhysicalPositionMessage("Las firmas físicas no pueden superponerse.");
       return;
@@ -706,7 +711,7 @@ export default function PdfViewerPage() {
               <button
                 type="button"
                 onClick={handleSavePhysicalPositions}
-                disabled={savingPhysicalPositions || physicalPositions.length === 0}
+                disabled={!physicalStatus?.can_adjust || savingPhysicalPositions || physicalPositions.length === 0}
                 className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {savingPhysicalPositions ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

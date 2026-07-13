@@ -209,7 +209,7 @@ export default function ReportSignatureStatus({ subject = "project", projectId, 
                 PDF con firmas físicas
               </Button>
             ) : null}
-            {canUsePhysicalSignatures && physicalSignatureCount > 0 ? (
+            {canUsePhysicalSignatures && physicalStatus?.can_adjust && physicalSignatureCount > 0 ? (
               <Button type="button" variant="outline" size="sm" className="rounded-full gap-2" onClick={openAdjustPhysicalSignatures}>
                 <Move className="h-4 w-4" />
                 Ajustar firmas

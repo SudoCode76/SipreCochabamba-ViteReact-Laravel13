@@ -13,6 +13,7 @@ class RolePermissionSyncService
     {
         $normalizedFunctionIds = collect($functionIds)
             ->map(static fn (mixed $id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
             ->unique()
             ->values();
 

@@ -123,26 +123,15 @@ class ProjectSignableReportService
 
     public function canSign(?User $user, string $reportKey): bool
     {
-        if (! $user) {
-            return false;
-        }
+        return $this->canSignReport($user, $reportKey, $this->hasSigningPermission($user));
+    }
 
-        if (! array_key_exists($reportKey, self::REPORTS)) {
-            return false;
-        }
+    public function canSignPhysically(?User $user, string $reportKey): bool
+    {
+        $hasPermission = $user?->isAdministrator()
+            || $this->permissionResolverService->allows($user, 'PROYECTO', ['FIRMAR_REPORTES_FISICOS']);
 
-        if (! $this->hasSigningPermission($user)) {
-            return false;
-        }
-
-        $permissions = $this->projectPermissionService->resolve($user);
-        $definition = self::REPORTS[$reportKey];
-
-        if (($definition['scope'] ?? 'project') === 'item') {
-            return true;
-        }
-
-        return (bool) ($permissions[$definition['permission']] ?? false);
+        return $this->canSignReport($user, $reportKey, $hasPermission);
     }
 
     public function findEnabled(string $reportKey): ?ProjectSignableReport
@@ -170,5 +159,22 @@ class ProjectSignableReportService
                 'FIRMAR_PRESUPUESTO_GENERAL',
                 'FIRMAS_DIGITALES',
             ]);
+    }
+
+    private function canSignReport(?User $user, string $reportKey, bool $hasSigningPermission): bool
+    {
+        if (! $user || ! $hasSigningPermission || ! array_key_exists($reportKey, self::REPORTS)) {
+            return false;
+        }
+
+        $definition = self::REPORTS[$reportKey];
+
+        if (($definition['scope'] ?? 'project') === 'item') {
+            return true;
+        }
+
+        $permissions = $this->projectPermissionService->resolve($user);
+
+        return (bool) ($permissions[$definition['permission']] ?? false);
     }
 }

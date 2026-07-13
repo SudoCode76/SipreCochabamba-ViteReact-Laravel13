@@ -227,19 +227,22 @@ class ProjectReportSignatureService
         $signatureAccess = $project instanceof Project
             ? $this->signatureAccessService->decision($project, $user)
             : ['mode' => null, 'allowed' => true, 'message' => null];
-        $hasSigningPermission = ! $project instanceof Project
-            || ($this->signableReportService->findEnabled($reportKey)
-                && $this->signableReportService->canSign($user, $reportKey));
+        $report = $this->signableReportService->findEnabled($reportKey);
+        $projectStatusAllowsSigning = ! $project instanceof Project
+            || ($report && $this->signableReportService->projectStatusAllowsSigning($report, $project->isFrozen()));
+        $canAdjust = (bool) $latestSigned
+            && $report
+            && $projectStatusAllowsSigning
+            && $this->signableReportService->canSignPhysically($user, $reportKey)
+            && $signatureAccess['allowed'];
         $this->assignMissingPhysicalPlacements($items, $pageSizes);
         $items = $items->fresh(['user']);
 
         return [
             'count' => $items->count(),
             'already_marked' => $items->contains('id_usuario', $user->id_usuario),
-            'can_mark' => (bool) $latestSigned
-                && filled($user->firma_imagen_path)
-                && $hasSigningPermission
-                && $signatureAccess['allowed'],
+            'can_mark' => $canAdjust && filled($user->firma_imagen_path),
+            'can_adjust' => $canAdjust,
             'needs_signature_image' => blank($user->firma_imagen_path),
             'signature_access' => $signatureAccess,
             'latest_signed' => $latestSigned ? $this->serialize($latestSigned) : null,
@@ -250,19 +253,7 @@ class ProjectReportSignatureService
 
     public function markPhysicalSignature(Project|Item $project, string $reportKey, array $parameters, User $user): array
     {
-        if ($project instanceof Project && ! $this->signableReportService->findEnabled($reportKey)) {
-            throw ValidationException::withMessages([
-                'report_key' => ['Este reporte no está habilitado para firma.'],
-            ]);
-        }
-
-        if ($project instanceof Project && ! $this->signableReportService->canSign($user, $reportKey)) {
-            throw new AuthorizationException('No tiene permisos para firmar este reporte.');
-        }
-
-        if ($project instanceof Project && ! $this->signatureAccessService->allows($project, $user)) {
-            throw new AuthorizationException('No está autorizado para firmar documentos de este proyecto.');
-        }
+        $this->assertCanUsePhysicalSignatures($project, $reportKey, $user);
 
         $normalizedParameters = $this->normalizeParameters($parameters);
         $parametersHash = $this->parametersHash($normalizedParameters);
@@ -330,6 +321,8 @@ class ProjectReportSignatureService
 
     public function updatePhysicalSignaturePositions(Project|Item $project, string $reportKey, array $parameters, array $positions, User $user): array
     {
+        $this->assertCanUsePhysicalSignatures($project, $reportKey, $user);
+
         $normalizedParameters = $this->normalizeParameters($parameters);
         $parametersHash = $this->parametersHash($normalizedParameters);
         $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalizedParameters);
@@ -403,6 +396,31 @@ class ProjectReportSignatureService
         });
 
         return $this->physicalSignatureStatus($project, $reportKey, $normalizedParameters, $user);
+    }
+
+    private function assertCanUsePhysicalSignatures(Project|Item $project, string $reportKey, User $user): void
+    {
+        $report = $this->signableReportService->findEnabled($reportKey);
+
+        if (! $report) {
+            throw ValidationException::withMessages([
+                'report_key' => ['Este reporte no está habilitado para firma.'],
+            ]);
+        }
+
+        if ($project instanceof Project && ! $this->signableReportService->projectStatusAllowsSigning($report, $project->isFrozen())) {
+            throw ValidationException::withMessages([
+                'project' => ['Este reporte solo permite firmas en proyectos FINALIZADOS.'],
+            ]);
+        }
+
+        if (! $this->signableReportService->canSignPhysically($user, $reportKey)) {
+            throw new AuthorizationException('No tiene permisos para firmar físicamente este reporte.');
+        }
+
+        if ($project instanceof Project && ! $this->signatureAccessService->allows($project, $user)) {
+            throw new AuthorizationException('No está autorizado para firmar documentos de este proyecto.');
+        }
     }
 
     public function physicalSignedPdf(Project|Item $project, string $reportKey, array $parameters): array

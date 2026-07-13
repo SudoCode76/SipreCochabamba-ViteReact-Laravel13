@@ -64,6 +64,7 @@ trait InteractsWithLegacyAuth
             $table->integer('item')->nullable();
             $table->date('fecha')->nullable();
             $table->integer('subalcaldia')->nullable();
+            $table->string('firma_imagen_path')->nullable();
 
             $table->foreign('id_unidad')->references('id_unidad')->on('unidad');
             $table->foreign('rol')->references('id_rol')->on('rol');
@@ -73,7 +74,7 @@ trait InteractsWithLegacyAuth
             $table->increments('id_permiso');
             $table->unsignedInteger('id_rol');
             $table->string('nombre_rol', 20)->nullable();
-            $table->unsignedInteger('id_funcion');
+            $table->unsignedInteger('id_funcion')->nullable();
             $table->string('descripcion', 100)->nullable();
             $table->string('estado', 2)->nullable();
 
