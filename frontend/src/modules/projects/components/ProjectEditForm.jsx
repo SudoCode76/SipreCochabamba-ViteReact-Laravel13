@@ -206,30 +206,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
           user_ids: currentSignatureDraft.user_ids,
         };
 
-        try {
-          await projectService.updateSignatureAccess(selectedProjectId, signaturePayload);
-        } catch (signatureError) {
-          const confirmation = signatureError.response?.data?.data;
-
-          if (signatureError.response?.status !== 409 || !confirmation?.requires_confirmation) {
-            throw signatureError;
-          }
-
-          const affected = (confirmation.affected_users ?? [])
-            .map((user) => `${user.full_name}: ${user.digital_signatures} digital(es), ${user.physical_signatures} física(s)`)
-            .join("\n");
-          const confirmed = window.confirm(`Estas personas ya tienen firmas registradas:\n\n${affected}\n\nSus firmas existentes permanecerán. ¿Desea retirar su autorización?`);
-
-          if (!confirmed) {
-            setSaving(false);
-            return;
-          }
-
-          await projectService.updateSignatureAccess(selectedProjectId, {
-            ...signaturePayload,
-            confirm_signed_removals: true,
-          });
-        }
+        await projectService.updateSignatureAccess(selectedProjectId, signaturePayload);
 
         await queryClient.invalidateQueries({ queryKey: ["project-signature-access", selectedProjectId] });
         await queryClient.invalidateQueries({ queryKey: ["project-report-signature-status"] });

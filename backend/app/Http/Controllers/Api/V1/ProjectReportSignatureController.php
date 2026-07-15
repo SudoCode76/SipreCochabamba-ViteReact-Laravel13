@@ -57,11 +57,8 @@ class ProjectReportSignatureController extends Controller
     public function updateProjectAccess(Request $request, Project $project): JsonResponse
     {
         $validated = $request->validate([
-            'mode' => ['required', 'string', Rule::in([
-                ProjectSignatureAccessService::MODE_ALL,
-                ProjectSignatureAccessService::MODE_SELECTED,
-            ])],
-            'user_ids' => ['nullable', 'array'],
+            'mode' => ['nullable', 'string', Rule::in([ProjectSignatureAccessService::MODE_SELECTED])],
+            'user_ids' => ['required', 'array', 'min:1'],
             'user_ids.*' => ['integer', 'distinct', 'exists:usuario,id_usuario'],
             'confirm_signed_removals' => ['nullable', 'boolean'],
         ]);
@@ -70,8 +67,8 @@ class ProjectReportSignatureController extends Controller
             $result = $this->signatureAccessService->update(
                 $project,
                 $request->user(),
-                $validated['mode'],
-                $validated['user_ids'] ?? [],
+                ProjectSignatureAccessService::MODE_SELECTED,
+                $validated['user_ids'],
                 (bool) ($validated['confirm_signed_removals'] ?? false),
                 $request->ip()
             );
@@ -260,6 +257,8 @@ class ProjectReportSignatureController extends Controller
             'access_token' => ['nullable', 'string'],
             'acces_token' => ['nullable', 'string'],
             'sign_all_pages' => ['nullable', 'boolean'],
+            'page_scope' => ['nullable', 'string', Rule::in(['last', 'all'])],
+            'layout_hash' => ['nullable', 'string', 'size:64'],
         ]);
 
         try {
@@ -358,6 +357,109 @@ class ProjectReportSignatureController extends Controller
     public function physicalSignatures(Request $request, Project $project, string $reportKey): JsonResponse
     {
         return $this->subjectPhysicalSignatures($request, $project, $reportKey);
+    }
+
+    public function preparePreview(Request $request, Project $project, string $reportKey): JsonResponse
+    {
+        if (! $this->reportAllowedForSubject($reportKey, $project)) {
+            return ApiResponse::error('El reporte solicitado no existe.', null, 404);
+        }
+
+        $validated = $request->validate([
+            'format' => ['nullable', 'string'],
+            'type' => ['nullable', 'integer'],
+            'fecha' => ['nullable', 'date'],
+            'mode' => ['nullable', 'string'],
+            'tipo_desglose' => ['nullable', 'integer'],
+            'page_scope' => ['required', 'string', Rule::in(['last', 'all'])],
+        ]);
+        $pageScope = $validated['page_scope'];
+        unset($validated['page_scope']);
+
+        try {
+            $preview = $this->signatureService->prepareProjectPreview(
+                $project,
+                $reportKey,
+                $validated,
+                $pageScope,
+                $request->user()
+            );
+        } catch (AuthorizationException $exception) {
+            return ApiResponse::error($exception->getMessage(), ['authorization' => [$exception->getMessage()]], 403);
+        }
+
+        $preview['preview_url'] = url("/api/v1/projects/{$project->id_proyecto}/reports/{$reportKey}/signature-preview/pdf")
+            .'?'.http_build_query($validated);
+
+        return ApiResponse::success($preview, 'Previsualización de firmas preparada correctamente.');
+    }
+
+    public function updatePreviewPositions(Request $request, Project $project, string $reportKey): JsonResponse
+    {
+        $validated = $request->validate([
+            'format' => ['nullable', 'string'],
+            'type' => ['nullable', 'integer'],
+            'fecha' => ['nullable', 'date'],
+            'mode' => ['nullable', 'string'],
+            'tipo_desglose' => ['nullable', 'integer'],
+            'layout_hash' => ['required', 'string', 'size:64'],
+            'positions' => ['required', 'array'],
+            'positions.*.id' => ['required', 'integer'],
+            'positions.*.x' => ['required', 'numeric', 'min:0'],
+            'positions.*.y' => ['required', 'numeric', 'min:0'],
+            'positions.*.width' => ['required', 'numeric', 'min:20'],
+            'positions.*.height' => ['required', 'numeric', 'min:12'],
+        ]);
+        $positions = $validated['positions'];
+        unset($validated['positions']);
+
+        try {
+            $preview = $this->signatureService->updatePhysicalSignaturePositions(
+                $project,
+                $reportKey,
+                $validated,
+                $positions,
+                $request->user()
+            );
+        } catch (AuthorizationException $exception) {
+            return ApiResponse::error($exception->getMessage(), ['authorization' => [$exception->getMessage()]], 403);
+        }
+
+        $preview['preview_url'] = url("/api/v1/projects/{$project->id_proyecto}/reports/{$reportKey}/signature-preview/pdf")
+            .'?'.http_build_query($this->signatureService->normalizeParameters($validated));
+
+        return ApiResponse::success($preview, 'Posiciones de firmas guardadas correctamente.');
+    }
+
+    public function previewPdf(Request $request, Project $project, string $reportKey)
+    {
+        $validated = $request->validate([
+            'format' => ['nullable', 'string'],
+            'type' => ['nullable', 'integer'],
+            'fecha' => ['nullable', 'date'],
+            'mode' => ['nullable', 'string'],
+            'tipo_desglose' => ['nullable', 'integer'],
+        ]);
+        $pdf = $this->signatureService->projectPreviewPdf($project, $reportKey, $validated, $request->user());
+
+        return response($pdf['content'], 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$pdf['filename'].'"',
+        ]);
+    }
+
+    public function cancel(Request $request, Project $project, ProjectReportSignature $signature): JsonResponse
+    {
+        try {
+            $cancelled = $this->signatureService->cancel($project, $signature, $request->user());
+        } catch (AuthorizationException $exception) {
+            return ApiResponse::error($exception->getMessage(), ['authorization' => [$exception->getMessage()]], 403);
+        }
+
+        return ApiResponse::success(
+            ['signature' => $this->signatureService->serialize($cancelled)],
+            'Solicitud de firma cancelada correctamente.'
+        );
     }
 
     public function itemPhysicalSignatures(Request $request, Item $item, string $reportKey): JsonResponse

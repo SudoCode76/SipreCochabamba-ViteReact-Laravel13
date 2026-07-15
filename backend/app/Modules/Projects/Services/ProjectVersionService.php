@@ -16,6 +16,7 @@ class ProjectVersionService
         private readonly ProjectItemInputSnapshotService $snapshotService,
         private readonly ProjectPercentageSnapshotService $percentageSnapshotService,
         private readonly ProjectHistoryService $historyService,
+        private readonly ProjectSignatureAccessService $signatureAccessService,
     ) {}
 
     public function versions(Project $project): Collection
@@ -93,6 +94,7 @@ class ProjectVersionService
                 ->all();
 
             $newVersion = Project::query()->create($payload);
+            $this->signatureAccessService->inherit($locked, $newVersion, $actor);
             $this->copyItemsAndSnapshots($locked, $newVersion, $actor);
             $this->percentageSnapshotService->copy($locked, $newVersion);
             $this->snapshotService->ensureForProject($newVersion);

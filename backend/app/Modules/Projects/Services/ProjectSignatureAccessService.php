@@ -3,20 +3,20 @@
 namespace App\Modules\Projects\Services;
 
 use App\Models\Project;
-use App\Models\ProjectReportPhysicalSignature;
 use App\Models\ProjectReportSignature;
 use App\Models\User;
 use App\Services\AuditService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class ProjectSignatureAccessService
 {
-    public const MODE_ALL = 'all';
-
     public const MODE_SELECTED = 'selected';
+
+    public const MODE_ALL = 'all';
 
     public function __construct(
         private readonly ProjectHistoryService $historyService,
@@ -25,87 +25,78 @@ class ProjectSignatureAccessService
 
     public function ensureDefaults(Project $project): void
     {
-        $root = $this->rootProject($project);
-
-        if (! in_array($root->signature_access_mode, [self::MODE_ALL, self::MODE_SELECTED], true)) {
-            $root->forceFill(['signature_access_mode' => self::MODE_SELECTED])->save();
-        }
-
-        if ($root->id_usuario) {
-            DB::table('project_signature_authorized_users')->insertOrIgnore([
-                'id_proyecto_raiz' => $root->id_proyecto,
-                'id_usuario' => $root->id_usuario,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        }
+        // Existing projects stay explicitly unconfigured until their owner chooses a finite list.
     }
 
     public function initialize(Project $project, User $creator, ?array $configuration): void
     {
-        $mode = (string) ($configuration['mode'] ?? self::MODE_SELECTED);
-        $requestedIds = collect($configuration['user_ids'] ?? [$creator->id_usuario])
+        $ids = collect($configuration['user_ids'] ?? [$creator->id_usuario])
             ->map(fn ($id): int => (int) $id)
+            ->filter()
             ->unique()
             ->values();
 
-        if ($mode === self::MODE_SELECTED && ! $requestedIds->contains((int) $creator->id_usuario)) {
-            throw ValidationException::withMessages([
-                'signature_access.user_ids' => ['El creador original del proyecto debe permanecer autorizado.'],
-            ]);
-        }
+        $this->replaceSigners($project, $ids);
+        $project->forceFill([
+            'signature_access_mode' => self::MODE_SELECTED,
+            'signature_signers_configured_at' => now(),
+            'signature_signers_locked_at' => null,
+        ])->save();
+    }
 
-        $requestedIds = $requestedIds->push((int) $creator->id_usuario)->unique()->values();
-        $root = $this->rootProject($project);
-        $root->forceFill(['signature_access_mode' => $mode])->save();
+    public function inherit(Project $source, Project $target, User $creator): void
+    {
+        $ids = DB::table('project_version_signature_users')
+            ->where('id_proyecto', $source->id_proyecto)
+            ->pluck('id_usuario')
+            ->map(fn ($id): int => (int) $id);
 
-        DB::table('project_signature_authorized_users')
-            ->where('id_proyecto_raiz', $root->id_proyecto)
-            ->delete();
-
-        DB::table('project_signature_authorized_users')->insert(
-            $requestedIds->map(fn (int $userId): array => [
-                'id_proyecto_raiz' => $root->id_proyecto,
-                'id_usuario' => $userId,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ])->all()
-        );
+        $this->replaceSigners($target, $ids->isEmpty() ? collect([$creator->id_usuario]) : $ids);
+        $target->forceFill([
+            'signature_access_mode' => self::MODE_SELECTED,
+            'signature_signers_configured_at' => now(),
+            'signature_signers_locked_at' => null,
+        ])->save();
     }
 
     public function configuration(Project $project, ?User $user): array
     {
-        $this->ensureDefaults($project);
         $root = $this->rootProject($project)->loadMissing('creator');
-        $authorizedUsers = User::query()
-            ->whereIn('id_usuario', $this->authorizedUserIds($root))
-            ->orderBy('funcionario')
-            ->get();
+        $signers = $this->signers($project);
 
         return [
+            'project_id' => $project->id_proyecto,
             'root_project_id' => $root->id_proyecto,
-            'mode' => $root->signature_access_mode ?: self::MODE_SELECTED,
+            'mode' => self::MODE_SELECTED,
+            'configured' => filled($project->signature_signers_configured_at),
+            'locked' => filled($project->signature_signers_locked_at),
+            'locked_at' => $project->signature_signers_locked_at?->toIso8601String(),
             'creator' => $root->creator ? $this->serializeUser($root->creator, true) : null,
-            'authorized_users' => $authorizedUsers
-                ->map(fn (User $authorized): array => $this->serializeUser($authorized, $authorized->id_usuario === $root->id_usuario))
-                ->values()
-                ->all(),
-            'can_manage' => $this->canManage($project, $user),
+            'authorized_users' => $signers->map(fn (User $signer): array => $this->serializeUser(
+                $signer,
+                $signer->id_usuario === $root->id_usuario,
+                $signer->signature_image_path_snapshot ?? null,
+            ))->values()->all(),
+            'can_manage' => $this->canManage($project, $user) && blank($project->signature_signers_locked_at),
             'current_user_allowed' => $this->allows($project, $user),
         ];
     }
 
     public function decision(Project $project, ?User $user): array
     {
-        $this->ensureDefaults($project);
-        $root = $this->rootProject($project);
-        $mode = $root->signature_access_mode ?: self::MODE_SELECTED;
-        $allowed = $this->allows($project, $user);
+        $configured = filled($project->signature_signers_configured_at);
+        $allowed = $configured && $this->allows($project, $user);
 
         return [
-            'mode' => $mode,
+            'mode' => self::MODE_SELECTED,
+            'configured' => $configured,
+            'locked' => filled($project->signature_signers_locked_at),
             'allowed' => $allowed,
-            'message' => $allowed ? null : 'No está incluido entre las personas autorizadas para firmar este proyecto.',
+            'message' => match (true) {
+                ! $configured => 'Debe configurar una lista de firmantes para esta versión antes de firmar.',
+                ! $allowed => 'No está incluido entre las personas autorizadas para firmar esta versión.',
+                default => null,
+            },
         ];
     }
 
@@ -122,20 +113,11 @@ class ProjectSignatureAccessService
 
     public function allows(Project $project, ?User $user): bool
     {
-        if (! $user) {
-            return false;
-        }
-
-        $root = $this->rootProject($project);
-
-        if (($root->signature_access_mode ?: self::MODE_SELECTED) === self::MODE_ALL) {
-            return true;
-        }
-
-        return DB::table('project_signature_authorized_users')
-            ->where('id_proyecto_raiz', $root->id_proyecto)
-            ->where('id_usuario', $user->id_usuario)
-            ->exists();
+        return $user
+            && DB::table('project_version_signature_users')
+                ->where('id_proyecto', $project->id_proyecto)
+                ->where('id_usuario', $user->id_usuario)
+                ->exists();
     }
 
     public function update(Project $project, User $actor, string $mode, array $userIds, bool $confirmSignedRemovals, ?string $ip): array
@@ -144,68 +126,135 @@ class ProjectSignatureAccessService
             throw new AuthorizationException('Solo el creador del proyecto o un administrador puede cambiar esta configuración.');
         }
 
-        $this->ensureDefaults($project);
-        $root = $this->rootProject($project);
-        $previousMode = $root->signature_access_mode ?: self::MODE_SELECTED;
-        $currentIds = $this->authorizedUserIds($root);
-        $requestedIds = collect($userIds)->map(fn ($id): int => (int) $id)->unique()->values();
-
-        if ($mode === self::MODE_SELECTED && ! $requestedIds->contains((int) $root->id_usuario)) {
+        if ($project->signature_signers_locked_at) {
             throw ValidationException::withMessages([
-                'user_ids' => ['El creador original del proyecto debe permanecer autorizado.'],
+                'user_ids' => ['Los firmantes de esta versión quedaron bloqueados por su primera firma digital. Cree una nueva versión para cambiarlos.'],
             ]);
         }
 
-        $removedIds = match (true) {
-            $mode !== self::MODE_SELECTED => collect(),
-            $previousMode === self::MODE_ALL => $this->signedUserIds($root)->diff($requestedIds)->values(),
-            default => $currentIds->diff($requestedIds)->values(),
-        };
-        $affectedUsers = $this->signedUsers($root, $removedIds->all());
-
-        if ($affectedUsers !== [] && ! $confirmSignedRemovals) {
-            return [
-                'requires_confirmation' => true,
-                'affected_users' => $affectedUsers,
-            ];
+        if ($this->hasPendingAttempt($project)) {
+            throw ValidationException::withMessages([
+                'user_ids' => ['Existe una firma digital en proceso. Cancélela antes de cambiar los firmantes.'],
+            ]);
         }
 
-        DB::transaction(function () use ($root, $mode, $currentIds, $requestedIds): void {
-            $root->forceFill(['signature_access_mode' => $mode])->save();
+        $ids = collect($userIds)->map(fn ($id): int => (int) $id)->filter()->unique()->values();
+        $previousIds = DB::table('project_version_signature_users')
+            ->where('id_proyecto', $project->id_proyecto)
+            ->pluck('id_usuario')
+            ->map(fn ($id): int => (int) $id);
 
-            if ($mode !== self::MODE_SELECTED) {
-                return;
-            }
+        $this->replaceSigners($project, $ids);
+        $project->forceFill([
+            'signature_access_mode' => self::MODE_SELECTED,
+            'signature_signers_configured_at' => now(),
+        ])->save();
 
-            DB::table('project_signature_authorized_users')
-                ->where('id_proyecto_raiz', $root->id_proyecto)
-                ->whereIn('id_usuario', $currentIds->diff($requestedIds)->all())
-                ->delete();
-
-            foreach ($requestedIds->diff($currentIds) as $userId) {
-                DB::table('project_signature_authorized_users')->insert([
-                    'id_proyecto_raiz' => $root->id_proyecto,
-                    'id_usuario' => $userId,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-        });
-
-        $addedIds = $mode === self::MODE_SELECTED ? $requestedIds->diff($currentIds)->values()->all() : [];
-        $removed = $mode === self::MODE_SELECTED ? $currentIds->diff($requestedIds)->values()->all() : [];
         $this->historyService->recordSignatureAccessUpdated($project, $actor, $ip, [
-            'previous_mode' => $previousMode,
-            'mode' => $mode,
-            'added_users' => $this->userSummaries($addedIds),
-            'removed_users' => $this->userSummaries($removed),
+            'mode' => self::MODE_SELECTED,
+            'added_users' => $this->userSummaries($ids->diff($previousIds)->all()),
+            'removed_users' => $this->userSummaries($previousIds->diff($ids)->all()),
         ]);
-        $this->auditService->record($actor, $ip, 'PROYECTOS: se actualizó la configuración de firmantes de '.$root->nombre_proyecto);
+        $this->auditService->record($actor, $ip, 'PROYECTOS: se actualizó la lista de firmantes de '.$project->nombre_proyecto);
 
         return [
             'requires_confirmation' => false,
-            'configuration' => $this->configuration($project, $actor),
+            'configuration' => $this->configuration($project->refresh(), $actor),
         ];
+    }
+
+    public function signers(Project $project): Collection
+    {
+        $rows = DB::table('project_version_signature_users')
+            ->where('id_proyecto', $project->id_proyecto)
+            ->get()
+            ->keyBy('id_usuario');
+
+        return User::query()
+            ->whereIn('id_usuario', $rows->keys())
+            ->orderBy('funcionario')
+            ->get()
+            ->each(function (User $user) use ($rows): void {
+                $row = $rows[$user->id_usuario];
+                $user->setAttribute('signature_image_path_snapshot', $row->signature_image_path);
+                $user->setAttribute('signature_image_hash_snapshot', $row->signature_image_hash);
+            });
+    }
+
+    public function lock(Project $project, Collection $physicalSignatures): void
+    {
+        if ($project->signature_signers_locked_at) {
+            return;
+        }
+
+        DB::transaction(function () use ($project, $physicalSignatures): void {
+            foreach ($physicalSignatures as $signature) {
+                $hash = Storage::disk('public')->exists($signature->signature_image_path)
+                    ? hash('sha256', Storage::disk('public')->get($signature->signature_image_path))
+                    : null;
+
+                DB::table('project_version_signature_users')
+                    ->where('id_proyecto', $project->id_proyecto)
+                    ->where('id_usuario', $signature->id_usuario)
+                    ->update([
+                        'signature_image_path' => $signature->signature_image_path,
+                        'signature_image_hash' => $hash,
+                        'updated_at' => now(),
+                    ]);
+            }
+
+            $project->forceFill(['signature_signers_locked_at' => now()])->save();
+        });
+    }
+
+    public function hasPendingAttempt(Project $project): bool
+    {
+        return ProjectReportSignature::query()
+            ->where('id_proyecto', $project->id_proyecto)
+            ->whereIn('status', ['pending', 'auth_pending', 'sent'])
+            ->exists();
+    }
+
+    private function replaceSigners(Project $project, Collection $ids): void
+    {
+        if ($ids->isEmpty()) {
+            throw ValidationException::withMessages([
+                'user_ids' => ['Seleccione al menos una persona firmante.'],
+            ]);
+        }
+
+        $activeIds = User::query()
+            ->whereIn('id_usuario', $ids)
+            ->where('estado', 'AC')
+            ->pluck('id_usuario')
+            ->map(fn ($id): int => (int) $id);
+
+        if ($activeIds->count() !== $ids->count()) {
+            throw ValidationException::withMessages([
+                'user_ids' => ['Todos los firmantes seleccionados deben ser usuarios activos.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($project, $ids): void {
+            DB::table('project_version_signature_users')->where('id_proyecto', $project->id_proyecto)->delete();
+            DB::table('project_version_signature_users')->insert($ids->map(fn (int $id): array => [
+                'id_proyecto' => $project->id_proyecto,
+                'id_usuario' => $id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ])->all());
+
+            if (DB::getSchemaBuilder()->hasTable('project_signature_authorized_users')) {
+                $rootId = (int) ($project->id_proyecto_raiz ?: $project->id_proyecto);
+                DB::table('project_signature_authorized_users')->where('id_proyecto_raiz', $rootId)->delete();
+                DB::table('project_signature_authorized_users')->insert($ids->map(fn (int $id): array => [
+                    'id_proyecto_raiz' => $rootId,
+                    'id_usuario' => $id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])->all());
+            }
+        });
     }
 
     private function rootProject(Project $project): Project
@@ -217,101 +266,25 @@ class ProjectSignatureAccessService
             : Project::query()->findOrFail($rootId);
     }
 
-    private function authorizedUserIds(Project $root): Collection
+    private function userSummaries(array $ids): array
     {
-        return DB::table('project_signature_authorized_users')
-            ->where('id_proyecto_raiz', $root->id_proyecto)
-            ->pluck('id_usuario')
-            ->map(fn ($id): int => (int) $id);
-    }
-
-    private function userSummaries(array $userIds): array
-    {
-        return User::query()
-            ->whereIn('id_usuario', $userIds)
-            ->orderBy('funcionario')
-            ->get()
-            ->map(fn (User $user): array => [
-                'id' => $user->id_usuario,
-                'full_name' => $user->funcionario,
-            ])
+        return User::query()->whereIn('id_usuario', $ids)->orderBy('funcionario')->get()
+            ->map(fn (User $user): array => ['id' => $user->id_usuario, 'full_name' => $user->funcionario])
             ->all();
     }
 
-    private function signedUsers(Project $root, array $userIds): array
+    private function serializeUser(User $user, bool $isCreator, ?string $snapshotPath = null): array
     {
-        if ($userIds === []) {
-            return [];
-        }
+        $path = $snapshotPath ?: $user->firma_imagen_path;
 
-        $projectIds = Project::query()
-            ->where('id_proyecto', $root->id_proyecto)
-            ->orWhere('id_proyecto_raiz', $root->id_proyecto)
-            ->pluck('id_proyecto');
-        $digital = ProjectReportSignature::query()
-            ->whereIn('id_proyecto', $projectIds)
-            ->whereIn('id_usuario', $userIds)
-            ->where('status', 'signed')
-            ->selectRaw('id_usuario, COUNT(*) as total')
-            ->groupBy('id_usuario')
-            ->pluck('total', 'id_usuario');
-        $physical = ProjectReportPhysicalSignature::query()
-            ->whereIn('id_proyecto', $projectIds)
-            ->whereIn('id_usuario', $userIds)
-            ->selectRaw('id_usuario, COUNT(*) as total')
-            ->groupBy('id_usuario')
-            ->pluck('total', 'id_usuario');
-
-        return User::query()
-            ->whereIn('id_usuario', $userIds)
-            ->get()
-            ->map(function (User $user) use ($digital, $physical): array {
-                $digitalCount = (int) ($digital[$user->id_usuario] ?? 0);
-                $physicalCount = (int) ($physical[$user->id_usuario] ?? 0);
-
-                return [
-                    'id' => $user->id_usuario,
-                    'full_name' => $user->funcionario,
-                    'digital_signatures' => $digitalCount,
-                    'physical_signatures' => $physicalCount,
-                    'total_signatures' => $digitalCount + $physicalCount,
-                ];
-            })
-            ->filter(fn (array $user): bool => $user['total_signatures'] > 0)
-            ->values()
-            ->all();
-    }
-
-    private function signedUserIds(Project $root): Collection
-    {
-        $projectIds = Project::query()
-            ->where('id_proyecto', $root->id_proyecto)
-            ->orWhere('id_proyecto_raiz', $root->id_proyecto)
-            ->pluck('id_proyecto');
-
-        return ProjectReportSignature::query()
-            ->whereIn('id_proyecto', $projectIds)
-            ->where('status', 'signed')
-            ->pluck('id_usuario')
-            ->merge(
-                ProjectReportPhysicalSignature::query()
-                    ->whereIn('id_proyecto', $projectIds)
-                    ->pluck('id_usuario')
-            )
-            ->filter()
-            ->map(fn ($id): int => (int) $id)
-            ->unique()
-            ->values();
-    }
-
-    private function serializeUser(User $user, bool $isCreator): array
-    {
         return [
             'id' => $user->id_usuario,
             'full_name' => $user->funcionario,
             'username' => $user->username,
             'status' => $user->estado,
             'is_creator' => $isCreator,
+            'has_signature_image' => filled($path) && Storage::disk('public')->exists($path),
+            'signature_image_url' => $path ? url(Storage::url($path)) : null,
         ];
     }
 }

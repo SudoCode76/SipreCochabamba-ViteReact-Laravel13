@@ -14,6 +14,7 @@ trait InteractsWithLegacyProjects
     {
         Schema::disableForeignKeyConstraints();
         Schema::dropIfExists('project_signature_authorized_users');
+        Schema::dropIfExists('project_version_signature_users');
         Schema::dropIfExists('proyecto_historial');
         Schema::dropIfExists('proyecto_item');
         Schema::dropIfExists('proyecto');
@@ -47,6 +48,8 @@ trait InteractsWithLegacyProjects
             $table->timestamp('fecha_version')->nullable();
             $table->timestamp('fecha_finalizacion')->nullable();
             $table->string('signature_access_mode', 20)->default('selected');
+            $table->timestamp('signature_signers_configured_at')->nullable();
+            $table->timestamp('signature_signers_locked_at')->nullable();
         });
 
         Schema::create('project_signature_authorized_users', function (Blueprint $table): void {
@@ -56,6 +59,23 @@ trait InteractsWithLegacyProjects
             $table->timestamps();
             $table->unique(['id_proyecto_raiz', 'id_usuario']);
         });
+
+        Schema::create('project_version_signature_users', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedInteger('id_proyecto');
+            $table->unsignedInteger('id_usuario');
+            $table->string('signature_image_path')->nullable();
+            $table->string('signature_image_hash', 64)->nullable();
+            $table->timestamps();
+            $table->unique(['id_proyecto', 'id_usuario']);
+        });
+
+        if (Schema::hasTable('project_report_physical_signatures')
+            && ! Schema::hasColumn('project_report_physical_signatures', 'page_scope')) {
+            Schema::table('project_report_physical_signatures', function (Blueprint $table): void {
+                $table->string('page_scope', 10)->default('all');
+            });
+        }
 
         Schema::create('modulo', function (Blueprint $table): void {
             $table->increments('id_modulo');
@@ -143,12 +163,23 @@ trait InteractsWithLegacyProjects
             'es_version_actual' => true,
             'fecha_version' => now(),
             'fecha_finalizacion' => null,
+            'signature_signers_configured_at' => now(),
         ], $overrides));
 
         $rootId = (int) ($project->id_proyecto_raiz ?: $project->id_proyecto);
         if ($project->id_proyecto === $rootId && $project->id_usuario) {
             DB::table('project_signature_authorized_users')->insertOrIgnore([
                 'id_proyecto_raiz' => $rootId,
+                'id_usuario' => $project->id_usuario,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+
+        if ($project->id_usuario) {
+            DB::table('project_version_signature_users')->insertOrIgnore([
+                'id_proyecto' => $project->id_proyecto,
                 'id_usuario' => $project->id_usuario,
                 'created_at' => now(),
                 'updated_at' => now(),

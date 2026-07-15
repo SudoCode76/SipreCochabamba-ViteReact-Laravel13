@@ -96,7 +96,7 @@ export default function ReportSignatureStatus({ subject = "project", projectId, 
 
   const status = statusQuery.data?.data;
   const latestSigned = status?.latest_signed;
-  const canUsePhysicalSignatures = Boolean(latestSigned?.has_signed_file && !status?.is_signed_stale);
+  const canUsePhysicalSignatures = Boolean(isItemSubject && latestSigned?.has_signed_file && !status?.is_signed_stale);
 
   const physicalQuery = useQuery({
     queryKey: [`${queryScope}-report-physical-signatures`, subjectId, reportKey, parametersKey],

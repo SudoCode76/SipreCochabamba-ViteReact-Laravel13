@@ -13,6 +13,7 @@ use App\Services\Citizenship\CiudadaniaDigitalClient;
 use App\Services\Citizenship\CiudadaniaDigitalException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -30,6 +31,14 @@ class ProjectReportSignatureService
 
     private const SIGNATURE_FOOTER_HEIGHT = 30.0;
 
+    private const PHYSICAL_ZONE_MARGIN = 4.0;
+
+    private const PHYSICAL_SIGNATURE_GAP = 4.0;
+
+    private const MIN_PHYSICAL_SIGNATURE_WIDTH = 20.0;
+
+    private const MIN_PHYSICAL_SIGNATURE_HEIGHT = 12.0;
+
     public function __construct(
         private readonly ProjectSignableReportService $signableReportService,
         private readonly ProjectSignatureAccessService $signatureAccessService,
@@ -42,8 +51,21 @@ class ProjectReportSignatureService
     {
         $this->assertCanStart($project, $reportKey, $user);
 
+        $requestedPageScope = ($parameters['page_scope'] ?? null) === 'all' || $this->shouldSignAllPages($parameters) ? 'all' : 'last';
+        $requestedLayoutHash = (string) ($parameters['layout_hash'] ?? '');
         $normalizedParameters = $this->normalizeParameters($parameters);
         $hash = $this->parametersHash($normalizedParameters);
+
+        if ($project instanceof Project && $this->forSubject(ProjectReportSignature::query(), $project)
+            ->where('report_key', $reportKey)
+            ->where('parameters_hash', $hash)
+            ->whereIn('status', ['pending', 'auth_pending', 'sent'])
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'signature' => ['Ya existe una firma digital en proceso para este PDF.'],
+            ]);
+        }
+
         $this->deleteIncompleteAttempts($project, $reportKey, $hash, $user);
 
         $pdf = $project instanceof Item
@@ -57,9 +79,49 @@ class ProjectReportSignatureService
                 || (! $previous->base_document_hash && $project instanceof Project && $this->isProjectFrozen($project))
             );
 
+        if ($project instanceof Project && $previous && ! $canDeriveFromPrevious) {
+            throw ValidationException::withMessages([
+                'signature' => ['El reporte cambió después de su firma digital. Cree una nueva versión para volver a firmarlo.'],
+            ]);
+        }
+
+        $pageScope = $previous
+            ? (string) (data_get($previous->request_payload, 'page_scope') ?: $requestedPageScope)
+            : $requestedPageScope;
+        $layoutHash = $previous
+            ? (string) (data_get($previous->request_payload, 'layout_hash') ?: $requestedLayoutHash)
+            : $requestedLayoutHash;
+
         if ($canDeriveFromPrevious && $previous?->signed_file_path && Storage::disk('local')->exists($previous->signed_file_path)) {
             $baseContent = Storage::disk('local')->get($previous->signed_file_path);
             $basePath = $previous->signed_file_path;
+        } elseif ($project instanceof Project) {
+            $items = $this->physicalSignatures($project, $reportKey, $hash, $baseDocumentHash);
+            $currentLayoutHash = $items->isEmpty()
+                ? ''
+                : $this->projectLayoutHash($project, $reportKey, $normalizedParameters, $pageScope, $items);
+            $missing = $this->projectSignatureBlockers(
+                $this->signatureAccessService->signers($project),
+                $project->signature_signers_locked_at !== null
+            );
+
+            if ($missing !== []) {
+                throw ValidationException::withMessages([
+                    'signature_images' => collect($missing)
+                        ->map(fn (array $missingUser): string => $missingUser['full_name'].': '.$missingUser['reason'])
+                        ->all(),
+                ]);
+            }
+
+            if ($layoutHash === '' || $currentLayoutHash === '' || ! hash_equals($currentLayoutHash, $layoutHash)) {
+                throw ValidationException::withMessages([
+                    'layout_hash' => ['La previsualización cambió o no fue preparada. Vuelva a revisarla antes de firmar.'],
+                ]);
+            }
+
+            $reserved = $this->reserveProjectSignatureAreas($pdf['content'], $items->count(), $pageScope);
+            $baseContent = $this->stampPhysicalSignatures($reserved['content'], $items, $pageScope);
+            $basePath = $this->storeBasePdf($project, $reportKey, $baseContent);
         } else {
             $baseContent = $this->reserveSignatureFooter($pdf['content']);
             $basePath = $this->storeBasePdf($project, $reportKey, $baseContent);
@@ -77,7 +139,10 @@ class ProjectReportSignatureService
             'base_file_path' => $basePath,
             'base_document_hash' => $baseDocumentHash,
             'request_payload' => [
-                'sign_all_pages' => $this->shouldSignAllPages($parameters),
+                'sign_all_pages' => $pageScope === 'all',
+                'page_scope' => $pageScope,
+                'layout_hash' => $layoutHash ?: null,
+                'derived_from_signature_id' => $canDeriveFromPrevious ? $previous?->id : null,
             ],
         ]);
 
@@ -129,6 +194,10 @@ class ProjectReportSignatureService
             throw new RuntimeException('La solicitud de firma ya no está activa. Inicie la firma nuevamente.');
         }
 
+        if ($signature->status === 'cancelled') {
+            throw new RuntimeException('La solicitud de firma fue cancelada. Inicie una nueva previsualización.');
+        }
+
         try {
             $accessToken = $this->accessTokenFrom($payload) ?: Cache::get($this->accessTokenCacheKey($signature));
             $documentResponse = $this->ciudadaniaDigitalClient->approvedDocument($accessToken, (string) $signature->code);
@@ -178,6 +247,17 @@ class ProjectReportSignatureService
                 'signed_at' => now(),
             ])->save();
 
+            $subject = $this->signatureSubject($signature);
+            if ($subject instanceof Project && ! data_get($signature->request_payload, 'derived_from_signature_id')) {
+                $physical = $this->physicalSignatures(
+                    $subject,
+                    $signature->report_key,
+                    $signature->parameters_hash,
+                    (string) $signature->base_document_hash
+                );
+                $this->signatureAccessService->lock($subject, $physical);
+            }
+
             Cache::forget($this->accessTokenCacheKey($signature));
 
             return $signature->refresh();
@@ -218,8 +298,106 @@ class ProjectReportSignatureService
             : [];
     }
 
+    public function prepareProjectPreview(Project $project, string $reportKey, array $parameters, string $pageScope, User $user): array
+    {
+        $this->assertCanStart($project, $reportKey, $user);
+        $this->assertProjectPreviewEditable($project, $reportKey, $parameters);
+
+        $pageScope = $pageScope === 'all' ? 'all' : 'last';
+        $normalized = $this->normalizeParameters($parameters);
+        $parametersHash = $this->parametersHash($normalized);
+        $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalized);
+        $signers = $this->signatureAccessService->signers($project);
+        $missing = $this->projectSignatureBlockers($signers, $project->signature_signers_locked_at !== null);
+
+        if ($missing !== []) {
+            return $this->projectPreviewPayload($project, $reportKey, $normalized, $pageScope, $user, collect(), [], $missing);
+        }
+
+        $items = $this->syncProjectPhysicalSignatures(
+            $project,
+            $reportKey,
+            $parametersHash,
+            $logicalHash,
+            $pageScope,
+            $signers
+        );
+        $geometry = $this->projectPreviewGeometry($project, $reportKey, $normalized, $pageScope, $items->count());
+        $this->assignProjectPreviewPlacements($items, $geometry);
+        $items = $this->physicalSignatures($project, $reportKey, $parametersHash, $logicalHash);
+
+        return $this->projectPreviewPayload($project, $reportKey, $normalized, $pageScope, $user, $items, $geometry, []);
+    }
+
+    public function projectPreviewStatus(Project $project, string $reportKey, array $parameters, User $user): array
+    {
+        $normalized = $this->normalizeParameters($parameters);
+        $parametersHash = $this->parametersHash($normalized);
+        $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalized);
+        $items = $this->physicalSignatures($project, $reportKey, $parametersHash, $logicalHash);
+        $pageScope = (string) ($items->first()?->page_scope ?: ($parameters['page_scope'] ?? 'last'));
+        $signers = $this->signatureAccessService->signers($project);
+        $missing = $this->projectSignatureBlockers($signers, $project->signature_signers_locked_at !== null);
+        $geometry = $items->isEmpty()
+            ? []
+            : $this->projectPreviewGeometry($project, $reportKey, $normalized, $pageScope, $items->count());
+
+        return $this->projectPreviewPayload($project, $reportKey, $normalized, $pageScope, $user, $items, $geometry, $missing);
+    }
+
+    public function projectPreviewPdf(Project $project, string $reportKey, array $parameters, User $user): array
+    {
+        $status = $this->projectPreviewStatus($project, $reportKey, $parameters, $user);
+
+        if (! ($status['ready'] ?? false)) {
+            throw ValidationException::withMessages([
+                'signature' => ['La previsualización no está lista para firmarse.'],
+            ]);
+        }
+
+        $pdf = $this->pdfResolver->resolve($project, $reportKey, $this->normalizeParameters($parameters));
+        $reserved = $this->reserveProjectSignatureAreas(
+            $pdf['content'],
+            count($status['items']),
+            $status['page_scope']
+        );
+
+        return ['filename' => 'previsualizacion_firmas.pdf', 'content' => $reserved['content']];
+    }
+
+    public function cancel(Project $project, ProjectReportSignature $signature, User $user): ProjectReportSignature
+    {
+        if ((int) $signature->id_proyecto !== (int) $project->id_proyecto) {
+            throw new AuthorizationException('La solicitud no pertenece a este proyecto.');
+        }
+
+        if ($signature->id_usuario !== $user->id_usuario && ! $this->signatureAccessService->canManage($project, $user)) {
+            throw new AuthorizationException('No puede cancelar esta solicitud de firma.');
+        }
+
+        if (! in_array($signature->status, ['pending', 'auth_pending', 'sent'], true)) {
+            throw ValidationException::withMessages(['signature' => ['La solicitud ya no puede cancelarse.']]);
+        }
+
+        Cache::forget($this->accessTokenCacheKey($signature));
+        $signature->forceFill([
+            'status' => 'cancelled',
+            'error_message' => 'Solicitud cancelada por el usuario.',
+            'response_payload' => array_merge($signature->response_payload ?? [], [
+                'cancelled_at' => now()->toIso8601String(),
+                'cancelled_by' => $user->id_usuario,
+            ]),
+        ])->save();
+
+        return $signature->refresh();
+    }
+
     public function physicalSignatureStatus(Project|Item $project, string $reportKey, array $parameters, User $user): array
     {
+        if ($project instanceof Project) {
+            return $this->projectPreviewStatus($project, $reportKey, $parameters, $user);
+        }
+
         $normalizedParameters = $this->normalizeParameters($parameters);
         $parametersHash = $this->parametersHash($normalizedParameters);
         $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalizedParameters);
@@ -255,6 +433,12 @@ class ProjectReportSignatureService
 
     public function markPhysicalSignature(Project|Item $project, string $reportKey, array $parameters, User $user): array
     {
+        if ($project instanceof Project) {
+            throw ValidationException::withMessages([
+                'signature' => ['Las firmas físicas del proyecto se preparan automáticamente antes de Ciudadanía Digital.'],
+            ]);
+        }
+
         $this->assertCanUsePhysicalSignatures($project, $reportKey, $user);
 
         $normalizedParameters = $this->normalizeParameters($parameters);
@@ -323,6 +507,10 @@ class ProjectReportSignatureService
 
     public function updatePhysicalSignaturePositions(Project|Item $project, string $reportKey, array $parameters, array $positions, User $user): array
     {
+        if ($project instanceof Project) {
+            return $this->updateProjectPreviewPositions($project, $reportKey, $parameters, $positions, $user);
+        }
+
         $this->assertCanUsePhysicalSignatures($project, $reportKey, $user);
 
         $normalizedParameters = $this->normalizeParameters($parameters);
@@ -400,6 +588,418 @@ class ProjectReportSignatureService
         return $this->physicalSignatureStatus($project, $reportKey, $normalizedParameters, $user);
     }
 
+    private function updateProjectPreviewPositions(Project $project, string $reportKey, array $parameters, array $positions, User $user): array
+    {
+        $this->assertCanStart($project, $reportKey, $user);
+        $this->assertProjectPreviewEditable($project, $reportKey, $parameters);
+
+        $normalized = $this->normalizeParameters($parameters);
+        $parametersHash = $this->parametersHash($normalized);
+        $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalized);
+        $items = $this->physicalSignatures($project, $reportKey, $parametersHash, $logicalHash);
+
+        if ($items->isEmpty()) {
+            throw ValidationException::withMessages(['positions' => ['Primero prepare la previsualización de firmas.']]);
+        }
+
+        $pageScope = (string) ($items->first()->page_scope ?: 'last');
+        $geometry = $this->projectPreviewGeometry($project, $reportKey, $normalized, $pageScope, $items->count());
+        $currentHash = $this->projectLayoutHash($project, $reportKey, $normalized, $pageScope, $items);
+
+        if (filled($parameters['layout_hash'] ?? null) && ! hash_equals($currentHash, (string) $parameters['layout_hash'])) {
+            throw ValidationException::withMessages([
+                'layout_hash' => ['La previsualización cambió. Vuelva a abrirla antes de guardar.'],
+            ]);
+        }
+
+        $byId = $items->keyBy('id');
+        $normalizedPositions = [];
+
+        foreach ($positions as $position) {
+            $id = (int) ($position['id'] ?? 0);
+
+            if (! $byId->has($id) || collect($normalizedPositions)->contains('id', $id)) {
+                throw ValidationException::withMessages(['positions' => ['Una firma no pertenece a esta previsualización o está repetida.']]);
+            }
+
+            $placement = [
+                'id' => $id,
+                'page' => (int) $geometry['signature_page'],
+                'x' => round((float) ($position['x'] ?? 0), 2),
+                'y' => round((float) ($position['y'] ?? 0), 2),
+                'width' => round((float) ($position['width'] ?? 0), 2),
+                'height' => round((float) ($position['height'] ?? 0), 2),
+            ];
+
+            if ($placement['width'] < self::MIN_PHYSICAL_SIGNATURE_WIDTH
+                || $placement['height'] < self::MIN_PHYSICAL_SIGNATURE_HEIGHT
+                || ! $this->placementInsidePhysicalZone($placement, $geometry['physical_zone'])) {
+                throw ValidationException::withMessages([
+                    'positions' => ['Las firmas deben permanecer dentro de la zona física reservada y respetar el tamaño mínimo.'],
+                ]);
+            }
+
+            $normalizedPositions[] = $placement;
+        }
+
+        $submitted = collect($normalizedPositions)->keyBy('id');
+        $all = $items->map(fn (ProjectReportPhysicalSignature $signature): array => (
+            $submitted->get($signature->id) ?: $this->placementFromSignature($signature)
+        ))->values()->all();
+
+        if ($this->placementsOverlap($all)) {
+            throw ValidationException::withMessages(['positions' => ['Las firmas físicas no pueden superponerse.']]);
+        }
+
+        DB::transaction(function () use ($byId, $normalizedPositions): void {
+            foreach ($normalizedPositions as $placement) {
+                $byId[$placement['id']]->forceFill(Arr::except($placement, ['id']))->save();
+            }
+        });
+
+        return $this->projectPreviewStatus($project, $reportKey, $normalized, $user);
+    }
+
+    private function assertProjectPreviewEditable(Project $project, string $reportKey, array $parameters): void
+    {
+        $normalized = $this->normalizeParameters($parameters);
+        $hash = $this->parametersHash($normalized);
+        $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalized);
+        $previousSigned = $this->latestSigned($project, $reportKey, $hash);
+
+        if ($previousSigned) {
+            throw ValidationException::withMessages([
+                'signature' => [filled($previousSigned->base_document_hash)
+                    && ! hash_equals((string) $previousSigned->base_document_hash, $logicalHash)
+                        ? 'El reporte cambió después de su firma digital. Cree una nueva versión para volver a firmarlo.'
+                        : 'Este PDF ya tiene una firma digital y sus firmas físicas no pueden modificarse. Cree una nueva versión.'],
+            ]);
+        }
+
+        if ($this->forSubject(ProjectReportSignature::query(), $project)
+            ->where('report_key', $reportKey)
+            ->where('parameters_hash', $hash)
+            ->whereIn('status', ['pending', 'auth_pending', 'sent'])
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'signature' => ['Existe una firma digital en proceso. Cancélela antes de modificar la previsualización.'],
+            ]);
+        }
+    }
+
+    private function projectSignatureBlockers(Collection $signers, bool $locked): array
+    {
+        return $signers->map(function (User $signer) use ($locked): ?array {
+            $path = $locked ? $signer->signature_image_path_snapshot : $signer->firma_imagen_path;
+            $reason = match (true) {
+                $signer->estado !== 'AC' => 'Usuario inactivo',
+                blank($path) || ! Storage::disk('public')->exists($path) => 'No tiene una imagen de firma cargada',
+                default => null,
+            };
+
+            return $reason ? [
+                'id' => $signer->id_usuario,
+                'full_name' => $signer->funcionario,
+                'reason' => $reason,
+            ] : null;
+        })->filter()->values()->all();
+    }
+
+    private function syncProjectPhysicalSignatures(
+        Project $project,
+        string $reportKey,
+        string $parametersHash,
+        string $logicalHash,
+        string $pageScope,
+        Collection $signers
+    ): Collection {
+        $query = $this->forSubject(ProjectReportPhysicalSignature::query(), $project)
+            ->where('report_key', $reportKey)
+            ->where('parameters_hash', $parametersHash)
+            ->where('logical_document_hash', $logicalHash);
+        $existing = (clone $query)->get()->keyBy('id_usuario');
+        $selectedIds = $signers->pluck('id_usuario')->map(fn ($id): int => (int) $id);
+
+        foreach ($existing->reject(fn ($signature, $userId): bool => $selectedIds->contains((int) $userId)) as $obsolete) {
+            Storage::disk('public')->delete($obsolete->signature_image_path);
+            $obsolete->delete();
+        }
+
+        foreach ($signers as $signer) {
+            $sourcePath = $project->signature_signers_locked_at
+                ? $signer->signature_image_path_snapshot
+                : $signer->firma_imagen_path;
+            $sourceHash = hash('sha256', Storage::disk('public')->get($sourcePath));
+            $signature = $existing->get($signer->id_usuario);
+            $currentHash = $signature && Storage::disk('public')->exists($signature->signature_image_path)
+                ? hash('sha256', Storage::disk('public')->get($signature->signature_image_path))
+                : null;
+            $scopeChanged = $signature && $signature->page_scope !== $pageScope;
+
+            if (! $signature || $currentHash !== $sourceHash) {
+                $extension = pathinfo((string) $sourcePath, PATHINFO_EXTENSION) ?: 'png';
+                $snapshotPath = sprintf(
+                    'project-physical-previews/%d/%s/%s/%d-%s.%s',
+                    $project->id_proyecto,
+                    $reportKey,
+                    $parametersHash,
+                    $signer->id_usuario,
+                    Str::uuid(),
+                    $extension
+                );
+                Storage::disk('public')->put($snapshotPath, Storage::disk('public')->get($sourcePath));
+
+                if ($signature) {
+                    Storage::disk('public')->delete($signature->signature_image_path);
+                    $signature->forceFill(['signature_image_path' => $snapshotPath])->save();
+                } else {
+                    $signature = ProjectReportPhysicalSignature::query()->create([
+                        ...$this->subjectColumns($project),
+                        'report_key' => $reportKey,
+                        'parameters_hash' => $parametersHash,
+                        'logical_document_hash' => $logicalHash,
+                        'id_usuario' => $signer->id_usuario,
+                        'signature_image_path' => $snapshotPath,
+                        'page_scope' => $pageScope,
+                        'marked_at' => now(),
+                    ]);
+                }
+            }
+
+            if ($scopeChanged || $signature->page_scope !== $pageScope) {
+                $signature->forceFill([
+                    'page_scope' => $pageScope,
+                    'page' => null,
+                    'x' => null,
+                    'y' => null,
+                    'width' => null,
+                    'height' => null,
+                ])->save();
+            }
+        }
+
+        return (clone $query)->with('user')->orderBy('marked_at')->get();
+    }
+
+    private function projectPreviewPayload(
+        Project $project,
+        string $reportKey,
+        array $parameters,
+        string $pageScope,
+        User $user,
+        Collection $items,
+        array $geometry,
+        array $missing
+    ): array {
+        $parametersHash = $this->parametersHash($parameters);
+        $logicalHash = $this->currentDocumentHash($project, $reportKey, $parameters);
+        $latestSigned = $this->latestSignedForHash($project, $reportKey, $parametersHash, $logicalHash);
+        $pending = $this->forSubject(ProjectReportSignature::query(), $project)
+            ->where('report_key', $reportKey)
+            ->where('parameters_hash', $parametersHash)
+            ->whereIn('status', ['pending', 'auth_pending', 'sent'])
+            ->latest('id')
+            ->first();
+        $access = $this->signatureAccessService->decision($project, $user);
+        $ready = $missing === [] && $items->isNotEmpty() && filled($project->signature_signers_configured_at);
+        $layoutHash = $ready ? $this->projectLayoutHash($project, $reportKey, $parameters, $pageScope, $items) : null;
+
+        return [
+            'ready' => $ready,
+            'can_send' => $ready && ! $latestSigned && ! $pending && $access['allowed']
+                && $this->signableReportService->canSign($user, $reportKey),
+            'can_adjust' => $ready && ! $latestSigned && ! $pending && $access['allowed']
+                && $this->signableReportService->canSign($user, $reportKey),
+            'page_scope' => $pageScope,
+            'layout_hash' => $layoutHash,
+            'missing_users' => $missing,
+            'signature_access' => $access,
+            'signers_locked' => filled($project->signature_signers_locked_at),
+            'latest_signed' => $latestSigned ? $this->serialize($latestSigned) : null,
+            'pending_signature' => $pending ? $this->serialize($pending) : null,
+            'page_sizes' => $geometry['page_sizes'] ?? [],
+            'physical_zone' => $geometry['physical_zone'] ?? null,
+            'digital_zone' => $geometry['digital_zone'] ?? null,
+            'signature_page' => $geometry['signature_page'] ?? null,
+            'items' => $items->map(fn (ProjectReportPhysicalSignature $signature): array => $this->serializePhysicalSignature($signature))->all(),
+        ];
+    }
+
+    private function projectLayoutHash(Project $project, string $reportKey, array $parameters, string $pageScope, Collection $items): string
+    {
+        return hash('sha256', json_encode([
+            'project_id' => $project->id_proyecto,
+            'report_key' => $reportKey,
+            'parameters' => $this->normalizeParameters($parameters),
+            'document_hash' => $this->currentDocumentHash($project, $reportKey, $parameters),
+            'page_scope' => $pageScope,
+            'signatures' => $items->sortBy('id_usuario')->map(function (ProjectReportPhysicalSignature $signature): array {
+                return [
+                    'user_id' => $signature->id_usuario,
+                    'image_hash' => Storage::disk('public')->exists($signature->signature_image_path)
+                        ? hash('sha256', Storage::disk('public')->get($signature->signature_image_path))
+                        : null,
+                    'page' => $signature->page,
+                    'x' => $signature->x,
+                    'y' => $signature->y,
+                    'width' => $signature->width,
+                    'height' => $signature->height,
+                ];
+            })->values()->all(),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function projectPreviewGeometry(Project $project, string $reportKey, array $parameters, string $pageScope, int $count): array
+    {
+        $pdf = $this->pdfResolver->resolve($project, $reportKey, $parameters);
+
+        return Arr::except($this->reserveProjectSignatureAreas($pdf['content'], $count, $pageScope), ['content']);
+    }
+
+    private function reserveProjectSignatureAreas(string $sourcePdf, int $count, string $pageScope): array
+    {
+        $sourcePath = tempnam(sys_get_temp_dir(), 'sipre_preview_');
+
+        if ($sourcePath === false) {
+            throw new RuntimeException('No se pudo preparar la previsualización de firmas.');
+        }
+
+        file_put_contents($sourcePath, $sourcePdf);
+        $compatiblePath = $this->fpdiCompatiblePdfPath($sourcePath);
+
+        try {
+            $pdf = new Fpdi;
+            $pdf->setPrintHeader(false);
+            $pdf->setPrintFooter(false);
+            $pdf->SetAutoPageBreak(false);
+            $pdf->SetMargins(0, 0, 0);
+            $pageCount = $pdf->setSourceFile($compatiblePath);
+            $templates = [];
+            $pageSizes = [];
+
+            for ($page = 1; $page <= $pageCount; $page++) {
+                $template = $pdf->importPage($page);
+                $size = $pdf->getTemplateSize($template);
+                $templates[$page] = ['id' => $template, ...$size];
+                $pageSizes[] = [
+                    'page' => $page,
+                    'width' => round((float) $size['width'], 2),
+                    'height' => round((float) $size['height'], 2),
+                    'orientation' => (string) $size['orientation'],
+                ];
+            }
+
+            $targetPages = $pageScope === 'all' ? range(1, $pageCount) : [$pageCount];
+            $targetSizes = collect($pageSizes)->whereIn('page', $targetPages);
+            $width = (float) $targetSizes->min('width');
+            $height = (float) $targetSizes->min('height');
+            $layout = $this->physicalZoneLayout($width, $height, $count);
+            $totalReserved = self::SIGNATURE_FOOTER_HEIGHT + $layout['height'];
+
+            foreach ($templates as $page => $template) {
+                $pageWidth = (float) $template['width'];
+                $pageHeight = (float) $template['height'];
+                $pdf->AddPage($template['orientation'], [$pageWidth, $pageHeight]);
+
+                if (in_array($page, $targetPages, true)) {
+                    $scale = ($pageHeight - $totalReserved) / $pageHeight;
+                    $scaledWidth = $pageWidth * $scale;
+                    $scaledHeight = $pageHeight * $scale;
+                    $pdf->useTemplate($template['id'], ($pageWidth - $scaledWidth) / 2, 0, $scaledWidth, $scaledHeight);
+                } else {
+                    $pdf->useTemplate($template['id'], 0, 0, $pageWidth, $pageHeight);
+                }
+            }
+
+            return [
+                'content' => $pdf->Output('', 'S'),
+                'page_sizes' => $pageSizes,
+                'signature_page' => $pageScope === 'all' ? 1 : $pageCount,
+                'physical_zone' => [
+                    'x' => self::PHYSICAL_ZONE_MARGIN,
+                    'y' => round($height - $totalReserved + self::PHYSICAL_ZONE_MARGIN, 2),
+                    'width' => round($width - (self::PHYSICAL_ZONE_MARGIN * 2), 2),
+                    'height' => round($layout['height'] - (self::PHYSICAL_ZONE_MARGIN * 2), 2),
+                    'default_width' => $layout['signature_width'],
+                    'default_height' => $layout['signature_height'],
+                    'columns' => $layout['columns'],
+                ],
+                'digital_zone' => [
+                    'x' => 0,
+                    'y' => round($height - self::SIGNATURE_FOOTER_HEIGHT, 2),
+                    'width' => $width,
+                    'height' => self::SIGNATURE_FOOTER_HEIGHT,
+                ],
+            ];
+        } finally {
+            @unlink($sourcePath);
+            if ($compatiblePath !== $sourcePath) {
+                @unlink($compatiblePath);
+            }
+        }
+    }
+
+    private function physicalZoneLayout(float $pageWidth, float $pageHeight, int $count): array
+    {
+        foreach ([[self::DEFAULT_PHYSICAL_SIGNATURE_WIDTH, self::DEFAULT_PHYSICAL_SIGNATURE_HEIGHT], [self::MIN_PHYSICAL_SIGNATURE_WIDTH, self::MIN_PHYSICAL_SIGNATURE_HEIGHT]] as [$width, $height]) {
+            $usableWidth = $pageWidth - (self::PHYSICAL_ZONE_MARGIN * 2);
+            $columns = max(1, (int) floor(($usableWidth + self::PHYSICAL_SIGNATURE_GAP) / ($width + self::PHYSICAL_SIGNATURE_GAP)));
+            $rows = max(1, (int) ceil(max(1, $count) / $columns));
+            $zoneHeight = (self::PHYSICAL_ZONE_MARGIN * 2) + ($rows * $height) + (($rows - 1) * self::PHYSICAL_SIGNATURE_GAP);
+
+            if ($zoneHeight + self::SIGNATURE_FOOTER_HEIGHT <= $pageHeight * 0.55) {
+                return [
+                    'height' => $zoneHeight,
+                    'signature_width' => $width,
+                    'signature_height' => $height,
+                    'columns' => $columns,
+                ];
+            }
+        }
+
+        throw ValidationException::withMessages([
+            'user_ids' => ['La cantidad de firmantes no cabe en el área reservada del PDF.'],
+        ]);
+    }
+
+    private function assignProjectPreviewPlacements(Collection $items, array $geometry): void
+    {
+        $zone = $geometry['physical_zone'];
+        $existing = [];
+
+        foreach ($items as $index => $signature) {
+            $placement = $this->hasPhysicalPlacement($signature)
+                ? $this->placementFromSignature($signature)
+                : null;
+
+            if ($placement && $this->placementInsidePhysicalZone($placement, $zone)
+                && ! $this->placementsOverlap([...$existing, $placement])) {
+                $existing[] = $placement;
+                continue;
+            }
+
+            $column = $index % $zone['columns'];
+            $row = intdiv($index, $zone['columns']);
+            $placement = [
+                'page' => $geometry['signature_page'],
+                'x' => round($zone['x'] + ($column * ($zone['default_width'] + self::PHYSICAL_SIGNATURE_GAP)), 2),
+                'y' => round($zone['y'] + ($row * ($zone['default_height'] + self::PHYSICAL_SIGNATURE_GAP)), 2),
+                'width' => $zone['default_width'],
+                'height' => $zone['default_height'],
+            ];
+            $signature->forceFill($placement)->save();
+            $existing[] = ['id' => $signature->id, ...$placement];
+        }
+    }
+
+    private function placementInsidePhysicalZone(array $placement, array $zone): bool
+    {
+        return $placement['x'] >= $zone['x']
+            && $placement['y'] >= $zone['y']
+            && ($placement['x'] + $placement['width']) <= ($zone['x'] + $zone['width'] + 0.01)
+            && ($placement['y'] + $placement['height']) <= ($zone['y'] + $zone['height'] + 0.01);
+    }
+
     private function assertCanUsePhysicalSignatures(Project|Item $project, string $reportKey, User $user): void
     {
         $report = $this->signableReportService->findEnabled($reportKey);
@@ -420,13 +1020,35 @@ class ProjectReportSignatureService
             throw new AuthorizationException('No tiene permisos para firmar físicamente este reporte.');
         }
 
-        if ($project instanceof Project && ! $this->signatureAccessService->allows($project, $user)) {
-            throw new AuthorizationException('No está autorizado para firmar documentos de este proyecto.');
+        if ($project instanceof Project) {
+            $access = $this->signatureAccessService->decision($project, $user);
+
+            if (! $access['configured']) {
+                throw ValidationException::withMessages(['user_ids' => [$access['message']]]);
+            }
+
+            if (! $access['allowed']) {
+                throw new AuthorizationException($access['message']);
+            }
         }
     }
 
     public function physicalSignedPdf(Project|Item $project, string $reportKey, array $parameters): array
     {
+        if ($project instanceof Project) {
+            $normalized = $this->normalizeParameters($parameters);
+            $signature = $this->latestSigned($project, $reportKey, $this->parametersHash($normalized));
+
+            if (! $signature) {
+                throw ValidationException::withMessages(['signature' => ['No existe un PDF firmado para este reporte.']]);
+            }
+
+            return [
+                'filename' => 'reporte_firmado.pdf',
+                'content' => $this->signedPdfContent($signature),
+            ];
+        }
+
         $normalizedParameters = $this->normalizeParameters($parameters);
         $parametersHash = $this->parametersHash($normalizedParameters);
         $logicalHash = $this->currentDocumentHash($project, $reportKey, $normalizedParameters);
@@ -530,6 +1152,7 @@ class ProjectReportSignatureService
             'user_id' => $signature->id_usuario,
             'user_name' => $signature->user?->funcionario ?: 'Usuario',
             'signature_image_url' => $signature->signature_image_path ? url(Storage::url($signature->signature_image_path)) : null,
+            'page_scope' => $signature->page_scope ?: 'all',
             'page' => $signature->page,
             'x' => $signature->x,
             'y' => $signature->y,
@@ -745,6 +1368,8 @@ class ProjectReportSignatureService
             'validation' => data_get($signature->response_payload, 'validation'),
             'citizenship_user' => data_get($signature->response_payload, 'ciudadania_user.data'),
             'validation_records' => data_get($signature->response_payload, 'validation.data.registros', []),
+            'page_scope' => data_get($signature->request_payload, 'page_scope'),
+            'layout_hash' => data_get($signature->request_payload, 'layout_hash'),
             'error_message' => $signature->error_message,
         ];
     }
@@ -1018,7 +1643,7 @@ class ProjectReportSignatureService
         return $signature->project ?: Project::query()->findOrFail($signature->id_proyecto);
     }
 
-    private function stampPhysicalSignatures(string $sourcePdf, $signatures): string
+    private function stampPhysicalSignatures(string $sourcePdf, $signatures, ?string $pageScope = null): string
     {
         $sourcePath = tempnam(sys_get_temp_dir(), 'sipre_signed_');
 
@@ -1050,6 +1675,13 @@ class ProjectReportSignatureService
                 ];
             }
 
+            $pageScope ??= (string) ($signatures->first()?->page_scope ?: 'all');
+            $targetPages = $pageScope === 'all' ? range(1, $pageCount) : [$pageCount];
+            $minimumTargetHeight = min(array_map(
+                fn (int $page): float => (float) $templateSizes[$page]['height'],
+                $targetPages
+            ));
+
             $sharedPage = $this->sharedPhysicalPageSize($pageSizes);
             $placements = [];
 
@@ -1066,6 +1698,10 @@ class ProjectReportSignatureService
                 $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
                 $pdf->useTemplate($templateId, 0, 0, $size['width'], $size['height']);
 
+                if (! in_array($pageNumber, $targetPages, true)) {
+                    continue;
+                }
+
                 foreach ($signatures as $index => $signature) {
                     $placement = $placements[$index] ?? null;
 
@@ -1074,7 +1710,7 @@ class ProjectReportSignatureService
                     }
 
                     $x = (float) $placement['x'];
-                    $y = (float) $placement['y'];
+                    $y = (float) $placement['y'] + ((float) $size['height'] - $minimumTargetHeight);
                     $slotWidth = (float) $placement['width'];
                     $slotHeight = (float) $placement['height'];
                     $nameHeight = min(4.0, max(0.0, $slotHeight * 0.25));
@@ -1263,8 +1899,16 @@ class ProjectReportSignatureService
             throw new AuthorizationException('No tiene permisos para firmar este reporte.');
         }
 
-        if ($project instanceof Project && ! $this->signatureAccessService->allows($project, $user)) {
-            throw new AuthorizationException('No está autorizado para firmar documentos de este proyecto.');
+        if ($project instanceof Project) {
+            $access = $this->signatureAccessService->decision($project, $user);
+
+            if (! $access['configured']) {
+                throw ValidationException::withMessages(['user_ids' => [$access['message']]]);
+            }
+
+            if (! $access['allowed']) {
+                throw new AuthorizationException($access['message']);
+            }
         }
     }
 

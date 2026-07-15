@@ -108,7 +108,7 @@ export default function NewProjectPage() {
         observaciones: formData.observaciones?.trim() || null,
         signature_access: {
           mode: signatureAccess.mode,
-          user_ids: [...new Set([creatorId, ...signatureAccess.user_ids.map(Number)].filter(Boolean))],
+          user_ids: [...new Set((signatureAccess.user_ids.length ? signatureAccess.user_ids : [creatorId]).map(Number).filter(Boolean))],
         },
       };
       delete payload.subdistrito;

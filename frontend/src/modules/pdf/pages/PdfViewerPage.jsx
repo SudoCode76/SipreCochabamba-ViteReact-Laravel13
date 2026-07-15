@@ -178,6 +178,7 @@ export default function PdfViewerPage() {
   const signatureReportKey = searchParams.get("sign_report");
   const signatureParametersRaw = searchParams.get("sign_params") || "{}";
   const signatureParameters = useMemo(() => parseJsonParam(signatureParametersRaw), [signatureParametersRaw]);
+  const requestedPageScope = searchParams.get("page_scope") === "all" ? "all" : "last";
   const hasSignatureContext = Boolean(signatureSubjectId && signatureReportKey);
   const [blobUrl, setBlobUrl] = useState("");
   const [physicalPdfData, setPhysicalPdfData] = useState(null);
@@ -202,6 +203,7 @@ export default function PdfViewerPage() {
   const [physicalLoading, setPhysicalLoading] = useState(false);
   const [physicalError, setPhysicalError] = useState("");
   const [physicalPositions, setPhysicalPositions] = useState([]);
+  const [physicalPositionsDirty, setPhysicalPositionsDirty] = useState(false);
   const [selectedPhysicalPage, setSelectedPhysicalPage] = useState(1);
   const [savingPhysicalPositions, setSavingPhysicalPositions] = useState(false);
   const [physicalPositionMessage, setPhysicalPositionMessage] = useState("");
@@ -213,6 +215,10 @@ export default function PdfViewerPage() {
   const hasSignedPdf = Boolean(latestSigned?.has_signed_file);
   const isSignedStale = Boolean(signatureStatus?.is_signed_stale);
   const physicalSignatures = physicalStatus?.items ?? [];
+  const pendingSignature = physicalStatus?.pending_signature
+    || (["pending", "auth_pending", "sent"].includes(signatureStatus?.latest_signature?.status)
+      ? signatureStatus.latest_signature
+      : null);
   const staleNoticeKey = `${pdfUrl || ""}|${reloadKey}|${signatureSubject || ""}|${signatureSubjectId || ""}|${signatureReportKey || ""}|${signatureParametersRaw}`;
   const staleNoticeAccepted = acceptedStaleNoticeKey === staleNoticeKey;
   const canRenderPdf = Boolean(
@@ -261,6 +267,7 @@ export default function PdfViewerPage() {
     const items = status?.items ?? [];
 
     setPhysicalStatus(status);
+    setPhysicalPositionsDirty(false);
     setPhysicalPositions(items.map((item) => ({
       ...item,
       page: Number(item.page ?? 1),
@@ -423,6 +430,20 @@ export default function PdfViewerPage() {
     () => (physicalStatus?.page_sizes ?? []).find((page) => Number(page.page) === Number(selectedPhysicalPage)),
     [physicalStatus, selectedPhysicalPage],
   );
+  const physicalPageIsTarget = physicalStatus?.page_scope === "all"
+    || Number(selectedPhysicalPage) === Number(physicalStatus?.signature_page);
+  const physicalPageOffsetY = useMemo(() => {
+    if (!currentPhysicalPageSize || !physicalPageIsTarget) {
+      return 0;
+    }
+
+    const targetPages = (physicalStatus?.page_sizes ?? []).filter((page) => (
+      physicalStatus?.page_scope === "all" || Number(page.page) === Number(physicalStatus?.signature_page)
+    ));
+    const minimumHeight = Math.min(...targetPages.map((page) => Number(page.height)));
+
+    return Math.max(0, Number(currentPhysicalPageSize.height) - minimumHeight);
+  }, [currentPhysicalPageSize, physicalPageIsTarget, physicalStatus]);
 
   useEffect(() => {
     const canvas = physicalPdfCanvasRef.current;
@@ -549,13 +570,8 @@ export default function PdfViewerPage() {
     };
   }, [isAdjustPhysicalMode, showSignatureToolbar, hasSignedPdf, isSignedStale, signatureParameters, signatureReportKey, signatureService, signatureSubjectId]);
 
-  const submitSignPdf = async (signAllPages) => {
-    if (!canSignPdf || signing) {
-      return;
-    }
-
-    if (typeof signAllPages !== "boolean") {
-      setSignAllPagesDialogOpen(true);
+  const submitSignPdf = async (pageScope, layoutHash = "") => {
+    if (!(isAdjustPhysicalMode ? physicalStatus?.can_send : canSignPdf) || signing) {
       return;
     }
 
@@ -566,7 +582,11 @@ export default function PdfViewerPage() {
     try {
       const response = await signatureService.signReport(signatureSubjectId, signatureReportKey, {
         ...signatureParameters,
-        sign_all_pages: signAllPages,
+        sign_all_pages: pageScope === "all",
+        ...(signatureSubject === "project" ? {
+          page_scope: pageScope,
+          ...(layoutHash ? { layout_hash: layoutHash } : {}),
+        } : {}),
       });
       const redirectUrl = response?.data?.redirect_url || response?.data?.signature?.redirect_url;
       const signature = response?.data?.signature;
@@ -600,17 +620,61 @@ export default function PdfViewerPage() {
     }
   };
 
+  const beginSignaturePreview = async (pageScope) => {
+    if (signatureSubject !== "project" || signing) {
+      void submitSignPdf(pageScope);
+      return;
+    }
+
+    setSignAllPagesDialogOpen(false);
+    setSigning(true);
+    setSignatureError("");
+
+    try {
+      const response = await projectService.prepareSignaturePreview(
+        signatureProjectId,
+        signatureReportKey,
+        { ...signatureParameters, page_scope: pageScope },
+      );
+      const preview = response?.data;
+
+      if (!preview?.ready) {
+        const missing = (preview?.missing_users ?? [])
+          .map((user) => `${user.full_name}: ${user.reason}`)
+          .join(" · ");
+        throw new Error(missing || "La previsualización de firmas no está lista.");
+      }
+
+      const previewUrl = projectService.signaturePreviewPdfUrl(signatureProjectId, signatureReportKey, signatureParameters);
+      window.location.assign(buildPdfViewerUrl(previewUrl, {
+        title: "Previsualización de firmas",
+        adjustPhysicalSignatures: true,
+        pageScope,
+        layoutHash: preview.layout_hash,
+        signature: {
+          projectId: signatureProjectId,
+          reportKey: signatureReportKey,
+          parameters: signatureParameters,
+        },
+      }));
+    } catch (previewError) {
+      setSignatureError(readApiError(previewError, "No se pudo preparar la previsualización de firmas."));
+    } finally {
+      setSigning(false);
+    }
+  };
+
   const handleSignPdf = () => {
     if (!canSignPdf || signing) {
       return;
     }
 
-    if (isSignedStale || !signatureStatus?.is_current_pdf_signed) {
+    if (!latestSigned?.has_signed_file || isSignedStale || !signatureStatus?.is_current_pdf_signed) {
       setSignAllPagesDialogOpen(true);
       return;
     }
 
-    void submitSignPdf(false);
+    void submitSignPdf(latestSigned.page_scope || "last", latestSigned.layout_hash || "");
   };
 
   const handleOpenHistory = async () => {
@@ -633,16 +697,32 @@ export default function PdfViewerPage() {
     }
   };
 
-  const sharedPhysicalBounds = useMemo(() => {
-    const pageSizes = physicalStatus?.page_sizes ?? [];
+  const handleCancelSignature = async () => {
+    if (!pendingSignature?.id || signatureSubject !== "project") {
+      return;
+    }
 
-    if (pageSizes.length === 0) {
+    setSignatureError("");
+    try {
+      await projectService.cancelSignature(signatureProjectId, pendingSignature.id);
+      window.location.reload();
+    } catch (cancelError) {
+      setSignatureError(readApiError(cancelError, "No se pudo cancelar la firma pendiente."));
+    }
+  };
+
+  const sharedPhysicalBounds = useMemo(() => {
+    const zone = physicalStatus?.physical_zone;
+
+    if (!zone) {
       return null;
     }
 
     return {
-      width: Math.min(...pageSizes.map((page) => Number(page.width))),
-      height: Math.min(...pageSizes.map((page) => Number(page.height))),
+      x: Number(zone.x),
+      y: Number(zone.y),
+      width: Number(zone.width),
+      height: Number(zone.height),
     };
   }, [physicalStatus]);
 
@@ -651,19 +731,20 @@ export default function PdfViewerPage() {
   ));
 
   const updatePhysicalPosition = (id, updater) => {
+    setPhysicalPositionsDirty(true);
     setPhysicalPositions((positions) => positions.map((position) => (
       position.id === id ? updater(position) : position
     )));
   };
 
   const handlePhysicalPointerDown = (event, position) => {
-    if (!physicalStatus?.can_adjust || !currentPhysicalPageSize || !physicalCanvasRef.current) {
+    if (!physicalStatus?.can_adjust || !physicalPageIsTarget || !currentPhysicalPageSize || !physicalCanvasRef.current) {
       return;
     }
 
     const rect = physicalCanvasRef.current.getBoundingClientRect();
     const pointerX = ((event.clientX - rect.left) / rect.width) * currentPhysicalPageSize.width;
-    const pointerY = ((event.clientY - rect.top) / rect.height) * currentPhysicalPageSize.height;
+    const pointerY = (((event.clientY - rect.top) / rect.height) * currentPhysicalPageSize.height) - physicalPageOffsetY;
 
     dragRef.current = {
       mode: "move",
@@ -684,21 +765,21 @@ export default function PdfViewerPage() {
 
     const rect = physicalCanvasRef.current.getBoundingClientRect();
     const pointerX = ((event.clientX - rect.left) / rect.width) * currentPhysicalPageSize.width;
-    const pointerY = ((event.clientY - rect.top) / rect.height) * currentPhysicalPageSize.height;
+    const pointerY = (((event.clientY - rect.top) / rect.height) * currentPhysicalPageSize.height) - physicalPageOffsetY;
 
     updatePhysicalPosition(drag.id, (position) => {
       if (drag.mode === "resize") {
         return {
           ...position,
-          width: Number(clamp(pointerX - position.x, MIN_PHYSICAL_SIGNATURE_WIDTH, sharedPhysicalBounds.width - position.x).toFixed(2)),
-          height: Number(clamp(pointerY - position.y, MIN_PHYSICAL_SIGNATURE_HEIGHT, sharedPhysicalBounds.height - position.y).toFixed(2)),
+          width: Number(clamp(pointerX - position.x, MIN_PHYSICAL_SIGNATURE_WIDTH, sharedPhysicalBounds.x + sharedPhysicalBounds.width - position.x).toFixed(2)),
+          height: Number(clamp(pointerY - position.y, MIN_PHYSICAL_SIGNATURE_HEIGHT, sharedPhysicalBounds.y + sharedPhysicalBounds.height - position.y).toFixed(2)),
         };
       }
 
       return {
         ...position,
-        x: Number(clamp(pointerX - drag.offsetX, 0, sharedPhysicalBounds.width - position.width).toFixed(2)),
-        y: Number(clamp(pointerY - drag.offsetY, 0, sharedPhysicalBounds.height - position.height).toFixed(2)),
+        x: Number(clamp(pointerX - drag.offsetX, sharedPhysicalBounds.x, sharedPhysicalBounds.x + sharedPhysicalBounds.width - position.width).toFixed(2)),
+        y: Number(clamp(pointerY - drag.offsetY, sharedPhysicalBounds.y, sharedPhysicalBounds.y + sharedPhysicalBounds.height - position.height).toFixed(2)),
       };
     });
   };
@@ -706,7 +787,7 @@ export default function PdfViewerPage() {
   const handlePhysicalResizePointerDown = (event, position) => {
     event.stopPropagation();
 
-    if (!physicalStatus?.can_adjust || !physicalCanvasRef.current) {
+    if (!physicalStatus?.can_adjust || !physicalPageIsTarget || !physicalCanvasRef.current) {
       return;
     }
 
@@ -752,8 +833,12 @@ export default function PdfViewerPage() {
     setPhysicalError("");
 
     try {
-      const response = await signatureService.updatePhysicalSignaturePositions(signatureSubjectId, signatureReportKey, {
+      const updatePositions = signatureSubject === "project"
+        ? projectService.updateSignaturePreviewPositions
+        : signatureService.updatePhysicalSignaturePositions;
+      const response = await updatePositions(signatureSubjectId, signatureReportKey, {
         ...signatureParameters,
+        ...(signatureSubject === "project" ? { layout_hash: physicalStatus.layout_hash } : {}),
         positions: physicalPositions.map(({ id, page, x, y, width, height }) => ({ id, page, x, y, width, height })),
       });
       applyPhysicalStatus(response?.data ?? null);
@@ -815,6 +900,27 @@ export default function PdfViewerPage() {
               >
                 {savingPhysicalPositions ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Guardar posiciones
+              </button>
+            ) : null}
+            {!error && isAdjustPhysicalMode ? (
+              <button
+                type="button"
+                onClick={() => void submitSignPdf(physicalStatus?.page_scope || requestedPageScope, physicalStatus?.layout_hash || "")}
+                disabled={!physicalStatus?.can_send || physicalPositionsDirty || signing || savingPhysicalPositions}
+                className="inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
+                Enviar a Ciudadanía Digital
+              </button>
+            ) : null}
+            {!error && pendingSignature && signatureSubject === "project" ? (
+              <button
+                type="button"
+                onClick={handleCancelSignature}
+                className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 transition hover:bg-amber-100"
+              >
+                <X className="h-4 w-4" />
+                Cancelar intento
               </button>
             ) : null}
             {!error && showSignatureToolbar ? (
@@ -938,7 +1044,20 @@ export default function PdfViewerPage() {
                       {physicalPdfError}
                     </div>
                   ) : null}
-                  {!physicalPdfError && physicalPositions.map((position) => (
+                  {!physicalPdfError && physicalPageIsTarget && physicalStatus?.digital_zone ? (
+                    <div
+                      className="pointer-events-none absolute z-[5] flex items-center justify-center border-2 border-dashed border-rose-400 bg-rose-100/55 text-xs font-semibold uppercase tracking-[0.16em] text-rose-700"
+                      style={{
+                        left: `${(physicalStatus.digital_zone.x / currentPhysicalPageSize.width) * 100}%`,
+                        top: `${((physicalStatus.digital_zone.y + physicalPageOffsetY) / currentPhysicalPageSize.height) * 100}%`,
+                        width: `${(physicalStatus.digital_zone.width / currentPhysicalPageSize.width) * 100}%`,
+                        height: `${(physicalStatus.digital_zone.height / currentPhysicalPageSize.height) * 100}%`,
+                      }}
+                    >
+                      Zona reservada para Ciudadanía Digital
+                    </div>
+                  ) : null}
+                  {!physicalPdfError && physicalPageIsTarget && physicalPositions.map((position) => (
                     <div
                       key={position.id}
                       role="button"
@@ -950,7 +1069,7 @@ export default function PdfViewerPage() {
                       className="absolute z-10 touch-none cursor-move overflow-hidden border-2 border-emerald-500 bg-white/80 shadow-lg"
                       style={{
                         left: `${(position.x / currentPhysicalPageSize.width) * 100}%`,
-                        top: `${(position.y / currentPhysicalPageSize.height) * 100}%`,
+                        top: `${((position.y + physicalPageOffsetY) / currentPhysicalPageSize.height) * 100}%`,
                         width: `${(position.width / currentPhysicalPageSize.width) * 100}%`,
                         height: `${(position.height / currentPhysicalPageSize.height) * 100}%`,
                       }}
@@ -985,6 +1104,11 @@ export default function PdfViewerPage() {
                       />
                     </div>
                   ))}
+                  {!physicalPdfError && !physicalPageIsTarget ? (
+                    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/45 p-6 text-center text-sm font-medium text-slate-600">
+                      Las firmas se aplicarán únicamente en la última página.
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
@@ -1012,22 +1136,22 @@ export default function PdfViewerPage() {
             </div>
             <h2 className="mt-4 text-xl font-semibold">Firma digital</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              ¿Quieres que la firma digital de Ciudadanía Digital aparezca en todas las hojas?
+              ¿Quieres que las firmas físicas y la firma de Ciudadanía Digital aparezcan en todas las hojas?
             </p>
             <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
               <button
                 type="button"
-                onClick={() => void submitSignPdf(true)}
+                onClick={() => void beginSignaturePreview("all")}
                 className="inline-flex items-center justify-center rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
               >
-                Sí, todas las hojas
+                Todas las hojas
               </button>
               <button
                 type="button"
-                onClick={() => void submitSignPdf(false)}
+                onClick={() => void beginSignaturePreview("last")}
                 className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
-                No, solo una
+                Solo la última hoja
               </button>
               <button
                 type="button"

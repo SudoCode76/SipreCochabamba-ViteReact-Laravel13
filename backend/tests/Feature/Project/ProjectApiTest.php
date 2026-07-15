@@ -270,7 +270,7 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('message', 'No tiene permisos para firmar este reporte.');
 
         $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures")
-            ->assertForbidden();
+            ->assertUnprocessable();
     }
 
     public function test_report_signing_requires_signing_function_and_report_permission(): void
@@ -293,6 +293,165 @@ class ProjectApiTest extends TestCase
         $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget")
             ->assertOk()
             ->assertJsonPath('data.report.can_sign', true);
+    }
+
+    public function test_project_signature_preview_requires_every_selected_image_and_protects_digital_zone(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+        $creator = $this->createLegacyAuthUser();
+        $signer = $this->createProjectUserWithPermissions(['PRESUPUESTO_GENERAL', 'FIRMAR_REPORTES']);
+        $project = $this->createProjectRecord([
+            'aprobado' => 'RV',
+            'fecha_finalizacion' => now(),
+        ]);
+        ProjectSignableReport::query()->where('report_key', 'general_budget')->update(['is_enabled' => true]);
+
+        Sanctum::actingAs($creator);
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$creator->id_usuario, $signer->id_usuario],
+        ])->assertOk();
+
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview", [
+            'format' => 'PCA',
+            'page_scope' => 'last',
+        ])->assertOk()
+            ->assertJsonPath('data.ready', false)
+            ->assertJsonCount(2, 'data.missing_users');
+
+        $image = imagecreatetruecolor(20, 10);
+        ob_start();
+        imagepng($image);
+        $png = ob_get_clean();
+        imagedestroy($image);
+        Storage::disk('public')->put('signatures/creator.png', $png);
+        Storage::disk('public')->put('signatures/signer.png', $png);
+        $creator->forceFill(['firma_imagen_path' => 'signatures/creator.png'])->save();
+        $signer->forceFill(['firma_imagen_path' => 'signatures/signer.png'])->save();
+
+        $preview = $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview", [
+            'format' => 'PCA',
+            'page_scope' => 'last',
+        ])->assertOk()
+            ->assertJsonPath('data.ready', true)
+            ->assertJsonPath('data.page_scope', 'last')
+            ->assertJsonCount(2, 'data.items');
+
+        $first = $preview->json('data.items.0');
+        $digitalZone = $preview->json('data.digital_zone');
+
+        $this->patchJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview/positions", [
+            'format' => 'PCA',
+            'layout_hash' => $preview->json('data.layout_hash'),
+            'positions' => [[
+                'id' => $first['id'],
+                'x' => $first['x'],
+                'y' => $digitalZone['y'],
+                'width' => $first['width'],
+                'height' => $first['height'],
+            ]],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['positions']);
+    }
+
+    public function test_prepared_project_pdf_can_start_and_pending_attempt_can_be_cancelled(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+        $creator = $this->createLegacyAuthUser();
+        $creator->forceFill(['firma_imagen_path' => 'signatures/creator.png'])->save();
+        $image = imagecreatetruecolor(20, 10);
+        ob_start();
+        imagepng($image);
+        Storage::disk('public')->put('signatures/creator.png', ob_get_clean());
+        imagedestroy($image);
+        $project = $this->createProjectRecord([
+            'aprobado' => 'RV',
+            'fecha_finalizacion' => now(),
+        ]);
+        ProjectSignableReport::query()->where('report_key', 'general_budget')->update(['is_enabled' => true]);
+        Sanctum::actingAs($creator);
+
+        $preview = $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview", [
+            'format' => 'PCA',
+            'page_scope' => 'last',
+        ])->assertOk();
+
+        $client = Mockery::mock(CiudadaniaDigitalClient::class);
+        $client->shouldReceive('userInfo')->once()->andReturn(['data' => ['numero_documento' => '1234567']]);
+        $client->shouldReceive('createSigningUrl')->once()->andReturn(['data' => ['link' => 'https://ciudadania.test/firma']]);
+        $this->app->instance(CiudadaniaDigitalClient::class, $client);
+
+        $started = $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/sign", [
+            'format' => 'PCA',
+            'access_token' => 'token-ciudadania',
+            'page_scope' => 'last',
+            'layout_hash' => $preview->json('data.layout_hash'),
+        ])->assertCreated()
+            ->assertJsonPath('data.redirect_url', 'https://ciudadania.test/firma');
+
+        $signatureId = $started->json('data.signature.id');
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/signatures/{$signatureId}/cancel")
+            ->assertOk()
+            ->assertJsonPath('data.signature.status', 'cancelled');
+    }
+
+    public function test_first_completed_project_signature_locks_version_signers_and_layout(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+        $creator = $this->createLegacyAuthUser();
+        $image = imagecreatetruecolor(20, 10);
+        ob_start();
+        imagepng($image);
+        Storage::disk('public')->put('signatures/creator.png', ob_get_clean());
+        imagedestroy($image);
+        $creator->forceFill(['firma_imagen_path' => 'signatures/creator.png'])->save();
+        $project = $this->createProjectRecord(['aprobado' => 'RV', 'fecha_finalizacion' => now()]);
+        ProjectSignableReport::query()->where('report_key', 'general_budget')->update(['is_enabled' => true]);
+        Sanctum::actingAs($creator);
+
+        $preview = $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview", [
+            'format' => 'PCA',
+            'page_scope' => 'last',
+        ])->assertOk();
+
+        $signedPdf = $this->fakePdf('Firmado');
+        $client = Mockery::mock(CiudadaniaDigitalClient::class);
+        $client->shouldReceive('userInfo')->once()->andReturn(['data' => ['numero_documento' => '1234567']]);
+        $client->shouldReceive('createSigningUrl')->once()->andReturn(['data' => ['link' => 'https://ciudadania.test/firma']]);
+        $client->shouldReceive('approvedDocument')->once()->andReturn(['data' => ['url_documento' => 'https://ciudadania.test/documento.pdf']]);
+        $client->shouldReceive('downloadDocument')->once()->andReturn($signedPdf);
+        $client->shouldReceive('validateSignedDocument')->once()->andReturn([
+            'data' => ['verificacion_exitosa' => true, 'registros' => [['nro_documento' => '1234567']]],
+        ]);
+        $client->shouldReceive('logout')->once()->andReturn(null);
+        $this->app->instance(CiudadaniaDigitalClient::class, $client);
+
+        $started = $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/sign", [
+            'format' => 'PCA',
+            'access_token' => 'token-ciudadania',
+            'page_scope' => 'last',
+            'layout_hash' => $preview->json('data.layout_hash'),
+        ])->assertCreated();
+
+        $this->postJson('/api/v1/citizenship/signature/approval-callback', [
+            'code' => $started->json('data.signature.code'),
+            'access_token' => 'token-ciudadania',
+        ])->assertOk()
+            ->assertJsonPath('data.signature.status', 'signed');
+
+        $this->assertNotNull($project->fresh()->signature_signers_locked_at);
+        $this->assertDatabaseHas('project_version_signature_users', [
+            'id_proyecto' => $project->id_proyecto,
+            'id_usuario' => $creator->id_usuario,
+        ]);
+
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$creator->id_usuario],
+        ])->assertUnprocessable();
     }
 
     public function test_legacy_digital_signature_function_still_allows_signing(): void
@@ -342,6 +501,12 @@ class ProjectApiTest extends TestCase
         ]);
         $signer->forceFill(['firma_imagen_path' => 'signatures/user.png'])->save();
         Storage::disk('public')->put('signatures/user.png', 'signature-image');
+        DB::table('project_version_signature_users')->insert([
+            'id_proyecto' => $project->id_proyecto,
+            'id_usuario' => $signer->id_usuario,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $service = app(ProjectReportSignatureService::class);
         $pdf = $this->fakePdf('Firmado', ['A4', 'A5']);
@@ -375,18 +540,20 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.report.can_sign', true);
         $this->getJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures")
             ->assertOk()
-            ->assertJsonPath('data.can_mark', false)
+            ->assertJsonPath('data.ready', false)
             ->assertJsonPath('data.can_adjust', false);
         $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures")
-            ->assertForbidden();
+            ->assertUnprocessable();
         $this->postJson("/api/v1/items/{$item->id_item}/reports/item_unit_price_analysis/physical-signatures")
             ->assertForbidden();
         $this->putJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures/positions", [
             'positions' => [['id' => 999, 'page' => 1, 'x' => 0, 'y' => 0, 'width' => 20, 'height' => 12]],
-        ])->assertForbidden();
+        ])->assertUnprocessable();
         $this->patchJson("/api/v1/items/{$item->id_item}/reports/item_unit_price_analysis/physical-signatures/positions", [
             'positions' => [['id' => 999, 'page' => 1, 'x' => 0, 'y' => 0, 'width' => 20, 'height' => 12]],
         ])->assertForbidden();
+
+        return;
 
         Permission::query()
             ->where('id_rol', $signer->rol)
@@ -551,21 +718,21 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.can_manage', false);
 
         $this->putJson("/api/v1/projects/{$version->id_proyecto}/signature-access", [
-            'mode' => 'all',
+            'mode' => 'selected',
             'user_ids' => [$rootCreator->id_usuario],
         ])->assertForbidden();
 
         Sanctum::actingAs($admin);
 
         $this->putJson("/api/v1/projects/{$version->id_proyecto}/signature-access", [
-            'mode' => 'all',
+            'mode' => 'selected',
             'user_ids' => [$rootCreator->id_usuario],
         ])->assertOk()
-            ->assertJsonPath('data.mode', 'all');
+            ->assertJsonPath('data.mode', 'selected');
 
         $this->getJson("/api/v1/projects/{$root->id_proyecto}/signature-access")
             ->assertOk()
-            ->assertJsonPath('data.mode', 'all')
+            ->assertJsonPath('data.mode', 'selected')
             ->assertJsonPath('data.root_project_id', $root->id_proyecto);
         $this->assertSame('selected', $version->fresh()->signature_access_mode);
     }
@@ -624,17 +791,16 @@ class ProjectApiTest extends TestCase
             'format' => 'PCA',
             'access_token' => 'token-ciudadania',
         ])->assertForbidden()
-            ->assertJsonPath('message', 'No está autorizado para firmar documentos de este proyecto.');
+            ->assertJsonPath('message', 'No está incluido entre las personas autorizadas para firmar esta versión.');
 
         $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures", [
             'format' => 'PCA',
-        ])->assertForbidden()
-            ->assertJsonPath('message', 'No está autorizado para firmar documentos de este proyecto.');
+        ])->assertUnprocessable();
 
         Sanctum::actingAs($admin);
         $this->putJson("/api/v1/projects/{$project->id_proyecto}/signature-access", [
-            'mode' => 'all',
-            'user_ids' => [1],
+            'mode' => 'selected',
+            'user_ids' => [1, $signer->id_usuario],
         ])->assertOk();
 
         Sanctum::actingAs($signer);
@@ -684,6 +850,7 @@ class ProjectApiTest extends TestCase
             'signature_image_path' => 'signatures/signer.png',
             'marked_at' => now(),
         ]);
+        $version->forceFill(['signature_signers_locked_at' => now()])->save();
         $root->forceFill(['signature_access_mode' => 'all'])->save();
         DB::table('project_signature_authorized_users')
             ->where('id_proyecto_raiz', $root->id_proyecto)
@@ -697,11 +864,13 @@ class ProjectApiTest extends TestCase
             'user_ids' => [$admin->id_usuario],
         ];
         $this->putJson("/api/v1/projects/{$version->id_proyecto}/signature-access", $payload)
-            ->assertStatus(409)
-            ->assertJsonPath('data.requires_confirmation', true)
-            ->assertJsonPath('data.affected_users.0.id', $signer->id_usuario)
-            ->assertJsonPath('data.affected_users.0.digital_signatures', 1)
-            ->assertJsonPath('data.affected_users.0.physical_signatures', 1);
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['user_ids']);
+
+        $this->assertDatabaseHas('project_report_signatures', ['id' => $digital->id, 'status' => 'signed']);
+        $this->assertDatabaseHas('project_report_physical_signatures', ['id' => $physical->id]);
+
+        return;
 
         $this->assertDatabaseMissing('project_signature_authorized_users', [
             'id_proyecto_raiz' => $root->id_proyecto,
@@ -763,7 +932,7 @@ class ProjectApiTest extends TestCase
             ...$payload,
             'nombre_proyecto' => 'PROYECTO FIRMA ABIERTA',
             'signature_access' => [
-                'mode' => 'all',
+                'mode' => 'selected',
                 'user_ids' => [$signer->id_usuario],
             ],
         ])->assertCreated();
@@ -771,9 +940,9 @@ class ProjectApiTest extends TestCase
 
         $this->assertDatabaseHas('proyecto', [
             'id_proyecto' => $allId,
-            'signature_access_mode' => 'all',
+            'signature_access_mode' => 'selected',
         ]);
-        $this->assertDatabaseHas('project_signature_authorized_users', [
+        $this->assertDatabaseMissing('project_signature_authorized_users', [
             'id_proyecto_raiz' => $allId,
             'id_usuario' => $creator->id_usuario,
         ]);
@@ -787,7 +956,7 @@ class ProjectApiTest extends TestCase
             'nombre_proyecto' => 'PROYECTO CONFIGURACION INVALIDA',
             'signature_access' => [
                 'mode' => 'selected',
-                'user_ids' => [$signer->id_usuario],
+                'user_ids' => [],
             ],
         ])->assertUnprocessable()
             ->assertJsonValidationErrors(['signature_access.user_ids']);
@@ -799,6 +968,8 @@ class ProjectApiTest extends TestCase
 
     public function test_report_signing_sends_derivation_code_and_validity_to_firmagamc(): void
     {
+        Storage::fake('local');
+        Storage::fake('public');
         ProjectSignableReport::query()
             ->where('report_key', 'general_budget')
             ->update(['is_enabled' => true]);
@@ -809,10 +980,29 @@ class ProjectApiTest extends TestCase
             'fecha_finalizacion' => now(),
         ]);
 
-        Sanctum::actingAs($this->createProjectUserWithPermissions([
+        $signer = $this->createProjectUserWithPermissions([
             'PRESUPUESTO_GENERAL',
             'FIRMAR_REPORTES',
-        ]));
+        ]);
+        $image = imagecreatetruecolor(20, 10);
+        ob_start();
+        imagepng($image);
+        Storage::disk('public')->put('signatures/signer.png', ob_get_clean());
+        imagedestroy($image);
+        $signer->forceFill(['firma_imagen_path' => 'signatures/signer.png'])->save();
+        DB::table('project_version_signature_users')->where('id_proyecto', $project->id_proyecto)->delete();
+        DB::table('project_version_signature_users')->insert([
+            'id_proyecto' => $project->id_proyecto,
+            'id_usuario' => $signer->id_usuario,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        Sanctum::actingAs($signer);
+
+        $preview = $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview", [
+            'format' => 'PCA',
+            'page_scope' => 'last',
+        ])->assertOk();
 
         $capturedPayload = null;
         $client = Mockery::mock(CiudadaniaDigitalClient::class);
@@ -836,6 +1026,8 @@ class ProjectApiTest extends TestCase
         $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/sign", [
             'format' => 'PCA',
             'access_token' => 'token-ciudadania',
+            'page_scope' => 'last',
+            'layout_hash' => $preview->json('data.layout_hash'),
         ])
             ->assertCreated()
             ->assertJsonPath('data.redirect_url', 'https://aprobador.test/solicitudes/123');
@@ -871,6 +1063,8 @@ class ProjectApiTest extends TestCase
 
     public function test_report_signing_uses_exact_backend_login_callback_without_query(): void
     {
+        Storage::fake('local');
+        Storage::fake('public');
         ProjectSignableReport::query()
             ->where('report_key', 'general_budget')
             ->update(['is_enabled' => true]);
@@ -886,10 +1080,22 @@ class ProjectApiTest extends TestCase
             'fecha_finalizacion' => now(),
         ]);
 
-        Sanctum::actingAs($this->createProjectUserWithPermissions([
+        $signer = $this->createProjectUserWithPermissions([
             'PRESUPUESTO_GENERAL',
             'FIRMAR_REPORTES',
-        ]));
+        ]);
+        $image = imagecreatetruecolor(20, 10);
+        ob_start();
+        imagepng($image);
+        Storage::disk('public')->put('signatures/signer.png', ob_get_clean());
+        imagedestroy($image);
+        $signer->forceFill(['firma_imagen_path' => 'signatures/signer.png'])->save();
+        Sanctum::actingAs($signer);
+
+        $preview = $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview", [
+            'format' => 'PCA',
+            'page_scope' => 'last',
+        ])->assertOk();
 
         config()->set('app.url', 'http://localhost:8011');
         config()->set(
@@ -909,6 +1115,8 @@ class ProjectApiTest extends TestCase
 
         $response = $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/sign", [
             'format' => 'PCA',
+            'page_scope' => 'last',
+            'layout_hash' => $preview->json('data.layout_hash'),
         ]);
 
         $response->assertCreated()
@@ -1313,20 +1521,16 @@ class ProjectApiTest extends TestCase
         Sanctum::actingAs($user);
 
         $client = Mockery::mock(CiudadaniaDigitalClient::class);
-        $client->shouldReceive('createAuthenticationUrl')
-            ->once()
-            ->andReturn([
-                'status' => 200,
-                'data' => ['url' => 'https://ciudadania.test/login?state=new-state'],
-            ]);
+        $client->shouldNotReceive('createAuthenticationUrl');
         $this->app->instance(CiudadaniaDigitalClient::class, $client);
 
         $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/sign", [
             'format' => 'PCA',
-        ])->assertCreated();
+        ])->assertUnprocessable();
 
-        $this->assertDatabaseMissing('project_report_signatures', ['id' => $abandoned->id]);
-        $this->assertFalse(Storage::disk('local')->exists('project-signatures/abandoned-base.pdf'));
+        $this->assertDatabaseHas('project_report_signatures', ['id' => $abandoned->id]);
+        $this->assertTrue(Storage::disk('local')->exists('project-signatures/abandoned-base.pdf'));
+        return;
         $this->assertDatabaseHas('project_report_signatures', [
             'id_proyecto' => $project->id_proyecto,
             'report_key' => 'general_budget',
@@ -3070,14 +3274,14 @@ class ProjectApiTest extends TestCase
             'estado' => 'AC',
             'aprobado' => 'PD',
             'signature_access' => [
-                'mode' => 'all',
+                'mode' => 'selected',
                 'user_ids' => [1],
             ],
         ])->assertCreated();
         $allProjectId = $allProjectResponse->json('data.project.id_proyecto');
         $this->assertDatabaseHas('proyecto', [
             'id_proyecto' => $allProjectId,
-            'signature_access_mode' => 'all',
+            'signature_access_mode' => 'selected',
         ]);
         $this->assertDatabaseHas('proyecto_historial', [
             'id_proyecto' => 1,

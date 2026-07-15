@@ -15,6 +15,7 @@ class ProjectReportPhysicalSignature extends Model
         'logical_document_hash',
         'id_usuario',
         'signature_image_path',
+        'page_scope',
         'page',
         'x',
         'y',

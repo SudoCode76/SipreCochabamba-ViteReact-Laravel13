@@ -50,11 +50,10 @@ export default function ProjectSignatureAccessSection({
 
     return (
       <ProjectSignatureAccessEditor
-        projectId="new"
         people={people}
         onDraftChange={onDraftChange}
-        configuration={{
-          mode: draftValue?.mode || "selected",
+      configuration={{
+          mode: "selected",
           creator,
           authorized_users: authorizedUsers,
           can_manage: true,
@@ -80,7 +79,6 @@ export default function ProjectSignatureAccessSection({
   return (
     <ProjectSignatureAccessEditor
       key={editorKey}
-      projectId={projectId}
       people={people}
       configuration={configuration}
       onDraftChange={onDraftChange}
@@ -88,8 +86,7 @@ export default function ProjectSignatureAccessSection({
   );
 }
 
-function ProjectSignatureAccessEditor({ projectId, people, configuration, onDraftChange = null }) {
-  const [mode, setMode] = useState(configuration.mode || "selected");
+function ProjectSignatureAccessEditor({ people, configuration, onDraftChange = null }) {
   const [selectedIds, setSelectedIds] = useState(
     configuration.authorized_users.map((user) => Number(user.id)),
   );
@@ -111,23 +108,22 @@ function ProjectSignatureAccessEditor({ projectId, people, configuration, onDraf
   }, [search, users]);
 
   const toggleUser = (userId) => {
-    if (!configuration?.can_manage || userId === creatorId) {
+    if (!configuration?.can_manage || configuration?.locked) {
       return;
     }
 
     setSelectedIds((current) => {
+      if (current.includes(userId) && current.length === 1) {
+        return current;
+      }
+
       const next = current.includes(userId)
         ? current.filter((id) => id !== userId)
         : [...current, userId];
-      onDraftChange?.({ mode, user_ids: next });
+      onDraftChange?.({ mode: "selected", user_ids: next });
 
       return next;
     });
-  };
-
-  const changeMode = (nextMode) => {
-    setMode(nextMode);
-    onDraftChange?.({ mode: nextMode, user_ids: selectedIds });
   };
 
   return (
@@ -139,36 +135,18 @@ function ProjectSignatureAccessEditor({ projectId, people, configuration, onDraf
         <div>
           <h3 className="font-semibold text-foreground">Quiénes pueden firmar</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Esta configuración se aplica a todas las versiones. Los permisos globales de firma y del reporte siguen siendo obligatorios.
+            Estas firmas se insertarán automáticamente antes de enviar cada PDF a Ciudadanía Digital.
           </p>
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        {[
-          ["selected", "Solo personas seleccionadas", "El creador original siempre permanece autorizado."],
-          ["all", "Cualquier usuario con permisos", "No reemplaza los permisos globales ni la habilitación del reporte."],
-        ].map(([value, label, description]) => (
-          <label key={value} className={`flex cursor-pointer gap-3 rounded-2xl border p-4 ${mode === value ? "border-slate-900 bg-white" : "border-border/70 bg-background/70"}`}>
-            <input
-              type="radio"
-              name={`signature-access-${projectId}`}
-              value={value}
-              checked={mode === value}
-              onChange={() => configuration.can_manage && changeMode(value)}
-              disabled={!configuration.can_manage}
-              className="mt-1"
-            />
-            <span>
-              <span className="block text-sm font-semibold text-foreground">{label}</span>
-              <span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span>
-            </span>
-          </label>
-        ))}
-      </div>
+      {configuration.locked ? (
+        <p className="mt-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          La lista quedó bloqueada por la primera firma digital. Cree una nueva versión para cambiarla.
+        </p>
+      ) : null}
 
-      {mode === "selected" ? (
-        <div className="mt-5">
+      <div className="mt-5">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre o usuario" className="h-11 rounded-xl pl-9" />
@@ -184,23 +162,21 @@ function ProjectSignatureAccessEditor({ projectId, people, configuration, onDraf
                     type="checkbox"
                     checked={selectedIds.includes(userId)}
                     onChange={() => toggleUser(userId)}
-                    disabled={!configuration.can_manage || isCreator}
+                    disabled={!configuration.can_manage || configuration.locked}
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-foreground">{user.full_name || `Usuario ${userId}`}</span>
                     <span className="block truncate text-xs text-muted-foreground">{user.username || "Sin usuario"}{user.status && user.status !== "AC" ? " · Inactivo" : ""}</span>
                   </span>
-                  {isCreator ? <span className="rounded-full bg-sky-100 px-2 py-1 text-[10px] font-semibold text-sky-700">CREADOR</span> : null}
+                  <span className="flex items-center gap-2">
+                    {!user.has_signature_image ? <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-700">SIN FIRMA</span> : null}
+                    {isCreator ? <span className="rounded-full bg-sky-100 px-2 py-1 text-[10px] font-semibold text-sky-700">CREADOR</span> : null}
+                  </span>
                 </label>
               );
             })}
           </div>
-        </div>
-      ) : (
-        <p className="mt-5 rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-800">
-          La lista de {selectedIds.length} persona(s) queda guardada y se recuperará si vuelve al modo restringido.
-        </p>
-      )}
+      </div>
 
     </section>
   );

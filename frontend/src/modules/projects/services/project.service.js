@@ -132,6 +132,23 @@ export const projectService = {
     return response.data;
   },
 
+  prepareSignaturePreview: async (projectId, reportKey, payload = {}) => {
+    const response = await apiClient.post(`/v1/projects/${projectId}/reports/${reportKey}/signature-preview`, payload);
+    return response.data;
+  },
+
+  updateSignaturePreviewPositions: async (projectId, reportKey, payload = {}) => {
+    const response = await apiClient.patch(`/v1/projects/${projectId}/reports/${reportKey}/signature-preview/positions`, payload);
+    return response.data;
+  },
+
+  signaturePreviewPdfUrl: (projectId, reportKey, params = {}) => buildApiUrl(`/v1/projects/${projectId}/reports/${reportKey}/signature-preview/pdf`, params),
+
+  cancelSignature: async (projectId, signatureId) => {
+    const response = await apiClient.post(`/v1/projects/${projectId}/signatures/${signatureId}/cancel`);
+    return response.data;
+  },
+
   physicalSignaturesPdfUrl: (projectId, reportKey, params = {}) => buildApiUrl(`/v1/projects/${projectId}/reports/${reportKey}/physical-signatures/pdf`, params),
 
   update: async (projectId, payload) => {

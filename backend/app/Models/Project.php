@@ -44,6 +44,9 @@ class Project extends Model
         'es_version_actual',
         'fecha_version',
         'fecha_finalizacion',
+        'signature_access_mode',
+        'signature_signers_configured_at',
+        'signature_signers_locked_at',
     ];
 
     protected function casts(): array
@@ -62,6 +65,8 @@ class Project extends Model
             'fecha_version' => 'datetime',
             'fecha_finalizacion' => 'datetime',
             'signature_access_mode' => 'string',
+            'signature_signers_configured_at' => 'datetime',
+            'signature_signers_locked_at' => 'datetime',
         ];
     }
 
