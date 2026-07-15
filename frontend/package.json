@@ -20,6 +20,7 @@
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
     "lucide-react": "^1.11.0",
+    "pdfjs-dist": "^6.1.200",
     "proj4": "^2.20.9",
     "proj4leaflet": "^1.0.2",
     "radix-ui": "^1.4.3",

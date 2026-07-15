@@ -344,7 +344,7 @@ class ProjectApiTest extends TestCase
         Storage::disk('public')->put('signatures/user.png', 'signature-image');
 
         $service = app(ProjectReportSignatureService::class);
-        $pdf = $this->fakePdf('Firmado');
+        $pdf = $this->fakePdf('Firmado', ['A4', 'A5']);
 
         foreach ([
             [$project, 'general_budget', 'project-signatures/project.pdf'],
@@ -416,11 +416,13 @@ class ProjectApiTest extends TestCase
         $projectPhysical = $this->getJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures")
             ->assertOk()
             ->assertJsonPath('data.can_mark', true)
-            ->assertJsonPath('data.can_adjust', true);
+            ->assertJsonPath('data.can_adjust', true)
+            ->assertJsonCount(2, 'data.page_sizes');
         $itemPhysical = $this->getJson("/api/v1/items/{$item->id_item}/reports/item_unit_price_analysis/physical-signatures")
             ->assertOk()
             ->assertJsonPath('data.can_mark', true)
-            ->assertJsonPath('data.can_adjust', true);
+            ->assertJsonPath('data.can_adjust', true)
+            ->assertJsonCount(2, 'data.page_sizes');
 
         $projectPhysical = $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures")
             ->assertOk();
@@ -450,6 +452,57 @@ class ProjectApiTest extends TestCase
                 'height' => $itemPosition['height'],
             ]],
         ])->assertOk();
+
+        $secondProjectPhysical = ProjectReportPhysicalSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters_hash' => $service->parametersHash([]),
+            'logical_document_hash' => $service->currentDocumentHash($project, 'general_budget', []),
+            'id_usuario' => $admin->id_usuario,
+            'signature_image_path' => 'signatures/user.png',
+            'page' => 2,
+            'x' => $projectPosition['x'],
+            'y' => $projectPosition['y'],
+            'width' => $projectPosition['width'],
+            'height' => $projectPosition['height'],
+            'marked_at' => now(),
+        ]);
+
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures/positions", [
+            'positions' => [
+                [
+                    'id' => $projectPosition['id'],
+                    'page' => $projectPosition['page'],
+                    'x' => $projectPosition['x'],
+                    'y' => $projectPosition['y'],
+                    'width' => $projectPosition['width'],
+                    'height' => $projectPosition['height'],
+                ],
+                [
+                    'id' => $secondProjectPhysical->id,
+                    'page' => 2,
+                    'x' => $projectPosition['x'],
+                    'y' => $projectPosition['y'],
+                    'width' => $projectPosition['width'],
+                    'height' => $projectPosition['height'],
+                ],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.positions.0', 'Las firmas físicas no pueden superponerse.');
+
+        $smallestPageWidth = min(array_column($projectPhysical->json('data.page_sizes'), 'width'));
+
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/physical-signatures/positions", [
+            'positions' => [[
+                'id' => $projectPosition['id'],
+                'page' => $projectPosition['page'],
+                'x' => $smallestPageWidth - $projectPosition['width'] + 1,
+                'y' => $projectPosition['y'],
+                'width' => $projectPosition['width'],
+                'height' => $projectPosition['height'],
+            ]],
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.positions.0', 'Una de las firmas queda fuera de la página.');
     }
 
     public function test_signature_access_is_shared_by_the_project_family_and_only_root_creator_or_admin_can_manage_it(): void
@@ -3132,13 +3185,16 @@ class ProjectApiTest extends TestCase
         return $user;
     }
 
-    private function fakePdf(string $text): string
+    private function fakePdf(string $text, array $pageFormats = ['A4']): string
     {
         $pdf = new \TCPDF;
         $pdf->SetPrintHeader(false);
         $pdf->SetPrintFooter(false);
-        $pdf->AddPage();
-        $pdf->Write(0, $text);
+
+        foreach ($pageFormats as $index => $format) {
+            $pdf->AddPage('P', $format);
+            $pdf->Write(0, $text.' '.($index + 1));
+        }
 
         return $pdf->Output('', 'S');
     }

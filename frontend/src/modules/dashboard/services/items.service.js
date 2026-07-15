@@ -298,7 +298,7 @@ export const itemsService = {
   },
 
   updatePhysicalSignaturePositions: async (itemId, reportKey, payload = {}) => {
-    const response = await apiClient.put(`/v1/items/${itemId}/reports/${reportKey}/physical-signatures/positions`, payload);
+    const response = await apiClient.patch(`/v1/items/${itemId}/reports/${reportKey}/physical-signatures/positions`, payload);
     return response.data;
   },
 

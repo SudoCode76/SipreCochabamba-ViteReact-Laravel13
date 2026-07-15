@@ -369,7 +369,7 @@ class ProjectReportSignatureService
                 'height' => round((float) ($position['height'] ?? self::DEFAULT_PHYSICAL_SIGNATURE_HEIGHT), 2),
             ];
 
-            if (! $this->placementInsidePage($placement, $pageSizes)) {
+            if (! $this->placementInsideEveryPage($placement, $pageSizes)) {
                 throw ValidationException::withMessages([
                     'positions' => ['Una de las firmas queda fuera de la página.'],
                 ]);
@@ -586,22 +586,39 @@ class ProjectReportSignatureService
             return;
         }
 
-        $lastPage = $pageSizes[array_key_last($pageSizes)];
+        $sharedPage = $this->sharedPhysicalPageSize($pageSizes);
         $existing = $signatures
-            ->filter(fn (ProjectReportPhysicalSignature $signature): bool => filled($signature->page))
+            ->filter(fn (ProjectReportPhysicalSignature $signature): bool => $this->hasPhysicalPlacement($signature))
             ->map(fn (ProjectReportPhysicalSignature $signature): array => $this->placementFromSignature($signature))
             ->values()
             ->all();
 
         foreach ($signatures as $signature) {
-            if (filled($signature->page)) {
+            if ($this->hasPhysicalPlacement($signature)) {
                 continue;
             }
 
-            $placement = $this->nextDefaultPlacement($lastPage, $existing);
+            $placement = $this->nextDefaultPlacement($sharedPage, $existing);
             $signature->forceFill($placement)->save();
             $existing[] = ['id' => $signature->id, ...$placement];
         }
+    }
+
+    private function hasPhysicalPlacement(ProjectReportPhysicalSignature $signature): bool
+    {
+        return $signature->x !== null
+            && $signature->y !== null
+            && $signature->width !== null
+            && $signature->height !== null;
+    }
+
+    private function sharedPhysicalPageSize(array $pageSizes): array
+    {
+        return [
+            'page' => (int) ($pageSizes[0]['page'] ?? 1),
+            'width' => min(array_map(fn (array $page): float => (float) $page['width'], $pageSizes)),
+            'height' => min(array_map(fn (array $page): float => (float) $page['height'], $pageSizes)),
+        ];
     }
 
     private function nextDefaultPlacement(array $pageSize, array $existing): array
@@ -654,20 +671,26 @@ class ProjectReportSignatureService
         ];
     }
 
-    private function placementInsidePage(array $placement, array $pageSizes): bool
+    private function placementInsideEveryPage(array $placement, array $pageSizes): bool
     {
-        $page = collect($pageSizes)->firstWhere('page', (int) $placement['page']);
-
-        if (! $page) {
+        if ($pageSizes === []) {
             return false;
         }
 
-        return $placement['width'] > 0
-            && $placement['height'] > 0
-            && $placement['x'] >= 0
-            && $placement['y'] >= 0
-            && ($placement['x'] + $placement['width']) <= ((float) $page['width'] + 0.01)
-            && ($placement['y'] + $placement['height']) <= ((float) $page['height'] + 0.01);
+        foreach ($pageSizes as $page) {
+            if (
+                $placement['width'] <= 0
+                || $placement['height'] <= 0
+                || $placement['x'] < 0
+                || $placement['y'] < 0
+                || ($placement['x'] + $placement['width']) > ((float) $page['width'] + 0.01)
+                || ($placement['y'] + $placement['height']) > ((float) $page['height'] + 0.01)
+            ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function placementsOverlap(array $placements): bool
@@ -676,10 +699,6 @@ class ProjectReportSignatureService
             for ($j = $i + 1; $j < count($placements); $j++) {
                 $a = $placements[$i];
                 $b = $placements[$j];
-
-                if ((int) $a['page'] !== (int) $b['page']) {
-                    continue;
-                }
 
                 if (
                     $a['x'] < $b['x'] + $b['width']
@@ -1019,23 +1038,25 @@ class ProjectReportSignatureService
             $pdf->SetMargins(0, 0, 0);
             $pageCount = $pdf->setSourceFile($compatiblePath);
             $templateSizes = [];
+            $pageSizes = [];
 
             for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
                 $templateId = $pdf->importPage($pageNumber);
                 $templateSizes[$pageNumber] = $pdf->getTemplateSize($templateId);
+                $pageSizes[] = [
+                    'page' => $pageNumber,
+                    'width' => (float) $templateSizes[$pageNumber]['width'],
+                    'height' => (float) $templateSizes[$pageNumber]['height'],
+                ];
             }
 
-            $lastPage = [
-                'page' => $pageCount,
-                'width' => (float) $templateSizes[$pageCount]['width'],
-                'height' => (float) $templateSizes[$pageCount]['height'],
-            ];
+            $sharedPage = $this->sharedPhysicalPageSize($pageSizes);
             $placements = [];
 
             foreach ($signatures as $signature) {
-                $placement = filled($signature->page)
+                $placement = $this->hasPhysicalPlacement($signature)
                     ? $this->placementFromSignature($signature)
-                    : ['id' => $signature->id, ...$this->nextDefaultPlacement($lastPage, $placements)];
+                    : ['id' => $signature->id, ...$this->nextDefaultPlacement($sharedPage, $placements)];
                 $placements[] = $placement;
             }
 

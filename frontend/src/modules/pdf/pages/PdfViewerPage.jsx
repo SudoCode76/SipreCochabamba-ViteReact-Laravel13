@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, ExternalLink, FileSignature, FileText, History, Loader2, RefreshCw, Save, X } from "lucide-react";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { useSearchParams } from "react-router-dom";
 
 import { apiOrigin } from "@/lib/api/client";
@@ -9,6 +11,8 @@ import { projectService } from "@/modules/projects/services/project.service";
 
 const DEFAULT_ERROR_MESSAGE = "No se pudo generar el PDF.";
 const SIGNATURE_SESSION_KEY = "sipre:ciudadania-digital:signature";
+
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 function parseMessageFromPayload(payload) {
   if (!payload || typeof payload !== "object") {
@@ -145,8 +149,7 @@ function resolveAllowedPdfUrl(rawUrl) {
 }
 
 function boxesOverlap(a, b) {
-  return Number(a.page) === Number(b.page)
-    && a.x < b.x + b.width
+  return a.x < b.x + b.width
     && a.x + a.width > b.x
     && a.y < b.y + b.height
     && a.y + a.height > b.y;
@@ -177,6 +180,10 @@ export default function PdfViewerPage() {
   const signatureParameters = useMemo(() => parseJsonParam(signatureParametersRaw), [signatureParametersRaw]);
   const hasSignatureContext = Boolean(signatureSubjectId && signatureReportKey);
   const [blobUrl, setBlobUrl] = useState("");
+  const [physicalPdfData, setPhysicalPdfData] = useState(null);
+  const [physicalPdfDocument, setPhysicalPdfDocument] = useState(null);
+  const [physicalPdfLoading, setPhysicalPdfLoading] = useState(false);
+  const [physicalPdfError, setPhysicalPdfError] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
@@ -199,6 +206,7 @@ export default function PdfViewerPage() {
   const [savingPhysicalPositions, setSavingPhysicalPositions] = useState(false);
   const [physicalPositionMessage, setPhysicalPositionMessage] = useState("");
   const physicalCanvasRef = useRef(null);
+  const physicalPdfCanvasRef = useRef(null);
   const dragRef = useRef(null);
 
   const latestSigned = signatureStatus?.latest_signed;
@@ -255,11 +263,11 @@ export default function PdfViewerPage() {
     setPhysicalStatus(status);
     setPhysicalPositions(items.map((item) => ({
       ...item,
-      page: Number(item.page || pageSizes.at(-1)?.page || 1),
-      x: Number(item.x || 10),
-      y: Number(item.y || 10),
-      width: Number(item.width || 56),
-      height: Number(item.height || 28),
+      page: Number(item.page ?? 1),
+      x: Number(item.x ?? 10),
+      y: Number(item.y ?? 10),
+      width: Number(item.width ?? 56),
+      height: Number(item.height ?? 28),
     })));
 
     if (pageSizes.length > 0) {
@@ -305,10 +313,15 @@ export default function PdfViewerPage() {
       setLoading(true);
       setError("");
       setBlobUrl("");
+      setPhysicalPdfData(null);
+      setPhysicalPdfDocument(null);
+      setPhysicalPdfError("");
+      setPhysicalPdfLoading(isAdjustPhysicalMode);
 
       if (!pdfUrl) {
         setError("La ruta del PDF no es válida.");
         setLoading(false);
+        setPhysicalPdfLoading(false);
         return;
       }
 
@@ -347,13 +360,16 @@ export default function PdfViewerPage() {
         }
 
         currentBlobUrl = URL.createObjectURL(blob);
+        const pdfData = isAdjustPhysicalMode ? await blob.arrayBuffer() : null;
 
         if (!cancelled) {
           setBlobUrl(currentBlobUrl);
+          setPhysicalPdfData(pdfData);
         }
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError?.message || fallbackMessage);
+          setPhysicalPdfLoading(false);
         }
       } finally {
         if (!cancelled) {
@@ -371,7 +387,84 @@ export default function PdfViewerPage() {
         URL.revokeObjectURL(currentBlobUrl);
       }
     };
-  }, [fallbackMessage, pdfUrl, reloadKey]);
+  }, [fallbackMessage, isAdjustPhysicalMode, pdfUrl, reloadKey]);
+
+  useEffect(() => {
+    if (!isAdjustPhysicalMode || !physicalPdfData) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const loadingTask = getDocument({ data: new Uint8Array(physicalPdfData.slice(0)) });
+
+    void loadingTask.promise
+      .then((document) => {
+        if (cancelled) {
+          void document.destroy();
+          return;
+        }
+
+        setPhysicalPdfDocument(document);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPhysicalPdfError("No se pudo preparar el PDF para ajustar firmas.");
+          setPhysicalPdfLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      void loadingTask.destroy();
+    };
+  }, [isAdjustPhysicalMode, physicalPdfData]);
+
+  const currentPhysicalPageSize = useMemo(
+    () => (physicalStatus?.page_sizes ?? []).find((page) => Number(page.page) === Number(selectedPhysicalPage)),
+    [physicalStatus, selectedPhysicalPage],
+  );
+
+  useEffect(() => {
+    const canvas = physicalPdfCanvasRef.current;
+
+    if (!isAdjustPhysicalMode || !physicalPdfDocument || !currentPhysicalPageSize || !canvas) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let renderTask = null;
+
+    void physicalPdfDocument.getPage(selectedPhysicalPage)
+      .then((page) => {
+        if (cancelled) {
+          return null;
+        }
+
+        const scale = Math.min(window.devicePixelRatio || 1, 2);
+        const viewport = page.getViewport({ scale });
+
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        renderTask = page.render({ canvas, viewport });
+
+        return renderTask.promise;
+      })
+      .catch((renderError) => {
+        if (!cancelled && renderError?.name !== "RenderingCancelledException") {
+          setPhysicalPdfError("No se pudo mostrar la página seleccionada.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPhysicalPdfLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      renderTask?.cancel();
+    };
+  }, [currentPhysicalPageSize, isAdjustPhysicalMode, physicalPdfDocument, selectedPhysicalPage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -540,10 +633,18 @@ export default function PdfViewerPage() {
     }
   };
 
-  const currentPhysicalPageSize = useMemo(
-    () => (physicalStatus?.page_sizes ?? []).find((page) => Number(page.page) === Number(selectedPhysicalPage)),
-    [physicalStatus, selectedPhysicalPage],
-  );
+  const sharedPhysicalBounds = useMemo(() => {
+    const pageSizes = physicalStatus?.page_sizes ?? [];
+
+    if (pageSizes.length === 0) {
+      return null;
+    }
+
+    return {
+      width: Math.min(...pageSizes.map((page) => Number(page.width))),
+      height: Math.min(...pageSizes.map((page) => Number(page.height))),
+    };
+  }, [physicalStatus]);
 
   const hasPhysicalOverlap = (positions) => positions.some((position, index) => (
     positions.slice(index + 1).some((next) => boxesOverlap(position, next))
@@ -577,7 +678,7 @@ export default function PdfViewerPage() {
   const handlePhysicalPointerMove = (event) => {
     const drag = dragRef.current;
 
-    if (!drag || !currentPhysicalPageSize || !physicalCanvasRef.current) {
+    if (!drag || !currentPhysicalPageSize || !sharedPhysicalBounds || !physicalCanvasRef.current) {
       return;
     }
 
@@ -589,17 +690,15 @@ export default function PdfViewerPage() {
       if (drag.mode === "resize") {
         return {
           ...position,
-          page: Number(selectedPhysicalPage),
-          width: Number(clamp(pointerX - position.x, MIN_PHYSICAL_SIGNATURE_WIDTH, currentPhysicalPageSize.width - position.x).toFixed(2)),
-          height: Number(clamp(pointerY - position.y, MIN_PHYSICAL_SIGNATURE_HEIGHT, currentPhysicalPageSize.height - position.y).toFixed(2)),
+          width: Number(clamp(pointerX - position.x, MIN_PHYSICAL_SIGNATURE_WIDTH, sharedPhysicalBounds.width - position.x).toFixed(2)),
+          height: Number(clamp(pointerY - position.y, MIN_PHYSICAL_SIGNATURE_HEIGHT, sharedPhysicalBounds.height - position.y).toFixed(2)),
         };
       }
 
       return {
         ...position,
-        page: Number(selectedPhysicalPage),
-        x: Number(clamp(pointerX - drag.offsetX, 0, currentPhysicalPageSize.width - position.width).toFixed(2)),
-        y: Number(clamp(pointerY - drag.offsetY, 0, currentPhysicalPageSize.height - position.height).toFixed(2)),
+        x: Number(clamp(pointerX - drag.offsetX, 0, sharedPhysicalBounds.width - position.width).toFixed(2)),
+        y: Number(clamp(pointerY - drag.offsetY, 0, sharedPhysicalBounds.height - position.height).toFixed(2)),
       };
     });
   };
@@ -793,7 +892,11 @@ export default function PdfViewerPage() {
                 <span className="text-sm font-medium text-slate-700">Página</span>
                 <select
                   value={selectedPhysicalPage}
-                  onChange={(event) => setSelectedPhysicalPage(Number(event.target.value))}
+                  onChange={(event) => {
+                    setPhysicalPdfError("");
+                    setPhysicalPdfLoading(true);
+                    setSelectedPhysicalPage(Number(event.target.value));
+                  }}
                   className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                 >
                   {(physicalStatus?.page_sizes ?? []).map((page) => (
@@ -818,61 +921,70 @@ export default function PdfViewerPage() {
                     aspectRatio: `${currentPhysicalPageSize.width} / ${currentPhysicalPageSize.height}`,
                   }}
                 >
-                  <object
-                    title="PDF firmado"
-                    data={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=0&page=${selectedPhysicalPage}&view=Fit`}
-                    type="application/pdf"
-                    className="absolute inset-0 h-full w-full pointer-events-none"
+                  <canvas
+                    ref={physicalPdfCanvasRef}
+                    role="img"
+                    aria-label={`Página ${selectedPhysicalPage} del PDF firmado`}
+                    className="pointer-events-none absolute inset-0 z-0 h-full w-full"
                   />
-                  {physicalPositions
-                    .filter((position) => Number(position.page) === Number(selectedPhysicalPage))
-                    .map((position) => (
-                      <div
-                        key={position.id}
+                  {physicalPdfLoading ? (
+                    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/70 text-sm text-slate-600">
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Cargando página...
+                    </div>
+                  ) : null}
+                  {physicalPdfError ? (
+                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-white p-6 text-center text-sm text-red-600">
+                      {physicalPdfError}
+                    </div>
+                  ) : null}
+                  {!physicalPdfError && physicalPositions.map((position) => (
+                    <div
+                      key={position.id}
+                      role="button"
+                      tabIndex={0}
+                      onPointerDown={(event) => handlePhysicalPointerDown(event, position)}
+                      onPointerMove={handlePhysicalPointerMove}
+                      onPointerUp={handlePhysicalPointerUp}
+                      onPointerCancel={handlePhysicalPointerUp}
+                      className="absolute z-10 touch-none cursor-move overflow-hidden border-2 border-emerald-500 bg-white/80 shadow-lg"
+                      style={{
+                        left: `${(position.x / currentPhysicalPageSize.width) * 100}%`,
+                        top: `${(position.y / currentPhysicalPageSize.height) * 100}%`,
+                        width: `${(position.width / currentPhysicalPageSize.width) * 100}%`,
+                        height: `${(position.height / currentPhysicalPageSize.height) * 100}%`,
+                      }}
+                      title={position.user_name || "Firma física"}
+                    >
+                      <div className="flex h-full w-full flex-col">
+                        <div className="min-h-0 flex-1">
+                          {position.signature_image_url ? (
+                            <img
+                              src={position.signature_image_url}
+                              alt=""
+                              className="h-full w-full object-contain"
+                              draggable="false"
+                            />
+                          ) : (
+                            <span className="text-xs text-slate-600">{position.user_name || "Firma"}</span>
+                          )}
+                        </div>
+                        <div className="truncate px-0.5 text-center text-[8px] leading-none text-slate-900">
+                          {position.user_name || "Usuario"}
+                        </div>
+                      </div>
+                      <span
                         role="button"
                         tabIndex={0}
-                        onPointerDown={(event) => handlePhysicalPointerDown(event, position)}
+                        aria-label="Cambiar tamaño"
+                        onPointerDown={(event) => handlePhysicalResizePointerDown(event, position)}
                         onPointerMove={handlePhysicalPointerMove}
                         onPointerUp={handlePhysicalPointerUp}
                         onPointerCancel={handlePhysicalPointerUp}
-                        className="absolute z-10 touch-none cursor-move overflow-hidden border-2 border-emerald-500 bg-white/80 shadow-lg"
-                        style={{
-                          left: `${(position.x / currentPhysicalPageSize.width) * 100}%`,
-                          top: `${(position.y / currentPhysicalPageSize.height) * 100}%`,
-                          width: `${(position.width / currentPhysicalPageSize.width) * 100}%`,
-                          height: `${(position.height / currentPhysicalPageSize.height) * 100}%`,
-                        }}
-                        title={position.user_name || "Firma física"}
-                      >
-                        <div className="flex h-full w-full flex-col">
-                          <div className="min-h-0 flex-1">
-                            {position.signature_image_url ? (
-                              <img
-                                src={position.signature_image_url}
-                                alt=""
-                                className="h-full w-full object-contain"
-                                draggable="false"
-                              />
-                            ) : (
-                              <span className="text-xs text-slate-600">{position.user_name || "Firma"}</span>
-                            )}
-                          </div>
-                          <div className="truncate px-0.5 text-center text-[8px] leading-none text-slate-900">
-                            {position.user_name || "Usuario"}
-                          </div>
-                        </div>
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          aria-label="Cambiar tamaño"
-                          onPointerDown={(event) => handlePhysicalResizePointerDown(event, position)}
-                          onPointerMove={handlePhysicalPointerMove}
-                          onPointerUp={handlePhysicalPointerUp}
-                          onPointerCancel={handlePhysicalPointerUp}
-                          className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize rounded-tl bg-emerald-500 shadow"
-                        />
-                      </div>
-                    ))}
+                        className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize rounded-tl bg-emerald-500 shadow"
+                      />
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
