@@ -1,14 +1,17 @@
-import { ArrowRight, Bell, ChevronDown, FileSignature, Loader2, LogOut, ShieldCheck, User } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, ChevronDown, FileSignature, Loader2, LogOut, Menu, ShieldCheck, User } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { navigationSections } from "@/app/navigation";
 import { Button } from "@/components/ui/button";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import { useAuth } from "@/modules/auth/hooks/useAuth";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { canAccessNavigationItem, hasPermission } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 import { itemsService } from "@/modules/dashboard/services/items.service";
+import { NotificationBell } from "@/modules/notifications/components/NotificationBell";
 import { CitizenshipSessionIndicator } from "@/modules/pdf/components/CitizenshipSessionIndicator";
 
 function isSectionActive(section, pathname) {
@@ -21,6 +24,7 @@ function isSectionActive(section, pathname) {
 
 export default function MainLayout() {
   const location = useLocation();
+  const [expandedMobileSection, setExpandedMobileSection] = useState(null);
   const { user, logout, isLoggingOut } = useAuth();
   const canViewItemAlerts = hasPermission(user, "ITEMS", ["INDEX", "ITEMS"]);
   const { data: itemMaintenanceData, isFetching: itemMaintenanceFetching } = useQuery({
@@ -54,22 +58,20 @@ export default function MainLayout() {
         </div>
       )}
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[460px] bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.07),_transparent_62%)]" />
-
       <header className="sticky top-0 z-50 px-4 pt-4 sm:px-6">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 rounded-[28px] border border-border/70 bg-background/88 px-4 py-3 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:px-5">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-2 rounded-[28px] border border-border/70 bg-background/88 px-4 py-3 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:gap-3 sm:px-5">
           <Link to="/dashboard" className="flex min-w-0 items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-2xl bg-foreground text-background shadow-sm">
               <ShieldCheck className="size-4" />
             </div>
-            <div className="min-w-0">
+            <div className="hidden min-w-0 sm:block">
               <p className="truncate text-sm font-semibold uppercase tracking-[0.22em] text-foreground">
                 SIPRE
               </p>
             </div>
           </Link>
 
-          <nav className="hidden items-center gap-2 lg:flex">
+          <nav className="hidden items-center gap-2 xl:flex">
             {visibleNavigationSections.map((section) => {
               const active = isSectionActive(section, location.pathname);
 
@@ -140,48 +142,90 @@ export default function MainLayout() {
             })}
           </nav>
 
-          <div className="flex items-center gap-3">
-            <CitizenshipSessionIndicator />
-            {canViewItemAlerts && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="relative size-10 rounded-full border border-border/70 bg-background/80 hover:bg-muted"
-                    title="Alertas de actualización de ítems"
-                  >
-                    {itemMaintenanceFetching ? <Loader2 className="size-5 animate-spin" /> : <Bell className="size-5" />}
-                    {outdatedItemsCount > 0 && (
-                      <span className="absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">
-                        {outdatedItemsCount > 99 ? "99+" : outdatedItemsCount}
-                      </span>
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-72 rounded-2xl border-border/70 bg-background/95 p-2 shadow-xl backdrop-blur-xl">
-                  <DropdownMenuLabel className="px-3 py-2">
-                    <p className="text-sm font-semibold text-foreground">Mantenimiento de ítems</p>
-                    <p className="mt-1 text-xs font-normal text-muted-foreground">
-                      {outdatedItemsCount > 0
-                        ? `${outdatedItemsCount} ítem${outdatedItemsCount === 1 ? "" : "s"} requiere${outdatedItemsCount === 1 ? "" : "n"} revisión.`
-                        : "No hay ítems pendientes de revisión."}
-                    </p>
-                  </DropdownMenuLabel>
-                  {outdatedItemsCount > 0 && (
-                    <>
-                      <DropdownMenuSeparator className="bg-border/70" />
-                      <DropdownMenuItem asChild className="rounded-xl px-3 py-2 cursor-pointer">
-                        <Link to="/items" state={{ freshness: "outdated" }}>
-                          <Bell className="mr-2 size-4" />
-                          Ver ítems pendientes
+          <div className="flex items-center gap-1.5 sm:gap-3">
+            <DropdownMenu onOpenChange={(open) => !open && setExpandedMobileSection(null)}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-10 rounded-full border border-border/70 bg-background/80 hover:bg-muted xl:hidden"
+                  title="Abrir navegación"
+                  aria-label="Abrir navegación"
+                >
+                  <Menu className="size-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="max-h-[calc(100vh-6rem)] w-[calc(100vw-2rem)] max-w-sm overflow-y-auto rounded-2xl border-border/70 bg-background/95 p-2 shadow-xl backdrop-blur-xl xl:hidden"
+              >
+                <DropdownMenuLabel className="px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                  Navegación
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-border/70" />
+                {visibleNavigationSections.map((section) => {
+                  const active = isSectionActive(section, location.pathname);
+
+                  if (!section.children) {
+                    return (
+                      <DropdownMenuItem
+                        key={section.path}
+                        asChild
+                        className={cn("cursor-pointer rounded-xl px-3 py-2.5", active && "bg-muted font-semibold text-foreground")}
+                      >
+                        <Link to={section.path} className="flex items-center gap-3">
+                          <section.icon className="size-4" />
+                          <span>{section.title}</span>
                         </Link>
                       </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+                    );
+                  }
+
+                  const expanded = expandedMobileSection === section.title;
+
+                  return (
+                    <DropdownMenuGroup key={section.title}>
+                      <DropdownMenuItem
+                        className={cn("cursor-pointer rounded-xl px-3 py-2.5 font-semibold", (active || expanded) && "bg-muted text-foreground")}
+                        aria-expanded={expanded}
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          setExpandedMobileSection(expanded ? null : section.title);
+                        }}
+                      >
+                        <section.icon className="size-4" />
+                        <span className="flex-1">{section.title}</span>
+                        <ChevronDown className={cn("size-4 transition-transform", expanded && "rotate-180")} />
+                      </DropdownMenuItem>
+                      {expanded ? section.children.map((child) => {
+                        const childActive = location.pathname === child.path;
+
+                        return (
+                          <DropdownMenuItem
+                            key={child.path}
+                            asChild
+                            className={cn("cursor-pointer rounded-xl py-2.5 pl-8 pr-3", childActive && "bg-muted font-semibold text-foreground")}
+                          >
+                            <Link to={child.path} className="flex items-center gap-3">
+                              <child.icon className="size-4" />
+                              <span>{child.title}</span>
+                            </Link>
+                          </DropdownMenuItem>
+                        );
+                      }) : null}
+                    </DropdownMenuGroup>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <ThemeSwitcher />
+            <CitizenshipSessionIndicator />
+            <NotificationBell
+              user={user}
+              canViewItemAlerts={canViewItemAlerts}
+              outdatedItemsCount={outdatedItemsCount}
+              itemMaintenanceFetching={itemMaintenanceFetching}
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="size-10 rounded-full border border-border/70 bg-background/80 hover:bg-muted">
