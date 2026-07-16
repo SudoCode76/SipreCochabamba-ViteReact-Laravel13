@@ -25,15 +25,15 @@ use setasign\Fpdi\Tcpdf\Fpdi;
 
 class ProjectReportSignatureService
 {
-    private const DEFAULT_PHYSICAL_SIGNATURE_WIDTH = 56.0;
+    private const DEFAULT_PHYSICAL_SIGNATURE_WIDTH = 36.0;
 
-    private const DEFAULT_PHYSICAL_SIGNATURE_HEIGHT = 28.0;
+    private const DEFAULT_PHYSICAL_SIGNATURE_HEIGHT = 18.0;
 
-    private const SIGNATURE_FOOTER_HEIGHT = 30.0;
+    private const SIGNATURE_FOOTER_HEIGHT = 20.0;
 
-    private const PHYSICAL_ZONE_MARGIN = 4.0;
+    private const PHYSICAL_ZONE_MARGIN = 3.0;
 
-    private const PHYSICAL_SIGNATURE_GAP = 4.0;
+    private const PHYSICAL_SIGNATURE_GAP = 3.0;
 
     private const MIN_PHYSICAL_SIGNATURE_WIDTH = 20.0;
 

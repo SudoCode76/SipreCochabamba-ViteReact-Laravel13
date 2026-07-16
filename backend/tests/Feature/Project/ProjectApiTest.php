@@ -300,7 +300,8 @@ class ProjectApiTest extends TestCase
         Storage::fake('local');
         Storage::fake('public');
         $creator = $this->createLegacyAuthUser();
-        $signer = $this->createProjectUserWithPermissions(['PRESUPUESTO_GENERAL', 'FIRMAR_REPORTES']);
+        $signers = collect(range(1, 4))
+            ->map(fn () => $this->createProjectUserWithPermissions(['PRESUPUESTO_GENERAL', 'FIRMAR_REPORTES']));
         $project = $this->createProjectRecord([
             'aprobado' => 'RV',
             'fecha_finalizacion' => now(),
@@ -310,7 +311,7 @@ class ProjectApiTest extends TestCase
         Sanctum::actingAs($creator);
         $this->putJson("/api/v1/projects/{$project->id_proyecto}/signature-access", [
             'mode' => 'selected',
-            'user_ids' => [$creator->id_usuario, $signer->id_usuario],
+            'user_ids' => [$creator->id_usuario, ...$signers->pluck('id_usuario')->all()],
         ])->assertOk();
 
         $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview", [
@@ -318,7 +319,7 @@ class ProjectApiTest extends TestCase
             'page_scope' => 'last',
         ])->assertOk()
             ->assertJsonPath('data.ready', false)
-            ->assertJsonCount(2, 'data.missing_users');
+            ->assertJsonCount(5, 'data.missing_users');
 
         $image = imagecreatetruecolor(20, 10);
         ob_start();
@@ -326,9 +327,12 @@ class ProjectApiTest extends TestCase
         $png = ob_get_clean();
         imagedestroy($image);
         Storage::disk('public')->put('signatures/creator.png', $png);
-        Storage::disk('public')->put('signatures/signer.png', $png);
         $creator->forceFill(['firma_imagen_path' => 'signatures/creator.png'])->save();
-        $signer->forceFill(['firma_imagen_path' => 'signatures/signer.png'])->save();
+        foreach ($signers as $index => $signer) {
+            $path = "signatures/signer-{$index}.png";
+            Storage::disk('public')->put($path, $png);
+            $signer->forceFill(['firma_imagen_path' => $path])->save();
+        }
 
         $preview = $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview", [
             'format' => 'PCA',
@@ -336,7 +340,13 @@ class ProjectApiTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('data.ready', true)
             ->assertJsonPath('data.page_scope', 'last')
-            ->assertJsonCount(2, 'data.items');
+            ->assertJsonPath('data.digital_zone.height', 20)
+            ->assertJsonPath('data.physical_zone.default_width', 36)
+            ->assertJsonPath('data.physical_zone.default_height', 18)
+            ->assertJsonPath('data.physical_zone.columns', 5)
+            ->assertJsonCount(5, 'data.items');
+
+        $this->assertCount(1, collect($preview->json('data.items'))->pluck('y')->unique());
 
         $first = $preview->json('data.items.0');
         $digitalZone = $preview->json('data.digital_zone');

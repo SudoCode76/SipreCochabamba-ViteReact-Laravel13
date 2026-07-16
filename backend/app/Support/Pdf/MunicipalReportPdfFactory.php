@@ -3,9 +3,13 @@
 namespace App\Support\Pdf;
 
 use Illuminate\Http\Response;
+use Illuminate\Validation\ValidationException;
+use TCPDF;
 
 class MunicipalReportPdfFactory
 {
+    private const CONTENT_BOTTOM_MARGIN = 10.0;
+
     public static function make(string $title): MunicipalReportPdf
     {
         $pdf = new MunicipalReportPdf(
@@ -64,5 +68,55 @@ class MunicipalReportPdfFactory
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.$filename.'"',
         ]);
+    }
+
+    public static function writeHtml(
+        TCPDF $pdf,
+        string $body,
+        string $terminal = '',
+        ?array $signatureLayout = null,
+    ): void {
+        $reserve = max(0.0, (float) ($signatureLayout['reserved_height'] ?? 0));
+        $scope = (string) ($signatureLayout['page_scope'] ?? '');
+
+        if ($reserve <= 0 || ! in_array($scope, ['last', 'all'], true)) {
+            $pdf->writeHTML($body.$terminal, true, false, true, false, '');
+
+            return;
+        }
+
+        if ($scope === 'all') {
+            $pdf->SetAutoPageBreak(true, self::CONTENT_BOTTOM_MARGIN + $reserve);
+            $pdf->writeHTML($body.$terminal, true, false, true, false, '');
+
+            return;
+        }
+
+        $pdf->writeHTML($body, true, false, true, false, '');
+
+        if ($terminal === '') {
+            return;
+        }
+
+        $pdf->startTransaction();
+        $startPage = $pdf->getPage();
+        $pdf->writeHTML($terminal, true, false, true, false, '');
+        $cutoff = $pdf->getPageHeight() - self::CONTENT_BOTTOM_MARGIN - $reserve;
+
+        if ($pdf->getPage() === $startPage && $pdf->GetY() <= $cutoff) {
+            $pdf->commitTransaction();
+
+            return;
+        }
+
+        $pdf->rollbackTransaction(true);
+        $pdf->AddPage();
+        $pdf->writeHTML($terminal, true, false, true, false, '');
+
+        if ($pdf->GetY() > $pdf->getPageHeight() - self::CONTENT_BOTTOM_MARGIN - $reserve) {
+            throw ValidationException::withMessages([
+                'signature' => ['El bloque final del reporte no cabe junto al área reservada para firmas.'],
+            ]);
+        }
     }
 }
