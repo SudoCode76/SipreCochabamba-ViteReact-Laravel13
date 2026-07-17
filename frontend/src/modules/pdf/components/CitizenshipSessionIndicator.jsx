@@ -2,6 +2,8 @@ import { CheckCircle2, KeyRound, Loader2, LogOut } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/toast";
 import { citizenshipService, citizenshipSessionKey } from "@/modules/pdf/services/citizenship.service";
@@ -76,28 +78,24 @@ export function CitizenshipSessionIndicator({ compact = false }) {
 
   if (compact) {
     return (
-      <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-900">
-        <div className="flex items-start gap-3">
-          <KeyRound className="mt-0.5 size-4 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold">Sesión de Ciudadanía Digital abierta</p>
-            <p className="mt-1 text-xs leading-5 text-amber-800">
-              Puede cerrarla manualmente antes de volver a intentar la firma.
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={closeSession}
-              disabled={!canLogout || logoutMutation.isPending}
-              className="mt-3 rounded-full border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
-            >
-              {logoutMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
-              Cerrar sesión de Ciudadanía Digital
-            </Button>
-          </div>
-        </div>
-      </div>
+      <Alert className="mt-5 text-left">
+        <KeyRound />
+        <AlertTitle>Sesión de Ciudadanía Digital abierta</AlertTitle>
+        <AlertDescription>
+          <p>Puede cerrarla manualmente antes de volver a intentar la firma.</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={closeSession}
+            disabled={!canLogout || logoutMutation.isPending}
+            className="mt-3"
+          >
+            {logoutMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
+            Cerrar sesión
+          </Button>
+        </AlertDescription>
+      </Alert>
     );
   }
 
@@ -107,11 +105,7 @@ export function CitizenshipSessionIndicator({ compact = false }) {
         <Button
           variant="outline"
           size="sm"
-          className={`h-10 rounded-full px-3 sm:min-w-48 sm:justify-start ${
-            active
-              ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900"
-              : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-900"
-          }`}
+          className="h-9"
           title={active ? "Sesión de Ciudadanía Digital abierta" : "Sesión de Ciudadanía Digital cerrada"}
         >
           {isFetching ? (
@@ -121,15 +115,16 @@ export function CitizenshipSessionIndicator({ compact = false }) {
           ) : (
             <CheckCircle2 className="size-4" />
           )}
-          <span className="hidden text-xs font-semibold sm:inline">
-            Ciudadanía: {active ? "abierta" : "cerrada"}
-          </span>
+          <span className="hidden sm:inline">Ciudadanía Digital</span>
+          <Badge variant={active ? "secondary" : "outline"} className="hidden sm:inline-flex">
+            {active ? "Abierta" : "Cerrada"}
+          </Badge>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] max-w-80 rounded-2xl border-border/70 bg-background/95 p-2 shadow-xl backdrop-blur-xl">
-        <DropdownMenuLabel className="px-3 py-2">
-          <p className="text-sm font-semibold text-foreground">Ciudadanía Digital</p>
-          <p className="mt-1 text-xs font-normal leading-5 text-muted-foreground">
+      <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] max-w-80">
+        <DropdownMenuLabel>
+          <p className="text-sm font-medium text-foreground">Ciudadanía Digital</p>
+          <p className="text-xs font-normal leading-5 text-muted-foreground">
             {active
               ? `Sesión abierta${signature?.code ? ` para ${signature.code}` : ""}.`
               : "No hay una sesión externa abierta."}
@@ -137,9 +132,9 @@ export function CitizenshipSessionIndicator({ compact = false }) {
         </DropdownMenuLabel>
         {active ? (
           <>
-            <DropdownMenuSeparator className="bg-border/70" />
+            <DropdownMenuSeparator />
             <DropdownMenuItem
-              className="rounded-xl px-3 py-2 text-amber-700 focus:bg-amber-50 focus:text-amber-900"
+              variant="destructive"
               onClick={closeSession}
               disabled={!canLogout || logoutMutation.isPending}
             >

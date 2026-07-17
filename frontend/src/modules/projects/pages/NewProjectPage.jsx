@@ -13,6 +13,21 @@ import { projectService } from "../services/project.service";
 
 const ProjectLocationMap = lazy(() => import("../components/ProjectLocationMap"));
 
+const fieldLabels = {
+  nombre_proyecto: "El nombre del proyecto",
+  ubicacion: "La especificación de ubicación",
+  latitud: "La latitud",
+  longitud: "La longitud",
+  distrito: "El distrito",
+  zona: "La zona",
+  otb: "La OTB",
+  fecha: "La fecha",
+  responsable: "El responsable",
+  solicitante: "El solicitante",
+  aprobado: "La condición",
+  estado: "El estado",
+};
+
 export default function NewProjectPage() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -59,6 +74,8 @@ export default function NewProjectPage() {
   const creatorId = Number(data?.data?.metadata?.creator_user_id || 0);
 
   const handleChange = (field, value) => {
+    document.getElementById(field)?.setCustomValidity("");
+    setError(null);
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -129,8 +146,26 @@ export default function NewProjectPage() {
       navigate("/Proyecto");
     } catch (err) {
       const fieldErrors = err.response?.data?.errors;
-      const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
-      setError(firstFieldError || err.response?.data?.message || "Error al crear el proyecto");
+      const [field, messages] = Object.entries(fieldErrors ?? {})[0] ?? [];
+      const rawMessage = (Array.isArray(messages) ? messages[0] : messages) || err.response?.data?.message;
+      const label = fieldLabels[field] || field?.replaceAll("_", " ") || "El campo";
+      const message = rawMessage === "validation.required"
+        ? `${label} es obligatorio.`
+        : rawMessage?.startsWith("validation.")
+          ? `Revise el valor de ${label.toLowerCase()}.`
+          : rawMessage || "Error al crear el proyecto";
+
+      setError(message);
+
+      requestAnimationFrame(() => {
+        const input = field ? document.getElementById(field) : null;
+        if (!input) {
+          return;
+        }
+
+        input.setCustomValidity(message);
+        input.reportValidity();
+      });
     } finally {
       setSaving(false);
     }

@@ -4,6 +4,7 @@ import { Bell, CheckCheck, FileSignature, Loader2, PackageCheck } from "lucide-r
 import { Link, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import {
   DropdownMenu,
@@ -177,32 +178,32 @@ export function NotificationBell({
         <Button
           variant="ghost"
           size="icon"
-          className="relative size-10 rounded-full border border-border/70 bg-background/80 hover:bg-muted"
+          className="relative size-9"
           title="Notificaciones"
+          aria-label="Notificaciones"
         >
           {notificationsQuery.isFetching || itemMaintenanceFetching
             ? <Loader2 className="size-5 animate-spin" />
             : <Bell className="size-5" />}
           {unreadCount > 0 ? (
-            <span className="absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">
+            <Badge variant="destructive" className="absolute -right-1 -top-1 h-4 min-w-4 px-1 text-[10px]">
               {unreadCount > 99 ? "99+" : unreadCount}
-            </span>
+            </Badge>
           ) : null}
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] max-w-96 rounded-2xl border-border/70 bg-background/95 p-2 shadow-xl backdrop-blur-xl">
-        <DropdownMenuLabel className="flex items-center justify-between gap-3 px-3 py-2">
+      <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] max-w-96">
+        <DropdownMenuLabel className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-foreground">Notificaciones</p>
-            <p className="mt-1 text-xs font-normal text-muted-foreground">{unreadCount} sin ver</p>
+            <p className="text-sm font-medium text-foreground">Notificaciones</p>
+            <p className="text-xs font-normal text-muted-foreground">{unreadCount} sin leer</p>
           </div>
           {unreadCount > 0 ? (
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="rounded-full text-xs"
+              size="xs"
               disabled={markAllMutation.isPending}
               onClick={() => markAllMutation.mutate()}
             >
@@ -211,7 +212,7 @@ export function NotificationBell({
             </Button>
           ) : null}
         </DropdownMenuLabel>
-        <DropdownMenuSeparator className="bg-border/70" />
+        <DropdownMenuSeparator />
 
         <div className="max-h-80 overflow-y-auto">
           {items.length === 0 ? (
@@ -219,30 +220,28 @@ export function NotificationBell({
           ) : items.map((notification) => (
             <DropdownMenuItem
               key={notification.id}
-              className="mb-1 cursor-pointer items-start gap-3 rounded-xl px-3 py-3"
+              className="cursor-pointer items-start gap-2 py-2.5"
               onSelect={() => openNotification(notification)}
             >
-              <span className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full ${notification.read_at ? "bg-muted text-muted-foreground" : "bg-sky-100 text-sky-700"}`}>
-                <FileSignature className="size-4" />
-              </span>
+              <FileSignature className="mt-0.5 size-4 text-muted-foreground" />
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-foreground">{notification.title}</span>
-                <span className="mt-1 block line-clamp-2 text-xs leading-5 text-muted-foreground">{notification.message}</span>
-                <span className="mt-1 block text-[11px] text-muted-foreground">{relativeTime(notification.created_at)}</span>
+                <span className={`block text-sm ${notification.read_at ? "font-normal" : "font-medium"}`}>{notification.title}</span>
+                <span className="block line-clamp-2 text-xs leading-4 text-muted-foreground">{notification.message}</span>
+                <span className="block text-[11px] text-muted-foreground">{relativeTime(notification.created_at)}</span>
               </span>
-              {!notification.read_at ? <span className="mt-2 size-2 shrink-0 rounded-full bg-sky-600" /> : null}
+              {!notification.read_at ? <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" /> : null}
             </DropdownMenuItem>
           ))}
         </div>
 
-        <DropdownMenuItem asChild className="rounded-xl px-3 py-2">
+        <DropdownMenuItem asChild className="justify-center py-2">
           <Link to="/notificaciones" className="justify-center font-medium">Ver todas las notificaciones</Link>
         </DropdownMenuItem>
 
         {canViewItemAlerts ? (
           <>
-            <DropdownMenuSeparator className="bg-border/70" />
-            <DropdownMenuLabel className="px-3 py-2">
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>
               <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
                 <PackageCheck className="size-4" /> Mantenimiento de ítems
               </p>
@@ -253,7 +252,7 @@ export function NotificationBell({
               </p>
             </DropdownMenuLabel>
             {outdatedItemsCount > 0 ? (
-              <DropdownMenuItem asChild className="rounded-xl px-3 py-2">
+              <DropdownMenuItem asChild>
                 <Link to="/items" state={{ freshness: "outdated" }}>Ver ítems pendientes</Link>
               </DropdownMenuItem>
             ) : null}
