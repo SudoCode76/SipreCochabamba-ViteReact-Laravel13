@@ -1016,7 +1016,7 @@ export default function ProjectsPage() {
                 </div>
               )}
               <div className="max-w-full overflow-x-auto overflow-y-hidden">
-                <table className="w-full table-fixed border-collapse text-[13px]">
+                <table className="w-full min-w-[1200px] table-fixed border-collapse text-[13px]">
                   <colgroup>
                     <col className="w-[4%]" />
                     <col className="w-[15%]" />
