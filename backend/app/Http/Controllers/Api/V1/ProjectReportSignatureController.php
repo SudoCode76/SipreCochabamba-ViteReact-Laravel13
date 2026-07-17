@@ -18,6 +18,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -197,6 +198,37 @@ class ProjectReportSignatureController extends Controller
             $isSignedStale = (bool) $latestSigned
                 && $subjectCanBecomeStale
                 && (! filled($signedDocumentHash) || ! $isCurrentPdfSigned);
+            $requiredSignersCount = null;
+            $signedSignersCount = null;
+            $currentUserSigned = false;
+            $currentUserSignatureStatus = null;
+
+            if ($subject instanceof Project) {
+                $requiredSignersCount = DB::table('project_version_signature_users')
+                    ->where('id_proyecto', $subject->id_proyecto)
+                    ->count();
+                $progressQuery = ProjectReportSignature::query()
+                    ->where('id_proyecto', $subject->id_proyecto)
+                    ->whereNull('id_item')
+                    ->where('report_key', $reportKey)
+                    ->where('parameters_hash', $hash);
+                $signedSignersCount = (clone $progressQuery)
+                    ->where('status', 'signed')
+                    ->whereNotNull('id_usuario')
+                    ->distinct()
+                    ->count('id_usuario');
+                $currentUserSigned = (clone $progressQuery)
+                    ->where('status', 'signed')
+                    ->where('id_usuario', $request->user()->id_usuario)
+                    ->exists();
+                $currentUserSignatureStatus = $currentUserSigned
+                    ? 'signed'
+                    : (clone $progressQuery)
+                        ->where('id_usuario', $request->user()->id_usuario)
+                        ->whereIn('status', ['pending', 'auth_pending', 'sent'])
+                        ->latest('id')
+                        ->value('status');
+            }
 
             return ApiResponse::success([
                 'project_is_finalized' => $projectIsFinalized,
@@ -212,14 +244,28 @@ class ProjectReportSignatureController extends Controller
                 'is_current_pdf_signed' => $isCurrentPdfSigned,
                 'is_signed_stale' => $isSignedStale,
                 'signature_access' => $signatureAccess,
+                'signed_signers_count' => $signedSignersCount,
+                'required_signers_count' => $requiredSignersCount,
+                'current_user_signed' => $currentUserSigned,
+                'current_user_signature_status' => $currentUserSignatureStatus,
             ], 'Estado de firma obtenido correctamente.');
         }
 
         $projectIsFinalized = $subject instanceof Item ? true : $subject->isFrozen();
+        $signatureAccess = $subject instanceof Project
+            ? $this->signatureAccessService->decision($subject, $request->user())
+            : ['mode' => null, 'allowed' => true, 'message' => null];
+        $requiredSignersCount = $subject instanceof Project
+            ? DB::table('project_version_signature_users')
+                ->where('id_proyecto', $subject->id_proyecto)
+                ->count()
+            : null;
 
         return ApiResponse::success([
             'project_is_finalized' => $projectIsFinalized,
             'reports' => $reports,
+            'signature_access' => $signatureAccess,
+            'required_signers_count' => $requiredSignersCount,
         ], 'Estado de firma obtenido correctamente.');
     }
 

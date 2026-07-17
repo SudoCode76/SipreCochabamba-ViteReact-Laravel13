@@ -77,7 +77,7 @@ class ProjectSignatureNotificationService
                     $actor,
                     'Firma de Ciudadanía Digital pendiente',
                     "«{$project->nombre_proyecto}» fue finalizado y requiere tu firma digital.",
-                    'project'
+                    'project_signatures'
                 );
 
                 if (! $this->hasContextNotification($user, $payload['context_key'])) {
@@ -115,7 +115,9 @@ class ProjectSignatureNotificationService
             'action_kind' => in_array($kind, [ProjectSignatureNotification::ASSIGNED, ProjectSignatureNotification::PENDING], true)
                 && $needsSignatureImage
                 ? 'profile'
-                : ($data['action_kind'] ?? 'none'),
+                : ($kind === ProjectSignatureNotification::PENDING
+                    ? 'project_signatures'
+                    : ($data['action_kind'] ?? 'none')),
             'read_at' => $notification->read_at?->toIso8601String(),
             'created_at' => $notification->created_at?->toIso8601String(),
         ];

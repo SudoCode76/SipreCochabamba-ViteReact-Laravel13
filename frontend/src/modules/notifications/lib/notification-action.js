@@ -12,6 +12,11 @@ export function openNotificationAction(notification, navigate) {
     return;
   }
 
+  if (notification.action_kind === "project_signatures" && notification.project_id) {
+    navigate(`/Proyecto/${notification.project_id}/firmas`);
+    return;
+  }
+
   if (notification.action_kind === "signed_report"
     && notification.project_id
     && notification.report_key) {
@@ -36,6 +41,7 @@ export function openNotificationAction(notification, navigate) {
 export function notificationActionLabel(notification) {
   if (notification.action_kind === "profile") return "Cargar firma";
   if (notification.action_kind === "project") return "Revisar proyecto";
+  if (notification.action_kind === "project_signatures") return "Revisar firmas";
   if (notification.action_kind === "signed_report") return "Abrir y firmar PDF";
   return "";
 }

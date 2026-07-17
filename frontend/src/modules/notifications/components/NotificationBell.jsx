@@ -123,18 +123,44 @@ export function NotificationBell({
       }
     };
     const onChanged = () => void refresh(true);
-    const onConnected = () => void refresh(false);
     const onFocus = () => void refresh(false);
-    const channel = echo.private(`users.${user.id}`).listen(".notifications.changed", onChanged);
-    const connection = echo.connector?.pusher?.connection;
-    connection?.bind("connected", onConnected);
+    const channelName = `users.${user.id}`;
+    let channel = null;
+    let disposed = false;
+
+    const unsubscribe = () => {
+      if (!channel) return;
+
+      channel.stopListening(".notifications.changed", onChanged);
+      echo.leave(channelName);
+      channel = null;
+    };
+    const subscribe = () => {
+      if (disposed || channel || echo.connectionStatus() !== "connected") return;
+
+      channel = echo.private(channelName).listen(".notifications.changed", onChanged);
+      void refresh(false);
+    };
+    const onConnectionChange = (status) => {
+      if (status === "connected") {
+        subscribe();
+        return;
+      }
+
+      if (status === "disconnected" || status === "failed") {
+        unsubscribe();
+      }
+    };
+    const stopConnectionListener = echo.connector.onConnectionChange(onConnectionChange);
+
+    onConnectionChange(echo.connectionStatus());
     window.addEventListener("focus", onFocus);
 
     return () => {
-      channel.stopListening(".notifications.changed", onChanged);
-      connection?.unbind("connected", onConnected);
+      disposed = true;
+      stopConnectionListener();
       window.removeEventListener("focus", onFocus);
-      echo.leave(`users.${user.id}`);
+      unsubscribe();
     };
   }, [navigate, queryClient, toast, user?.id]);
 

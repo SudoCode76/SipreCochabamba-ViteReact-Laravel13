@@ -37,6 +37,7 @@ const loadPriceRecalculationPage = () => import("@/modules/analysis/pages/PriceR
 const loadPdfViewerPage = () => import("@/modules/pdf/pages/PdfViewerPage");
 const loadCitizenshipSignatureCallbackPage = () => import("@/modules/pdf/pages/CitizenshipSignatureCallbackPage");
 const loadProjectItemsPage = () => import("@/modules/projects/pages/ProjectItemsPage");
+const loadProjectSignatureReportsPage = () => import("@/modules/projects/pages/ProjectSignatureReportsPage");
 const loadProjectTemplatesPage = () => import("@/modules/projects/pages/ProjectTemplatesPage");
 const loadProjectsPage = () => import("@/modules/projects/pages/ProjectsPage");
 const loadPromanAnalysisPage = () => import("@/modules/analysis/proman/pages/PromanAnalysisPage");
@@ -79,6 +80,7 @@ const PriceRecalculationPage = lazy(loadPriceRecalculationPage);
 const PdfViewerPage = lazy(loadPdfViewerPage);
 const CitizenshipSignatureCallbackPage = lazy(loadCitizenshipSignatureCallbackPage);
 const ProjectItemsPage = lazy(loadProjectItemsPage);
+const ProjectSignatureReportsPage = lazy(loadProjectSignatureReportsPage);
 const ProjectTemplatesPage = lazy(loadProjectTemplatesPage);
 const ProjectsPage = lazy(loadProjectsPage);
 const PromanAnalysisPage = lazy(loadPromanAnalysisPage);
@@ -221,6 +223,10 @@ export const router = createBrowserRouter([
           {
             path: "/Proyecto/:projectId/items",
             element: routeElement(<ProjectItemsPage />),
+          },
+          {
+            path: "/Proyecto/:projectId/firmas",
+            element: routeElement(<ProjectSignatureReportsPage />),
           },
           {
             path: "/notificaciones",

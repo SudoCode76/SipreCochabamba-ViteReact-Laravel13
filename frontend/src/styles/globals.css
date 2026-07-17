@@ -157,6 +157,12 @@
     @apply min-h-screen;
   }
 
+  select option,
+  select optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
+
   ::selection {
     @apply bg-foreground text-background;
   }

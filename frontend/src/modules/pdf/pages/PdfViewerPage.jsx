@@ -256,7 +256,8 @@ export default function PdfViewerPage() {
       && !error
       && signatureStatus?.project_status_allows_signing
       && signatureStatus?.report?.is_enabled
-      && signatureStatus?.report?.can_sign,
+      && signatureStatus?.report?.can_sign
+      && !signatureStatus?.current_user_signed,
   );
   const signatureRestrictionMessage = useMemo(() => {
     if (!showSignatureToolbar || signatureLoading || signatureError || !signatureStatus?.report) {
@@ -265,6 +266,10 @@ export default function PdfViewerPage() {
 
     if (signatureStatus.signature_access?.allowed === false) {
       return signatureStatus.signature_access.message || "No está autorizado para firmar documentos de este proyecto.";
+    }
+
+    if (signatureStatus.current_user_signed) {
+      return "Ya firmó digitalmente esta variante del reporte.";
     }
 
     if (!signatureStatus.report.is_enabled) {

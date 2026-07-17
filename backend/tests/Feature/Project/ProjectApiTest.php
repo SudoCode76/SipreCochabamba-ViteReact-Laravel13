@@ -1273,8 +1273,90 @@ class ProjectApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.items.0.title', 'Firma de Ciudadanía Digital pendiente')
             ->assertJsonPath('data.items.0.message', '«PROYECTO TEST» fue finalizado y requiere tu firma digital.')
-            ->assertJsonPath('data.items.0.action_kind', 'project')
+            ->assertJsonPath('data.items.0.action_kind', 'project_signatures')
             ->assertJsonPath('data.items.0.report_key', null);
+    }
+
+    public function test_signature_status_counts_distinct_signers_for_the_exact_report_parameters(): void
+    {
+        ProjectSignableReport::query()
+            ->where('report_key', 'general_budget')
+            ->update(['is_enabled' => true]);
+        $project = $this->createProjectRecord([
+            'aprobado' => 'RV',
+            'fecha_aprob' => now()->toDateString(),
+            'fecha_finalizacion' => now(),
+        ]);
+        $signer = $this->createProjectUserWithPermissions(['PRESUPUESTO_GENERAL', 'FIRMAR_REPORTES']);
+        $otherSigner = User::query()->create([
+            'id_usuario' => 3,
+            'funcionario' => 'Otro Firmante',
+            'ci' => '76543210',
+            'username' => 'otro-firmante',
+            'clave' => Hash::make('secret123'),
+            'estado' => 'AC',
+            'id_unidad' => $signer->id_unidad,
+            'rol' => $signer->rol,
+            'fecha' => now()->toDateString(),
+            'subalcaldia' => null,
+        ]);
+        DB::table('project_version_signature_users')->insertOrIgnore([
+            [
+                'id_proyecto' => $project->id_proyecto,
+                'id_usuario' => $signer->id_usuario,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id_proyecto' => $project->id_proyecto,
+                'id_usuario' => $otherSigner->id_usuario,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+        $signatureService = app(ProjectReportSignatureService::class);
+        $pcaParameters = $signatureService->normalizeParameters(['format' => 'PCA']);
+        $fpsParameters = $signatureService->normalizeParameters(['format' => 'PC_FPS']);
+
+        foreach ([$signer, $otherSigner] as $signedUser) {
+            ProjectReportSignature::query()->create([
+                'id_proyecto' => $project->id_proyecto,
+                'report_key' => 'general_budget',
+                'parameters' => $pcaParameters,
+                'parameters_hash' => $signatureService->parametersHash($pcaParameters),
+                'status' => 'signed',
+                'id_usuario' => $signedUser->id_usuario,
+                'signed_at' => now(),
+            ]);
+        }
+        ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters' => $fpsParameters,
+            'parameters_hash' => $signatureService->parametersHash($fpsParameters),
+            'status' => 'signed',
+            'id_usuario' => $otherSigner->id_usuario,
+            'signed_at' => now(),
+        ]);
+
+        Sanctum::actingAs($signer);
+
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status")
+            ->assertOk()
+            ->assertJsonPath('data.signature_access.allowed', true)
+            ->assertJsonPath('data.required_signers_count', 2);
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget&format=PCA")
+            ->assertOk()
+            ->assertJsonPath('data.signed_signers_count', 2)
+            ->assertJsonPath('data.required_signers_count', 2)
+            ->assertJsonPath('data.current_user_signed', true)
+            ->assertJsonPath('data.current_user_signature_status', 'signed');
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget&format=PC_FPS")
+            ->assertOk()
+            ->assertJsonPath('data.signed_signers_count', 1)
+            ->assertJsonPath('data.required_signers_count', 2)
+            ->assertJsonPath('data.current_user_signed', false)
+            ->assertJsonPath('data.current_user_signature_status', null);
     }
 
     public function test_report_signing_sends_derivation_code_and_validity_to_firmagamc(): void

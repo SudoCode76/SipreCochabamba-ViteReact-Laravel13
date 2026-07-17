@@ -1542,21 +1542,18 @@ export default function ItemsPage() {
                         ? null
                         : daysWithoutUpdate === null || daysWithoutUpdate >= 180
                           ? {
-                              row: "bg-rose-50/70",
                               text: "font-medium text-rose-800",
                               badge: "bg-rose-600",
                               label: "Requiere revisión",
                             }
                           : daysWithoutUpdate >= 120
                             ? {
-                                row: "bg-orange-50/70",
                                 text: "font-medium text-orange-800",
                                 badge: "bg-orange-600",
                                 label: "120 a 180 días",
                               }
                             : daysWithoutUpdate >= 60
                               ? {
-                                  row: "bg-amber-50/60",
                                   text: "font-medium text-amber-800",
                                   badge: "bg-amber-600",
                                   label: "60 a 120 días",
@@ -1564,7 +1561,6 @@ export default function ItemsPage() {
                               : null;
                       const rowClassName = [
                         index < items.length - 1 ? "border-b border-border/60" : "",
-                        reviewStatus && !(highlightMissingSpecifications && isMissingSpecification) ? reviewStatus.row : "",
                         item.is_duplicate && !(highlightMissingSpecifications && isMissingSpecification) ? "bg-amber-50/70" : "",
                         highlightMissingSpecifications && isMissingSpecification ? "border-l-4 border-l-rose-500 bg-rose-50/90 [&>td]:!text-rose-950" : "",
                       ].filter(Boolean).join(" ");
