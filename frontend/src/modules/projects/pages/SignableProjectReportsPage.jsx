@@ -120,29 +120,7 @@ export default function SignableProjectReportsPage() {
                           {item.scope === "item" ? (
                             <span className="text-sm text-muted-foreground">No aplica para ítems</span>
                           ) : (
-                            <div className="flex flex-col gap-2">
-                              <Badge
-                                className={
-                                  item.requires_finalized_project
-                                    ? "bg-blue-600 text-white"
-                                    : "bg-amber-500 text-white"
-                                }
-                              >
-                                {item.requires_finalized_project ? "SOLO FINALIZADOS" : "CUALQUIER ESTADO"}
-                              </Badge>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                disabled={!canManage || isBusy}
-                                onClick={() => updateMutation.mutate({
-                                  reportKey: item.report_key,
-                                  payload: { requires_finalized_project: !item.requires_finalized_project },
-                                })}
-                              >
-                                {item.requires_finalized_project ? "Permitir no finalizados" : "Exigir finalizado"}
-                              </Button>
-                            </div>
+                            <Badge className="bg-blue-600 text-white">SOLO FINALIZADOS</Badge>
                           )}
                         </td>
                         <td className="px-5 py-4">
