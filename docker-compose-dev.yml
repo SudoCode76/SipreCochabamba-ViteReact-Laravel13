@@ -87,6 +87,9 @@ services:
 
     restart: unless-stopped
 
+    depends_on:
+      - reverb
+
     ports:
       - "8010:80"
 

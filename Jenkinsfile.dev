@@ -219,7 +219,7 @@ stages {
                 --header 'Sec-WebSocket-Version: 13' \
                 --header 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
                 --header 'Origin: http://localhost:8010' \
-                'http://localhost:8011/app/sipre-dev-key?protocol=7&client=js&version=8.4.0&flash=false' || true)"
+                'http://localhost:8010/app/sipre-dev-key?protocol=7&client=js&version=8.5.0&flash=false' || true)"
               test "$WS_STATUS" = '101'
 
               PUBLIC_WS_STATUS="$(curl --http1.1 --silent --output /dev/null --write-out '%{http_code}' \
