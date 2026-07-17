@@ -48,3 +48,5 @@ frontend/*.local
 
 # Unrelated local artifacts
 testApis/
+/.agents/
+/sipre-backup.dmp

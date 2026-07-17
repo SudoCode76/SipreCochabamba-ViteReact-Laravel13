@@ -10,14 +10,9 @@ parameters {
     booleanParam(
         name: 'FULL_REBUILD',
         defaultValue: false,
-        description: 'Eliminar cache Docker, imágenes y recrear completamente frontend/backend'
+        description: 'Eliminar cache Docker, imágenes y recrear completamente todos los servicios'
     )
 
-    booleanParam(
-        name: 'RUN_MIGRATIONS',
-        defaultValue: false,
-        description: 'Ejecutar migraciones Laravel'
-    )
 }
 
 environment {
@@ -25,6 +20,10 @@ environment {
     GIT_URL = 'https://github.com/alcaldiacochabamba/sipregamc.cochabamba.bo.git'
     GIT_CREDENTIALS = 'github-https'
     GIT_BRANCH = 'dev'
+    VITE_API_URL = 'https://sipregamcapidev.cochabamba.bo/api'
+    VITE_STORAGE_BASE_URL = 'https://sipregamcapidev.cochabamba.bo'
+    VITE_REVERB_APP_KEY = 'sipre-dev-key'
+    VITE_REVERB_URL = 'https://sipregamcdev.cochabamba.bo'
 }
 
 stages {
@@ -89,7 +88,7 @@ stages {
     stage('Stop running containers') {
         steps {
             sh '''
-              docker compose -f ${DOCKER_COMPOSE_FILE} down -v --remove-orphans
+              docker compose -f ${DOCKER_COMPOSE_FILE} down --remove-orphans
             '''
         }
     }
@@ -106,20 +105,15 @@ stages {
         steps {
             sh '''
               docker compose -f ${DOCKER_COMPOSE_FILE} exec -T backend sh -c '
-                if [ ! -f vendor/autoload.php ]; then
-                    composer install --no-interaction --prefer-dist --no-progress
-                fi
+                composer install --no-interaction --prefer-dist --no-progress
               '
+
+              docker compose -f ${DOCKER_COMPOSE_FILE} restart backend reverb
             '''
         }
     }
 
     stage('Run Laravel migrations') {
-
-        when {
-            expression { params.RUN_MIGRATIONS }
-        }
-
         steps {
             sh '''
               docker compose -f ${DOCKER_COMPOSE_FILE} exec -T backend sh -c '
@@ -184,11 +178,59 @@ stages {
         }
     }
 
-    stage('Debug frontend') {
+    stage('Validate deployment') {
         steps {
             sh '''
-                docker compose -f ${DOCKER_COMPOSE_FILE} ps
-                docker compose -f ${DOCKER_COMPOSE_FILE} logs frontend --tail=300
+              set -eu
+
+              docker compose -f ${DOCKER_COMPOSE_FILE} ps
+
+              RUNNING_SERVICES="$(docker compose -f ${DOCKER_COMPOSE_FILE} ps --services --status running)"
+              for SERVICE in backend frontend nginx reverb; do
+                printf '%s\n' "$RUNNING_SERVICES" | grep -qx "$SERVICE"
+              done
+
+              docker compose -f ${DOCKER_COMPOSE_FILE} exec -T reverb php -r '
+                $socket = @fsockopen("127.0.0.1", 8080);
+                exit($socket ? 0 : 1);
+              '
+
+              docker compose -f ${DOCKER_COMPOSE_FILE} exec -T backend \
+                php artisan migrate:status --no-ansi \
+                | grep -q '2026_07_16_000001_create_notifications_table.*Ran'
+
+              curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 2 \
+                http://localhost:8010/ > /dev/null
+              curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 2 \
+                http://localhost:8011/up > /dev/null
+
+              FRONTEND_ENTRY="$(docker compose -f ${DOCKER_COMPOSE_FILE} exec -T frontend \
+                sed -n 's#.*src="\(/assets/index-[^"]*\.js\)".*#\1#p' /usr/share/nginx/html/index.html)"
+              test -n "$FRONTEND_ENTRY"
+              docker compose -f ${DOCKER_COMPOSE_FILE} exec -T frontend \
+                grep -Fq "$VITE_REVERB_APP_KEY" "/usr/share/nginx/html${FRONTEND_ENTRY}"
+              docker compose -f ${DOCKER_COMPOSE_FILE} exec -T frontend \
+                grep -Fq "$VITE_REVERB_URL" "/usr/share/nginx/html${FRONTEND_ENTRY}"
+
+              WS_STATUS="$(curl --http1.1 --silent --output /dev/null --write-out '%{http_code}' \
+                --max-time 3 \
+                --header 'Connection: Upgrade' \
+                --header 'Upgrade: websocket' \
+                --header 'Sec-WebSocket-Version: 13' \
+                --header 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+                --header 'Origin: http://localhost:8010' \
+                'http://localhost:8011/app/sipre-dev-key?protocol=7&client=js&version=8.4.0&flash=false' || true)"
+              test "$WS_STATUS" = '101'
+
+              PUBLIC_WS_STATUS="$(curl --http1.1 --silent --output /dev/null --write-out '%{http_code}' \
+                --max-time 3 \
+                --header 'Connection: Upgrade' \
+                --header 'Upgrade: websocket' \
+                --header 'Sec-WebSocket-Version: 13' \
+                --header 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+                --header 'Origin: https://sipregamcdev.cochabamba.bo' \
+                'https://sipregamcdev.cochabamba.bo/app/sipre-dev-key?protocol=7&client=js&version=8.4.0&flash=false' || true)"
+              test "$PUBLIC_WS_STATUS" = '101'
             '''
         }
     }
@@ -208,7 +250,7 @@ stages {
 
 post {
     success {
-        echo '✅ DEV levantado correctamente (backend + frontend)'
+        echo '✅ DEV levantado correctamente (backend + frontend + nginx + reverb)'
     }
 
     failure {
