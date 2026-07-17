@@ -205,7 +205,7 @@ stages {
                 http://localhost:8011/up > /dev/null
 
               FRONTEND_ENTRY="$(docker compose -f ${DOCKER_COMPOSE_FILE} exec -T frontend \
-                sed -n 's#.*src="\(/assets/index-[^"]*\.js\)".*#\1#p' /usr/share/nginx/html/index.html)"
+                sed -n 's#.*src="\\(/assets/index-[^"]*\\.js\\)".*#\\1#p' /usr/share/nginx/html/index.html)"
               test -n "$FRONTEND_ENTRY"
               docker compose -f ${DOCKER_COMPOSE_FILE} exec -T frontend \
                 grep -Fq "$VITE_REVERB_APP_KEY" "/usr/share/nginx/html${FRONTEND_ENTRY}"
