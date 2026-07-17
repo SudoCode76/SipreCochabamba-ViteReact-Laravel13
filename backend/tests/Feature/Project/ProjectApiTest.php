@@ -19,9 +19,12 @@ use App\Modules\Projects\Services\ProjectInputsReportPdfService;
 use App\Modules\Projects\Services\ProjectLegacyUnitPriceService;
 use App\Modules\Projects\Services\ProjectReportSignatureService;
 use App\Modules\Projects\Services\ProjectSignableReportService;
+use App\Modules\Projects\Services\ProjectSignatureNotificationService;
+use App\Notifications\ProjectSignatureNotification;
 use App\Services\Citizenship\CiudadaniaDigitalClient;
 use App\Services\Citizenship\CiudadaniaDigitalException;
 use Carbon\Carbon;
+use Illuminate\Broadcasting\BroadcastManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -194,13 +197,13 @@ class ProjectApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.report.report_key', 'general_budget')
             ->assertJsonPath('data.report.is_enabled', true)
-            ->assertJsonPath('data.report.requires_finalized_project', false)
+            ->assertJsonPath('data.report.requires_finalized_project', true)
             ->assertJsonPath('data.report.validity_days', 15);
 
         $this->assertTrue(ProjectSignableReport::query()
             ->where('report_key', 'general_budget')
             ->value('is_enabled'));
-        $this->assertFalse(ProjectSignableReport::query()
+        $this->assertTrue(ProjectSignableReport::query()
             ->where('report_key', 'general_budget')
             ->value('requires_finalized_project'));
         $this->assertSame(15, ProjectSignableReport::query()
@@ -216,12 +219,18 @@ class ProjectApiTest extends TestCase
         $this->getJson('/api/v1/projects/1/signature-status?report_key=general_budget&format=PCA')
             ->assertOk()
             ->assertJsonPath('data.project_is_finalized', false)
-            ->assertJsonPath('data.project_status_allows_signing', true)
-            ->assertJsonPath('data.report.requires_finalized_project', false);
+            ->assertJsonPath('data.project_status_allows_signing', false)
+            ->assertJsonPath('data.report.requires_finalized_project', true);
+
+        $this->postJson('/api/v1/projects/1/reports/general_budget/sign', [
+            'format' => 'PCA',
+        ])->assertUnprocessable()
+            ->assertJsonPath('message', 'Este reporte solo permite firma digital en proyectos FINALIZADOS.');
 
         $this->patchJson('/api/v1/signable-project-reports/general_budget', [
-            'requires_finalized_project' => true,
-        ])->assertOk();
+            'requires_finalized_project' => false,
+        ])->assertOk()
+            ->assertJsonPath('data.report.requires_finalized_project', true);
 
         $this->getJson('/api/v1/projects/1/signature-status?report_key=general_budget&format=PCA')
             ->assertOk()
@@ -349,11 +358,49 @@ class ProjectApiTest extends TestCase
         $this->assertCount(1, collect($preview->json('data.items'))->pluck('y')->unique());
 
         $first = $preview->json('data.items.0');
+        $second = $preview->json('data.items.1');
         $digitalZone = $preview->json('data.digital_zone');
+        $pageWidth = $preview->json('data.page_sizes.0.width');
+        $originalHash = $preview->json('data.layout_hash');
+
+        $moved = $this->patchJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview/positions", [
+            'format' => 'PCA',
+            'layout_hash' => $originalHash,
+            'positions' => [[
+                'id' => $first['id'],
+                'x' => $first['x'],
+                'y' => 20,
+                'width' => $first['width'],
+                'height' => $first['height'],
+            ]],
+        ])->assertOk()
+            ->assertJsonPath('data.items.0.y', 20);
+
+        $savedHash = $moved->json('data.layout_hash');
+        $this->assertNotSame($originalHash, $savedHash);
 
         $this->patchJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview/positions", [
             'format' => 'PCA',
-            'layout_hash' => $preview->json('data.layout_hash'),
+            'layout_hash' => $originalHash,
+            'positions' => [[
+                'id' => $first['id'],
+                'x' => $first['x'],
+                'y' => 21,
+                'width' => $first['width'],
+                'height' => $first['height'],
+            ]],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['layout_hash']);
+
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview", [
+            'format' => 'PCA',
+            'page_scope' => 'last',
+        ])->assertOk()
+            ->assertJsonPath('data.items.0.y', 20);
+
+        $this->patchJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview/positions", [
+            'format' => 'PCA',
+            'layout_hash' => $savedHash,
             'positions' => [[
                 'id' => $first['id'],
                 'x' => $first['x'],
@@ -362,7 +409,46 @@ class ProjectApiTest extends TestCase
                 'height' => $first['height'],
             ]],
         ])->assertUnprocessable()
-            ->assertJsonValidationErrors(['positions']);
+            ->assertJsonPath('errors.positions.0', 'Las firmas físicas no pueden entrar en la zona de Ciudadanía Digital.');
+
+        $this->patchJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview/positions", [
+            'format' => 'PCA',
+            'layout_hash' => $savedHash,
+            'positions' => [[
+                'id' => $first['id'],
+                'x' => $pageWidth - $first['width'] + 1,
+                'y' => 20,
+                'width' => $first['width'],
+                'height' => $first['height'],
+            ]],
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.positions.0', 'Una de las firmas queda fuera de la página.');
+
+        $this->patchJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview/positions", [
+            'format' => 'PCA',
+            'layout_hash' => $savedHash,
+            'positions' => [[
+                'id' => $first['id'],
+                'x' => $second['x'],
+                'y' => $second['y'],
+                'width' => $first['width'],
+                'height' => $first['height'],
+            ]],
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.positions.0', 'Las firmas físicas no pueden superponerse.');
+
+        $this->patchJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signature-preview/positions", [
+            'format' => 'PCA',
+            'layout_hash' => $savedHash,
+            'positions' => [[
+                'id' => $first['id'],
+                'x' => $first['x'],
+                'y' => 20,
+                'width' => 19,
+                'height' => 12,
+            ]],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['positions.0.width']);
     }
 
     public function test_prepared_project_pdf_can_start_and_pending_attempt_can_be_cancelled(): void
@@ -976,6 +1062,221 @@ class ProjectApiTest extends TestCase
         ]);
     }
 
+    public function test_project_creation_notifies_new_signers_and_notifications_can_be_read(): void
+    {
+        $creator = $this->createLegacyAuthUser();
+        $signer = $this->createProjectUserWithPermissions(['INDEX']);
+        Sanctum::actingAs($creator);
+
+        $response = $this->postJson('/api/v1/projects', [
+            'nombre_proyecto' => 'PROYECTO CON NOTIFICACIONES',
+            'fecha' => '2026-07-16',
+            'ubicacion' => 'CENTRO',
+            'responsable' => $creator->id_usuario,
+            'solicitante' => $creator->id_usuario,
+            'estado' => 'AC',
+            'aprobado' => 'PD',
+            'signature_access' => [
+                'mode' => 'selected',
+                'user_ids' => [$creator->id_usuario, $signer->id_usuario],
+            ],
+        ])->assertCreated();
+
+        $projectId = $response->json('data.project.id_proyecto');
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $creator->id_usuario,
+            'type' => ProjectSignatureNotification::class,
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $signer->id_usuario,
+            'type' => ProjectSignatureNotification::class,
+            'read_at' => null,
+        ]);
+
+        Sanctum::actingAs($signer);
+        $notifications = $this->getJson('/api/v1/notifications')
+            ->assertOk()
+            ->assertJsonPath('data.unread_count', 1)
+            ->assertJsonPath('data.items.0.type', ProjectSignatureNotification::ASSIGNED)
+            ->assertJsonPath('data.items.0.title', 'Firma física requerida')
+            ->assertJsonPath('data.items.0.message', 'Carga tu firma física para incluirla en «PROYECTO CON NOTIFICACIONES».')
+            ->assertJsonPath('data.items.0.project_id', $projectId)
+            ->assertJsonPath('data.items.0.needs_signature_image', true)
+            ->assertJsonPath('data.items.0.action_kind', 'profile');
+
+        $notificationId = $notifications->json('data.items.0.id');
+        $this->patchJson("/api/v1/notifications/{$notificationId}/read")
+            ->assertOk()
+            ->assertJsonPath('data.notification.id', $notificationId);
+        $this->assertDatabaseMissing('notifications', ['id' => $notificationId, 'read_at' => null]);
+    }
+
+    public function test_new_project_version_notifies_inherited_signers_without_duplicates_on_save(): void
+    {
+        $creator = $this->createLegacyAuthUser();
+        $signer = $this->createProjectUserWithPermissions(['INDEX']);
+        Sanctum::actingAs($creator);
+
+        $created = $this->postJson('/api/v1/projects', [
+            'nombre_proyecto' => 'PROYECTO VERSIONADO',
+            'fecha' => '2026-07-16',
+            'ubicacion' => 'CENTRO',
+            'responsable' => $creator->id_usuario,
+            'solicitante' => $creator->id_usuario,
+            'estado' => 'AC',
+            'aprobado' => 'PD',
+            'signature_access' => [
+                'mode' => 'selected',
+                'user_ids' => [$signer->id_usuario],
+            ],
+        ])->assertCreated();
+        $projectId = $created->json('data.project.id_proyecto');
+
+        $this->postJson("/api/v1/projects/{$projectId}/finalize")->assertOk();
+        $version = $this->postJson("/api/v1/projects/{$projectId}/versions")->assertCreated();
+        $versionId = $version->json('data.project.id_proyecto');
+
+        $assigned = $signer->notifications()->get()
+            ->filter(fn ($notification): bool => $notification->data['kind'] === ProjectSignatureNotification::ASSIGNED);
+        $this->assertCount(2, $assigned);
+        $this->assertEqualsCanonicalizing([$projectId, $versionId], $assigned->pluck('data.project_id')->all());
+
+        $this->putJson("/api/v1/projects/{$versionId}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$signer->id_usuario],
+        ])->assertOk();
+
+        $this->assertSame(2, $signer->notifications()->get()
+            ->filter(fn ($notification): bool => $notification->data['kind'] === ProjectSignatureNotification::ASSIGNED)
+            ->count());
+    }
+
+    public function test_removing_a_signer_resolves_assignment_and_sends_removal_notice(): void
+    {
+        $creator = $this->createLegacyAuthUser();
+        $signer = $this->createProjectUserWithPermissions(['INDEX']);
+        $project = $this->createProjectRecord(['id_usuario' => $creator->id_usuario]);
+        Sanctum::actingAs($creator);
+
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$creator->id_usuario, $signer->id_usuario],
+        ])->assertOk();
+
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$creator->id_usuario],
+        ])->assertOk();
+
+        $notifications = $signer->notifications()->latest()->get();
+        $this->assertCount(2, $notifications);
+        $removed = $notifications->first(fn ($notification): bool => $notification->data['kind'] === ProjectSignatureNotification::REMOVED);
+        $assigned = $notifications->first(fn ($notification): bool => $notification->data['kind'] === ProjectSignatureNotification::ASSIGNED);
+        $this->assertNull($removed?->read_at);
+        $this->assertNotNull($assigned?->read_at);
+    }
+
+    public function test_notification_api_is_user_scoped_and_mark_all_only_updates_current_user(): void
+    {
+        $creator = $this->createLegacyAuthUser();
+        $signer = $this->createProjectUserWithPermissions(['INDEX']);
+        $other = User::query()->create([
+            'funcionario' => 'Otro Firmante',
+            'ci' => '55667788',
+            'username' => 'otro.firmante',
+            'clave' => Hash::make('secret123'),
+            'estado' => 'AC',
+            'id_unidad' => $signer->id_unidad,
+            'rol' => $signer->rol,
+            'fecha' => now()->toDateString(),
+        ]);
+        $payload = [
+            'kind' => ProjectSignatureNotification::ASSIGNED,
+            'title' => 'Designación',
+            'message' => 'Debe revisar el proyecto.',
+            'project_id' => 1,
+            'project_name' => 'PROYECTO TEST',
+            'version_number' => 1,
+            'action_kind' => 'project',
+            'context_key' => 'project:1:assigned',
+        ];
+        $signer->notify(new ProjectSignatureNotification($payload));
+        $other->notify(new ProjectSignatureNotification($payload));
+        $otherNotificationId = $other->notifications()->firstOrFail()->id;
+
+        Sanctum::actingAs($signer);
+        $this->patchJson("/api/v1/notifications/{$otherNotificationId}/read")->assertNotFound();
+        $this->patchJson('/api/v1/notifications/read-all')
+            ->assertOk()
+            ->assertJsonPath('data.updated', 1);
+
+        $this->assertNotNull($signer->notifications()->first()->read_at);
+        $this->assertNull($other->notifications()->first()->read_at);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $creator->id_usuario,
+            'type' => ProjectSignatureNotification::class,
+        ]);
+    }
+
+    public function test_notification_broadcast_channel_is_private_to_the_authenticated_user(): void
+    {
+        $user = $this->createLegacyAuthUser();
+        config([
+            'broadcasting.default' => 'reverb',
+            'broadcasting.connections.reverb.key' => 'test-key',
+            'broadcasting.connections.reverb.secret' => 'test-secret',
+            'broadcasting.connections.reverb.app_id' => 'test-app',
+        ]);
+        app(BroadcastManager::class)->forgetDrivers();
+        require base_path('routes/channels.php');
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/broadcasting/auth', [
+            'socket_id' => '123.456',
+            'channel_name' => "private-users.{$user->id_usuario}",
+        ])->assertOk();
+
+        $this->postJson('/api/broadcasting/auth', [
+            'socket_id' => '123.456',
+            'channel_name' => 'private-users.999999',
+        ])->assertForbidden();
+    }
+
+    public function test_finalizing_project_notifies_signers_once_per_version(): void
+    {
+        Storage::fake('public');
+        $creator = $this->createLegacyAuthUser();
+        $signer = $this->createProjectUserWithPermissions(['INDEX']);
+        Storage::disk('public')->put('signatures/signer.png', 'image');
+        $signer->forceFill(['firma_imagen_path' => 'signatures/signer.png'])->save();
+        $project = $this->createProjectRecord([
+            'id_usuario' => $creator->id_usuario,
+            'aprobado' => 'AP',
+        ]);
+        DB::table('project_version_signature_users')->insert([
+            'id_proyecto' => $project->id_proyecto,
+            'id_usuario' => $signer->id_usuario,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        Sanctum::actingAs($creator);
+
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/finalize")->assertOk();
+        app(ProjectSignatureNotificationService::class)->notifyFinalized($project->refresh(), $creator);
+
+        $this->assertSame(1, $signer->notifications()->where('type', ProjectSignatureNotification::class)->count());
+        $notification = $signer->notifications()->firstOrFail();
+        $this->assertSame(ProjectSignatureNotification::PENDING, $notification->data['kind']);
+
+        Sanctum::actingAs($signer);
+        $this->getJson('/api/v1/notifications')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.title', 'Firma de Ciudadanía Digital pendiente')
+            ->assertJsonPath('data.items.0.message', '«PROYECTO TEST» fue finalizado y requiere tu firma digital.')
+            ->assertJsonPath('data.items.0.action_kind', 'project')
+            ->assertJsonPath('data.items.0.report_key', null);
+    }
+
     public function test_report_signing_sends_derivation_code_and_validity_to_firmagamc(): void
     {
         Storage::fake('local');
@@ -1540,6 +1841,7 @@ class ProjectApiTest extends TestCase
 
         $this->assertDatabaseHas('project_report_signatures', ['id' => $abandoned->id]);
         $this->assertTrue(Storage::disk('local')->exists('project-signatures/abandoned-base.pdf'));
+
         return;
         $this->assertDatabaseHas('project_report_signatures', [
             'id_proyecto' => $project->id_proyecto,
@@ -1622,13 +1924,12 @@ class ProjectApiTest extends TestCase
             ->where('report_key', 'general_budget')
             ->update([
                 'is_enabled' => true,
-                'requires_finalized_project' => false,
             ]);
 
         $project = $this->createProjectRecord([
-            'aprobado' => 'AP',
-            'fecha_aprob' => null,
-            'fecha_finalizacion' => null,
+            'aprobado' => 'RV',
+            'fecha_aprob' => now()->toDateString(),
+            'fecha_finalizacion' => now(),
         ]);
 
         $service = app(ProjectReportSignatureService::class);
@@ -1662,10 +1963,16 @@ class ProjectApiTest extends TestCase
             ],
         ]);
 
-        Sanctum::actingAs($this->createProjectUserWithPermissions([
+        Storage::disk('public')->put('signature-images/second-signer.png', 'image');
+        $secondSigner = $this->createProjectUserWithPermissions([
             'PRESUPUESTO_GENERAL',
             'FIRMAR_REPORTES',
-        ]));
+        ]);
+        User::query()->update(['firma_imagen_path' => 'signature-images/second-signer.png']);
+        DB::table('project_version_signature_users')
+            ->where('id_proyecto', $project->id_proyecto)
+            ->update(['signature_image_path' => 'signature-images/second-signer.png']);
+        Sanctum::actingAs($secondSigner);
 
         $capturedPayload = null;
         $client = Mockery::mock(CiudadaniaDigitalClient::class);

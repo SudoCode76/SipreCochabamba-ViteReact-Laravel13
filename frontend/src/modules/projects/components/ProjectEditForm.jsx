@@ -30,8 +30,8 @@ const emptyForm = {
 
 function MapPreview({ distrito, zona, otb, latitud, longitud }) {
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-border/80 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.14),_transparent_32%),linear-gradient(135deg,rgba(248,250,252,1)_0%,rgba(241,245,249,1)_100%)]">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(15,23,42,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.06)_1px,transparent_1px)] bg-[size:28px_28px] opacity-70" />
+    <div className="project-form-surface relative overflow-hidden rounded-3xl border border-border/80">
+      <div className="project-form-grid absolute inset-0 opacity-70" />
       <div className="absolute inset-x-0 top-1/4 h-px bg-teal-500/30" />
       <div className="absolute inset-y-0 left-1/3 w-px bg-sky-500/30" />
       <div className="absolute inset-y-0 right-1/4 w-px bg-teal-500/25" />

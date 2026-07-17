@@ -4,17 +4,20 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { createRoot } from 'react-dom/client'
 
 import { ToastProvider } from '@/components/ui/toast'
+import { ThemeProvider } from '@/components/theme-provider'
 import { queryClient } from '@/lib/query/client'
 import '@/styles/globals.css'
 import App from './App'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
-      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>,
 )

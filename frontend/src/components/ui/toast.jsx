@@ -9,18 +9,18 @@ import { cn } from "@/lib/utils";
 const toastStyles = {
   success: {
     icon: CheckCircle2,
-    className: "border-emerald-200 bg-emerald-50 text-emerald-950",
-    iconClassName: "text-emerald-600",
+    className: "border-success/30 bg-success/10 text-success",
+    iconClassName: "text-success",
   },
   error: {
     icon: AlertCircle,
-    className: "border-rose-200 bg-rose-50 text-rose-950",
-    iconClassName: "text-rose-600",
+    className: "border-destructive/30 bg-destructive/10 text-destructive",
+    iconClassName: "text-destructive",
   },
   info: {
     icon: Info,
-    className: "border-sky-200 bg-sky-50 text-sky-950",
-    iconClassName: "text-sky-600",
+    className: "border-info/30 bg-info/10 text-info",
+    iconClassName: "text-info",
   },
 };
 
@@ -31,20 +31,20 @@ export function ToastProvider({ children }) {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
-  const notify = useCallback((type, message) => {
+  const notify = useCallback((type, message, options = {}) => {
     const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
-    const toast = { id, type, message };
+    const toast = { id, type, message, ...options };
 
     setToasts((current) => [...current, toast].slice(-4));
-    window.setTimeout(() => dismiss(id), 3500);
+    window.setTimeout(() => dismiss(id), options.duration ?? 3500);
 
     return id;
   }, [dismiss]);
 
   const value = useMemo(() => ({
-    success: (message) => notify("success", message),
-    error: (message) => notify("error", message),
-    info: (message) => notify("info", message),
+    success: (message, options) => notify("success", message, options),
+    error: (message, options) => notify("error", message, options),
+    info: (message, options) => notify("info", message, options),
     dismiss,
   }), [dismiss, notify]);
 
@@ -59,9 +59,22 @@ export function ToastProvider({ children }) {
           return (
             <div
               key={toast.id}
-              role="status"
+              role={toast.onClick ? "button" : "status"}
+              tabIndex={toast.onClick ? 0 : undefined}
+              onClick={() => {
+                if (!toast.onClick) return;
+                toast.onClick();
+                dismiss(toast.id);
+              }}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget || !toast.onClick || !["Enter", " "].includes(event.key)) return;
+                event.preventDefault();
+                toast.onClick();
+                dismiss(toast.id);
+              }}
               className={cn(
                 "pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-[0_18px_45px_rgba(15,23,42,0.16)] backdrop-blur-sm",
+                toast.onClick && "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 styles.className,
               )}
             >
@@ -71,8 +84,11 @@ export function ToastProvider({ children }) {
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="size-7 shrink-0 rounded-full text-current/70 hover:bg-black/5 hover:text-current"
-                onClick={() => dismiss(toast.id)}
+                className="size-7 shrink-0 rounded-full text-current/70 hover:bg-current/10 hover:text-current"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  dismiss(toast.id);
+                }}
                 aria-label="Cerrar notificación"
               >
                 <X className="size-4" />

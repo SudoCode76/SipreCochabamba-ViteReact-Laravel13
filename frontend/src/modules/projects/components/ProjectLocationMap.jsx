@@ -170,8 +170,8 @@ function projectPopup(project, distance) {
   return `
     <div style="min-width:220px;max-width:300px">
       <strong>${escapeHtml(project.name)}</strong>
-      <div style="margin-top:6px;color:#475569">${escapeHtml(project.location || "Sin ubicación registrada")}</div>
-      ${territorial ? `<div style="margin-top:4px;color:#475569">${territorial}</div>` : ""}
+      <div style="margin-top:6px;color:var(--muted-foreground)">${escapeHtml(project.location || "Sin ubicación registrada")}</div>
+      ${territorial ? `<div style="margin-top:4px;color:var(--muted-foreground)">${territorial}</div>` : ""}
       <div style="margin-top:6px"><strong>Condición:</strong> ${escapeHtml(getProjectApprovalLabel(project.approval_status))}</div>
       ${Number.isFinite(distance) ? `<div style="margin-top:4px"><strong>Distancia:</strong> ${Math.round(distance).toLocaleString("es-BO")} m</div>` : ""}
     </div>

@@ -103,7 +103,7 @@ class ProjectSignableReportService
                     'name' => $report->name,
                     'description' => $report->description,
                     'is_enabled' => (bool) $report->is_enabled,
-                    'requires_finalized_project' => $scope === 'item' ? false : (bool) $report->requires_finalized_project,
+                    'requires_finalized_project' => $scope !== 'item',
                     'validity_days' => (int) ($report->validity_days ?? 30),
                     'can_sign' => (bool) $report->is_enabled
                         && $canSignReports
@@ -144,7 +144,7 @@ class ProjectSignableReportService
 
     public function projectStatusAllowsSigning(ProjectSignableReport $report, bool $projectIsFinalized): bool
     {
-        return ! $report->requires_finalized_project || $projectIsFinalized;
+        return $projectIsFinalized;
     }
 
     private function hasSigningPermission(?User $user): bool

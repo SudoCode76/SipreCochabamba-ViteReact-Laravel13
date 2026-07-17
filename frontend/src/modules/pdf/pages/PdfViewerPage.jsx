@@ -6,6 +6,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { apiOrigin } from "@/lib/api/client";
 import { buildPdfViewerUrl, openUrlInNewTab } from "@/lib/utils/pdf";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import { itemsService } from "@/modules/dashboard/services/items.service";
 import { projectService } from "@/modules/projects/services/project.service";
 
@@ -82,6 +83,24 @@ function readApiError(error, fallback) {
   }
 
   return message;
+}
+
+function readMissingSignatureUsers(payload) {
+  const missing = payload?.data?.missing_users ?? payload?.missing_users ?? [];
+
+  if (missing.length > 0) {
+    return missing;
+  }
+
+  return (payload?.errors?.signature_images ?? []).map((message, index) => {
+    const [name, ...reason] = String(message).split(":");
+
+    return {
+      id: `signature-image-${index}`,
+      full_name: name.trim(),
+      reason: reason.join(":").trim() || String(message),
+    };
+  });
 }
 
 function signatureStatusMeta(signatureStatus) {
@@ -193,6 +212,7 @@ export default function PdfViewerPage() {
   const [signatureChecked, setSignatureChecked] = useState(!hasSignatureContext);
   const [acceptedStaleNoticeKey, setAcceptedStaleNoticeKey] = useState("");
   const [signatureError, setSignatureError] = useState("");
+  const [missingSignatureUsers, setMissingSignatureUsers] = useState([]);
   const [signing, setSigning] = useState(false);
   const [signAllPagesDialogOpen, setSignAllPagesDialogOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -515,7 +535,9 @@ export default function PdfViewerPage() {
       } catch (statusError) {
         if (!cancelled) {
           setSignatureStatus(null);
-          setSignatureError(readApiError(statusError, "No se pudo validar si este PDF puede firmarse."));
+          setSignatureError(readMissingSignatureUsers(statusError?.response?.data).length > 0
+            ? ""
+            : readApiError(statusError, "No se pudo validar si este PDF puede firmarse."));
         }
       } finally {
         if (!cancelled) {
@@ -614,7 +636,14 @@ export default function PdfViewerPage() {
 
       window.location.assign(redirectUrl);
     } catch (signError) {
-      setSignatureError(readApiError(signError, "No se pudo iniciar la firma digital."));
+      const missing = readMissingSignatureUsers(signError?.response?.data);
+
+      if (missing.length > 0) {
+        setSignatureError("");
+        setMissingSignatureUsers(missing);
+      } else {
+        setSignatureError(readApiError(signError, "No se pudo iniciar la firma digital."));
+      }
     } finally {
       setSigning(false);
     }
@@ -636,13 +665,18 @@ export default function PdfViewerPage() {
         signatureReportKey,
         { ...signatureParameters, page_scope: pageScope },
       );
-      const preview = response?.data;
+      const preview = response?.data ?? response;
 
       if (!preview?.ready) {
-        const missing = (preview?.missing_users ?? [])
-          .map((user) => `${user.full_name}: ${user.reason}`)
-          .join(" · ");
-        throw new Error(missing || "La previsualización de firmas no está lista.");
+        const missing = readMissingSignatureUsers(preview);
+
+        if (missing.length > 0) {
+          setSignatureError("");
+          setMissingSignatureUsers(missing);
+          return;
+        }
+
+        throw new Error("La previsualización de firmas no está lista.");
       }
 
       const previewUrl = projectService.signaturePreviewPdfUrl(signatureProjectId, signatureReportKey, signatureParameters);
@@ -658,6 +692,14 @@ export default function PdfViewerPage() {
         },
       }));
     } catch (previewError) {
+      const missing = readMissingSignatureUsers(previewError?.response?.data);
+
+      if (missing.length > 0) {
+        setSignatureError("");
+        setMissingSignatureUsers(missing);
+        return;
+      }
+
       setSignatureError(readApiError(previewError, "No se pudo preparar la previsualización de firmas."));
     } finally {
       setSigning(false);
@@ -711,18 +753,20 @@ export default function PdfViewerPage() {
     }
   };
 
-  const sharedPhysicalBounds = useMemo(() => {
-    const zone = physicalStatus?.physical_zone;
+  const sharedPageBounds = useMemo(() => {
+    const pageSizes = (physicalStatus?.page_sizes ?? []).filter((page) => (
+      physicalStatus?.page_scope === "all" || Number(page.page) === Number(physicalStatus?.signature_page)
+    ));
 
-    if (!zone) {
+    if (pageSizes.length === 0) {
       return null;
     }
 
     return {
-      x: Number(zone.x),
-      y: Number(zone.y),
-      width: Number(zone.width),
-      height: Number(zone.height),
+      x: 0,
+      y: 0,
+      width: Math.min(...pageSizes.map((page) => Number(page.width))),
+      height: Math.min(...pageSizes.map((page) => Number(page.height))),
     };
   }, [physicalStatus]);
 
@@ -731,10 +775,30 @@ export default function PdfViewerPage() {
   ));
 
   const updatePhysicalPosition = (id, updater) => {
-    setPhysicalPositionsDirty(true);
-    setPhysicalPositions((positions) => positions.map((position) => (
-      position.id === id ? updater(position) : position
-    )));
+    setPhysicalPositions((positions) => {
+      const current = positions.find((position) => position.id === id);
+
+      if (!current) {
+        return positions;
+      }
+
+      const candidate = updater(current);
+
+      if (physicalStatus?.digital_zone && boxesOverlap(candidate, physicalStatus.digital_zone)) {
+        setPhysicalPositionMessage("Las firmas físicas no pueden entrar en la zona de Ciudadanía Digital.");
+        return positions;
+      }
+
+      if (positions.some((position) => position.id !== id && boxesOverlap(candidate, position))) {
+        setPhysicalPositionMessage("Las firmas físicas no pueden superponerse.");
+        return positions;
+      }
+
+      setPhysicalPositionsDirty(true);
+      setPhysicalPositionMessage("Hay cambios sin guardar.");
+
+      return positions.map((position) => (position.id === id ? candidate : position));
+    });
   };
 
   const handlePhysicalPointerDown = (event, position) => {
@@ -759,7 +823,7 @@ export default function PdfViewerPage() {
   const handlePhysicalPointerMove = (event) => {
     const drag = dragRef.current;
 
-    if (!drag || !currentPhysicalPageSize || !sharedPhysicalBounds || !physicalCanvasRef.current) {
+    if (!drag || !currentPhysicalPageSize || !sharedPageBounds || !physicalCanvasRef.current) {
       return;
     }
 
@@ -771,15 +835,15 @@ export default function PdfViewerPage() {
       if (drag.mode === "resize") {
         return {
           ...position,
-          width: Number(clamp(pointerX - position.x, MIN_PHYSICAL_SIGNATURE_WIDTH, sharedPhysicalBounds.x + sharedPhysicalBounds.width - position.x).toFixed(2)),
-          height: Number(clamp(pointerY - position.y, MIN_PHYSICAL_SIGNATURE_HEIGHT, sharedPhysicalBounds.y + sharedPhysicalBounds.height - position.y).toFixed(2)),
+          width: Number(clamp(pointerX - position.x, MIN_PHYSICAL_SIGNATURE_WIDTH, sharedPageBounds.width - position.x).toFixed(2)),
+          height: Number(clamp(pointerY - position.y, MIN_PHYSICAL_SIGNATURE_HEIGHT, sharedPageBounds.height - position.y).toFixed(2)),
         };
       }
 
       return {
         ...position,
-        x: Number(clamp(pointerX - drag.offsetX, sharedPhysicalBounds.x, sharedPhysicalBounds.x + sharedPhysicalBounds.width - position.width).toFixed(2)),
-        y: Number(clamp(pointerY - drag.offsetY, sharedPhysicalBounds.y, sharedPhysicalBounds.y + sharedPhysicalBounds.height - position.height).toFixed(2)),
+        x: Number(clamp(pointerX - drag.offsetX, 0, sharedPageBounds.width - position.width).toFixed(2)),
+        y: Number(clamp(pointerY - drag.offsetY, 0, sharedPageBounds.height - position.height).toFixed(2)),
       };
     });
   };
@@ -851,7 +915,7 @@ export default function PdfViewerPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col bg-slate-100 text-slate-950">
+    <main className="theme-shell flex min-h-screen flex-col bg-background text-foreground">
       {showChrome ? (
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
           <div className="flex items-center gap-3">
@@ -864,6 +928,7 @@ export default function PdfViewerPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <ThemeSwitcher />
             {!error && showSignatureToolbar && !signatureLoading ? (
               <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${statusMeta.className}`}>
                 {hasSignedPdf ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
@@ -895,7 +960,7 @@ export default function PdfViewerPage() {
               <button
                 type="button"
                 onClick={handleSavePhysicalPositions}
-                disabled={!physicalStatus?.can_adjust || savingPhysicalPositions || physicalPositions.length === 0}
+                disabled={!physicalStatus?.can_adjust || !physicalPositionsDirty || savingPhysicalPositions || physicalPositions.length === 0}
                 className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {savingPhysicalPositions ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -907,6 +972,7 @@ export default function PdfViewerPage() {
                 type="button"
                 onClick={() => void submitSignPdf(physicalStatus?.page_scope || requestedPageScope, physicalStatus?.layout_hash || "")}
                 disabled={!physicalStatus?.can_send || physicalPositionsDirty || signing || savingPhysicalPositions}
+                title={physicalPositionsDirty ? "Guarde las posiciones antes de enviar a Ciudadanía Digital." : undefined}
                 className="inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
@@ -994,24 +1060,31 @@ export default function PdfViewerPage() {
         {canRenderPdf && isAdjustPhysicalMode ? (
           <div className="flex flex-1 flex-col overflow-hidden bg-slate-200">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-white px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-slate-700">Página</span>
-                <select
-                  value={selectedPhysicalPage}
-                  onChange={(event) => {
-                    setPhysicalPdfError("");
-                    setPhysicalPdfLoading(true);
-                    setSelectedPhysicalPage(Number(event.target.value));
-                  }}
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                >
-                  {(physicalStatus?.page_sizes ?? []).map((page) => (
-                    <option key={page.page} value={page.page}>{page.page}</option>
-                  ))}
-                </select>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-slate-700">Página</span>
+                  <select
+                    value={selectedPhysicalPage}
+                    onChange={(event) => {
+                      setPhysicalPdfError("");
+                      setPhysicalPdfLoading(true);
+                      setSelectedPhysicalPage(Number(event.target.value));
+                    }}
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                  >
+                    {(physicalStatus?.page_sizes ?? []).map((page) => (
+                      <option key={page.page} value={page.page}>{page.page}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  Si mueve o redimensiona una firma, debe guardar las posiciones antes de enviar.
+                </p>
               </div>
               {physicalPositionMessage ? (
-                <span className={`text-sm ${physicalPositionMessage.includes("guardadas") ? "text-emerald-700" : "text-red-600"}`}>
+                <span className={`text-sm ${physicalPositionMessage.includes("guardadas")
+                  ? "text-emerald-700"
+                  : physicalPositionMessage.includes("sin guardar") ? "text-amber-700" : "text-red-600"}`}>
                   {physicalPositionMessage}
                 </span>
               ) : null}
@@ -1021,7 +1094,7 @@ export default function PdfViewerPage() {
               {currentPhysicalPageSize ? (
                 <div
                   ref={physicalCanvasRef}
-                  className="relative mx-auto bg-white shadow-2xl"
+                  className="theme-fixed-light relative mx-auto bg-white shadow-2xl"
                   style={{
                     width: "min(100%, 920px)",
                     aspectRatio: `${currentPhysicalPageSize.width} / ${currentPhysicalPageSize.height}`,
@@ -1034,13 +1107,13 @@ export default function PdfViewerPage() {
                     className="pointer-events-none absolute inset-0 z-0 h-full w-full"
                   />
                   {physicalPdfLoading ? (
-                    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/70 text-sm text-slate-600">
+                    <div className="theme-fixed-light pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/70 text-sm text-slate-600">
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                       Cargando página...
                     </div>
                   ) : null}
                   {physicalPdfError ? (
-                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-white p-6 text-center text-sm text-red-600">
+                    <div className="theme-fixed-light absolute inset-0 z-20 flex items-center justify-center bg-white p-6 text-center text-sm text-red-600">
                       {physicalPdfError}
                     </div>
                   ) : null}
@@ -1066,7 +1139,7 @@ export default function PdfViewerPage() {
                       onPointerMove={handlePhysicalPointerMove}
                       onPointerUp={handlePhysicalPointerUp}
                       onPointerCancel={handlePhysicalPointerUp}
-                      className="absolute z-10 touch-none cursor-move overflow-hidden border-2 border-emerald-500 bg-white/80 shadow-lg"
+                      className="theme-fixed-light absolute z-10 touch-none cursor-move overflow-hidden border-2 border-emerald-500 bg-white/80 shadow-lg"
                       style={{
                         left: `${(position.x / currentPhysicalPageSize.width) * 100}%`,
                         top: `${((position.y + physicalPageOffsetY) / currentPhysicalPageSize.height) * 100}%`,
@@ -1105,7 +1178,7 @@ export default function PdfViewerPage() {
                     </div>
                   ))}
                   {!physicalPdfError && !physicalPageIsTarget ? (
-                    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/45 p-6 text-center text-sm font-medium text-slate-600">
+                    <div className="theme-fixed-light pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/45 p-6 text-center text-sm font-medium text-slate-600">
                       Las firmas se aplicarán únicamente en la última página.
                     </div>
                   ) : null}
@@ -1123,7 +1196,7 @@ export default function PdfViewerPage() {
           <iframe
             title={title}
             src={blobUrl}
-            className={`${showChrome ? "h-[calc(100vh-73px)]" : "h-screen"} w-full border-0 bg-white`}
+            className={`${showChrome ? "h-[calc(100vh-73px)]" : "h-screen"} theme-fixed-light w-full border-0 bg-white`}
           />
         ) : null}
       </section>
@@ -1161,6 +1234,43 @@ export default function PdfViewerPage() {
                 Cancelar
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {missingSignatureUsers.length > 0 ? (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="missing-signatures-title"
+            className="w-full max-w-lg rounded-2xl border border-red-200 bg-white p-6 shadow-2xl"
+          >
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <h2 id="missing-signatures-title" className="mt-4 text-center text-xl font-semibold">
+              No se puede enviar a Ciudadanía Digital
+            </h2>
+            <p className="mt-2 text-center text-sm leading-6 text-slate-600">
+              Todos los firmantes seleccionados deben tener una imagen de firma cargada en su perfil.
+            </p>
+            <ul className="mt-5 space-y-2">
+              {missingSignatureUsers.map((user) => (
+                <li key={user.id ?? user.user_id ?? user.full_name} className="rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+                  <p className="font-medium text-red-900">{user.full_name}</p>
+                  <p className="mt-1 text-sm text-red-700">{user.reason}</p>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setMissingSignatureUsers([])}
+              className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+            >
+              Entendido
+            </button>
           </div>
         </div>
       ) : null}

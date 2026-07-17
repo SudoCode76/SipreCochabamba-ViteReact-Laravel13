@@ -30,6 +30,7 @@ const loadItemsPage = () => import("@/modules/items/pages/ItemsPage");
 const loadManageInputRequestsPage = () => import("@/modules/input-requests/pages/ManageInputRequestsPage");
 const loadModulesPage = () => import("@/modules/modules/pages/ModulesPage");
 const loadNewProjectPage = () => import("@/modules/projects/pages/NewProjectPage");
+const loadNotificationsPage = () => import("@/modules/notifications/pages/NotificationsPage");
 const loadObrasAnalysisPage = () => import("@/modules/analysis/obras/pages/ObrasAnalysisPage");
 const loadObrasCalculationPercentagesPage = () => import("@/modules/calculation-percentages/pages/ObrasCalculationPercentagesPage");
 const loadPriceRecalculationPage = () => import("@/modules/analysis/pages/PriceRecalculationPage");
@@ -71,6 +72,7 @@ const ItemsPage = lazy(loadItemsPage);
 const ManageInputRequestsPage = lazy(loadManageInputRequestsPage);
 const ModulesPage = lazy(loadModulesPage);
 const NewProjectPage = lazy(loadNewProjectPage);
+const NotificationsPage = lazy(loadNotificationsPage);
 const ObrasAnalysisPage = lazy(loadObrasAnalysisPage);
 const ObrasCalculationPercentagesPage = lazy(loadObrasCalculationPercentagesPage);
 const PriceRecalculationPage = lazy(loadPriceRecalculationPage);
@@ -219,6 +221,10 @@ export const router = createBrowserRouter([
           {
             path: "/Proyecto/:projectId/items",
             element: routeElement(<ProjectItemsPage />),
+          },
+          {
+            path: "/notificaciones",
+            element: routeElement(<NotificationsPage />),
           },
           {
             path: "/parametros",

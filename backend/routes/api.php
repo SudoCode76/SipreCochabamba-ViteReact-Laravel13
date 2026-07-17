@@ -42,4 +42,5 @@ Route::prefix('v1')->group(function (): void {
     require __DIR__.'/api/v1/input_requests.php';
     require __DIR__.'/api/v1/authorizations.php';
     require __DIR__.'/api/v1/audits.php';
+    require __DIR__.'/api/v1/notifications.php';
 });

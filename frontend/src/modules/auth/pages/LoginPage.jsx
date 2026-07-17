@@ -6,6 +6,7 @@ import { authService } from "../services/auth.service";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import {
   Card,
   CardContent,
@@ -81,10 +82,10 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.1),_transparent_55%)]" />
+      <ThemeSwitcher className="absolute right-4 top-4 z-20 sm:right-6 sm:top-6" />
 
       <div className="relative z-10 w-full max-w-[620px]">
-        <Card className="border border-border/70 bg-white/88 shadow-[0_30px_120px_rgba(15,23,42,0.1)] backdrop-blur">
+        <Card className="border border-border/70 bg-card/88 shadow-xl backdrop-blur">
           <CardHeader className="gap-5 px-8 pt-8 text-center sm:px-10 sm:pt-10">
             <div className="flex justify-center">
               <img
@@ -92,7 +93,7 @@ export default function LoginPage() {
                 alt="SIPRE"
                 width={780}
                 height={300}
-                className="h-auto w-full max-w-[260px] object-contain"
+                className="theme-fixed-light h-auto w-full max-w-[280px] rounded-2xl bg-white p-3 object-contain"
               />
             </div>
             <div>

@@ -17,6 +17,7 @@ class ProjectVersionService
         private readonly ProjectPercentageSnapshotService $percentageSnapshotService,
         private readonly ProjectHistoryService $historyService,
         private readonly ProjectSignatureAccessService $signatureAccessService,
+        private readonly ProjectSignatureNotificationService $notificationService,
     ) {}
 
     public function versions(Project $project): Collection
@@ -121,6 +122,7 @@ class ProjectVersionService
                 'fecha_finalizacion' => now(),
             ]);
             $this->historyService->recordVersionFinalized($locked->refresh(), $actor, $ip);
+            $this->notificationService->notifyFinalized($locked->refresh(), $actor);
 
             return $locked->refresh();
         });

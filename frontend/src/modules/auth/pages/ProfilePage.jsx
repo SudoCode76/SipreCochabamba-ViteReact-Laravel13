@@ -93,7 +93,7 @@ function handleClassName(handle) {
     sw: "cursor-nesw-resize",
   }[handle];
 
-  return `absolute ${vertical} ${horizontal} size-3 rounded-[3px] border border-violet-500 bg-white shadow ${cursor}`;
+  return `theme-fixed-light absolute ${vertical} ${horizontal} size-3 rounded-[3px] border border-violet-500 bg-white shadow ${cursor}`;
 }
 
 export default function ProfilePage() {
@@ -123,6 +123,7 @@ export default function ProfilePage() {
   const refreshProfile = () => {
     void queryClient.invalidateQueries({ queryKey: ["profile"] });
     void queryClient.invalidateQueries({ queryKey: ["auth-user"] });
+    void queryClient.invalidateQueries({ queryKey: ["notifications"] });
   };
 
   const uploadMutation = useMutation({
@@ -377,10 +378,10 @@ export default function ProfilePage() {
                 <img
                   src={resolvedSignatureUrl}
                   alt="Firma física"
-                  className="h-24 max-w-64 rounded-2xl border border-border/70 bg-white object-contain p-3"
+                  className="theme-fixed-light h-24 max-w-64 rounded-2xl border border-border/70 bg-white object-contain p-3"
                 />
               ) : (
-                <div className="flex h-24 w-64 items-center justify-center rounded-2xl border border-dashed border-border/80 bg-white text-sm text-muted-foreground">
+                <div className="theme-fixed-light flex h-24 w-64 items-center justify-center rounded-2xl border border-dashed border-border/80 bg-white text-sm text-muted-foreground">
                   Sin firma cargada
                 </div>
               )}
@@ -416,7 +417,7 @@ export default function ProfilePage() {
             </div>
 
             {previewUrl ? (
-              <div className="mt-5 rounded-[24px] border border-border/70 bg-white p-4">
+              <div className="theme-fixed-light mt-5 rounded-[24px] border border-border/70 bg-white p-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <h3 className="text-sm font-semibold">Recortar firma</h3>

@@ -126,7 +126,7 @@ export function CitizenshipSessionIndicator({ compact = false }) {
           </span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 rounded-2xl border-border/70 bg-background/95 p-2 shadow-xl backdrop-blur-xl">
+      <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] max-w-80 rounded-2xl border-border/70 bg-background/95 p-2 shadow-xl backdrop-blur-xl">
         <DropdownMenuLabel className="px-3 py-2">
           <p className="text-sm font-semibold text-foreground">Ciudadanía Digital</p>
           <p className="mt-1 text-xs font-normal leading-5 text-muted-foreground">

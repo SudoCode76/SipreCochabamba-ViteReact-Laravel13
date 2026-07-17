@@ -124,13 +124,12 @@ class ProjectReportSignatureController extends Controller
             ->firstOrFail();
 
         $updates = collect($validated)
+            ->except('requires_finalized_project')
             ->map(fn ($value, string $key) => $key === 'validity_days' ? (int) $value : (bool) $value)
             ->all();
 
         $scope = ProjectSignableReportService::REPORTS[$report->report_key]['scope'] ?? 'project';
-        if ($scope === 'item') {
-            $updates['requires_finalized_project'] = false;
-        }
+        $updates['requires_finalized_project'] = $scope !== 'item';
 
         $report->forceFill($updates)->save();
 
@@ -141,7 +140,7 @@ class ProjectReportSignatureController extends Controller
                 'name' => $report->name,
                 'description' => $report->description,
                 'is_enabled' => (bool) $report->is_enabled,
-                'requires_finalized_project' => $scope === 'item' ? false : (bool) $report->requires_finalized_project,
+                'requires_finalized_project' => $scope !== 'item',
                 'validity_days' => (int) ($report->validity_days ?? 30),
             ],
         ], 'Configuración de firma actualizada correctamente.');
@@ -204,7 +203,7 @@ class ProjectReportSignatureController extends Controller
                 'project_is_frozen' => $projectIsFinalized,
                 'project_status_allows_signing' => $subject instanceof Item
                     ? (bool) ($report['is_enabled'] ?? false)
-                    : ($report ? (! ($report['requires_finalized_project'] ?? true) || $projectIsFinalized) : false),
+                    : ($report ? $projectIsFinalized : false),
                 'report' => $report,
                 'latest_signature' => $latest ? $this->signatureService->serialize($latest) : null,
                 'latest_signed' => $latestSigned ? $this->signatureService->serialize($latestSigned) : null,

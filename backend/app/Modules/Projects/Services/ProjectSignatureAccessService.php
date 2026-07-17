@@ -21,6 +21,7 @@ class ProjectSignatureAccessService
     public function __construct(
         private readonly ProjectHistoryService $historyService,
         private readonly AuditService $auditService,
+        private readonly ProjectSignatureNotificationService $notificationService,
     ) {}
 
     public function ensureDefaults(Project $project): void
@@ -42,6 +43,7 @@ class ProjectSignatureAccessService
             'signature_signers_configured_at' => now(),
             'signature_signers_locked_at' => null,
         ])->save();
+        $this->notificationService->syncAssignments($project, $creator, $ids, collect());
     }
 
     public function inherit(Project $source, Project $target, User $creator): void
@@ -57,6 +59,12 @@ class ProjectSignatureAccessService
             'signature_signers_configured_at' => now(),
             'signature_signers_locked_at' => null,
         ])->save();
+        $this->notificationService->syncAssignments(
+            $target,
+            $creator,
+            $ids->isEmpty() ? collect([$creator->id_usuario]) : $ids,
+            collect()
+        );
     }
 
     public function configuration(Project $project, ?User $user): array
@@ -143,6 +151,8 @@ class ProjectSignatureAccessService
             ->where('id_proyecto', $project->id_proyecto)
             ->pluck('id_usuario')
             ->map(fn ($id): int => (int) $id);
+        $addedIds = $ids->diff($previousIds)->values();
+        $removedIds = $previousIds->diff($ids)->values();
 
         $this->replaceSigners($project, $ids);
         $project->forceFill([
@@ -152,10 +162,11 @@ class ProjectSignatureAccessService
 
         $this->historyService->recordSignatureAccessUpdated($project, $actor, $ip, [
             'mode' => self::MODE_SELECTED,
-            'added_users' => $this->userSummaries($ids->diff($previousIds)->all()),
-            'removed_users' => $this->userSummaries($previousIds->diff($ids)->all()),
+            'added_users' => $this->userSummaries($addedIds->all()),
+            'removed_users' => $this->userSummaries($removedIds->all()),
         ]);
         $this->auditService->record($actor, $ip, 'PROYECTOS: se actualizó la lista de firmantes de '.$project->nombre_proyecto);
+        $this->notificationService->syncAssignments($project, $actor, $addedIds, $removedIds);
 
         return [
             'requires_confirmation' => false,
