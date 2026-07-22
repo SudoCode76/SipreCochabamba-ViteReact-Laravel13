@@ -1,0 +1,15 @@
+services:
+  backend:
+    environment:
+      APP_URL: http://localhost:8011
+      FRONTEND_URL: http://localhost:8010
+      SANCTUM_STATEFUL_DOMAINS: localhost:5173,localhost:8010,localhost:8011,127.0.0.1:5173,127.0.0.1:8010,127.0.0.1:8011
+      SESSION_DOMAIN: ""
+      SESSION_SECURE_COOKIE: "false"
+
+  frontend:
+    build:
+      args:
+        VITE_API_URL: http://localhost:8011/api
+        VITE_STORAGE_BASE_URL: http://localhost:8011
+        VITE_GIS_BASE_URL: ""

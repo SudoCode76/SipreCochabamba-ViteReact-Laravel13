@@ -3,7 +3,6 @@
 namespace App\Support\Pdf;
 
 use Illuminate\Http\Response;
-use Illuminate\Validation\ValidationException;
 use TCPDF;
 
 class MunicipalReportPdfFactory
@@ -76,47 +75,41 @@ class MunicipalReportPdfFactory
         string $terminal = '',
         ?array $signatureLayout = null,
     ): void {
+        self::render($pdf, function () use ($pdf, $body, $terminal): void {
+            $pdf->writeHTML($body.$terminal, true, false, true, false, '');
+        }, $signatureLayout);
+    }
+
+    public static function render(TCPDF $pdf, callable $writer, ?array $signatureLayout = null): void
+    {
         $reserve = max(0.0, (float) ($signatureLayout['reserved_height'] ?? 0));
         $scope = (string) ($signatureLayout['page_scope'] ?? '');
 
         if ($reserve <= 0 || ! in_array($scope, ['last', 'all'], true)) {
-            $pdf->writeHTML($body.$terminal, true, false, true, false, '');
+            $writer();
 
             return;
         }
 
         if ($scope === 'all') {
             $pdf->SetAutoPageBreak(true, self::CONTENT_BOTTOM_MARGIN + $reserve);
-            $pdf->writeHTML($body.$terminal, true, false, true, false, '');
+            $writer();
 
-            return;
-        }
-
-        $pdf->writeHTML($body, true, false, true, false, '');
-
-        if ($terminal === '') {
             return;
         }
 
         $pdf->startTransaction();
-        $startPage = $pdf->getPage();
-        $pdf->writeHTML($terminal, true, false, true, false, '');
+        $writer();
         $cutoff = $pdf->getPageHeight() - self::CONTENT_BOTTOM_MARGIN - $reserve;
 
-        if ($pdf->getPage() === $startPage && $pdf->GetY() <= $cutoff) {
+        if ($pdf->GetY() <= $cutoff) {
             $pdf->commitTransaction();
 
             return;
         }
 
         $pdf->rollbackTransaction(true);
-        $pdf->AddPage();
-        $pdf->writeHTML($terminal, true, false, true, false, '');
-
-        if ($pdf->GetY() > $pdf->getPageHeight() - self::CONTENT_BOTTOM_MARGIN - $reserve) {
-            throw ValidationException::withMessages([
-                'signature' => ['El bloque final del reporte no cabe junto al área reservada para firmas.'],
-            ]);
-        }
+        $pdf->SetAutoPageBreak(true, self::CONTENT_BOTTOM_MARGIN + $reserve);
+        $writer();
     }
 }

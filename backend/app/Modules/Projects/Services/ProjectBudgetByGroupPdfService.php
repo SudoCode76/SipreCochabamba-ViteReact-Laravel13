@@ -4,6 +4,7 @@ namespace App\Modules\Projects\Services;
 
 use App\Models\Project;
 use App\Support\Pdf\LegacyPdfFormat;
+use App\Support\Pdf\MunicipalReportPdfFactory;
 use App\Support\Pdf\ProjectBudgetByGroupPdf;
 use Illuminate\Http\Response;
 
@@ -13,35 +14,37 @@ class ProjectBudgetByGroupPdfService
         private readonly ProjectBudgetService $projectBudgetService,
     ) {}
 
-    public function stream(Project $project): Response
+    public function stream(Project $project, ?array $signatureLayout = null): Response
     {
         $budget = $this->projectBudgetService->budgetByGroupPdfData($project);
 
-        return $this->streamBudget($project, $budget);
+        return $this->streamBudget($project, $budget, $signatureLayout);
     }
 
-    public function streamHistorical(Project $project, array $budget): Response
+    public function streamHistorical(Project $project, array $budget, ?array $signatureLayout = null): Response
     {
         return $this->streamBudget($project, array_merge([
             'items_proyecto_count' => count($budget['items'] ?? []),
-        ], $budget));
+        ], $budget), $signatureLayout);
     }
 
-    private function streamBudget(Project $project, array $budget): Response
+    private function streamBudget(Project $project, array $budget, ?array $signatureLayout): Response
     {
         $items = $budget['items'] ?? [];
 
         $pdf = $this->makePdf();
-        $pdf->ln();
+        MunicipalReportPdfFactory::render($pdf, function () use ($budget, $items, $pdf, $project): void {
+            $pdf->ln();
 
-        if (($budget['items_proyecto_count'] ?? 0) === 0) {
-            $pdf->writeHTML('<div><h1>El proyecto no tiene item registrados aun, por favor agregue item</h1></div>', true, false, true, false, '');
-        } elseif ($items === []) {
-            $pdf->writeHTML('<div><h1>El proyecto  tiene algun item que aun no fue creado por completo, por favor revise la existencia del item</h1></div>', true, false, true, false, '');
-        } else {
-            $pdf->SetFont('dejavusans', '', 8, '', true);
-            $pdf->writeHTML($this->buildHtml($project, $items, $budget['totals'] ?? []), true, false, true, false, '');
-        }
+            if (($budget['items_proyecto_count'] ?? 0) === 0) {
+                $pdf->writeHTML('<div><h1>El proyecto no tiene item registrados aun, por favor agregue item</h1></div>', true, false, true, false, '');
+            } elseif ($items === []) {
+                $pdf->writeHTML('<div><h1>El proyecto  tiene algun item que aun no fue creado por completo, por favor revise la existencia del item</h1></div>', true, false, true, false, '');
+            } else {
+                $pdf->SetFont('dejavusans', '', 8, '', true);
+                $pdf->writeHTML($this->buildHtml($project, $items, $budget['totals'] ?? []), true, false, true, false, '');
+            }
+        }, $signatureLayout);
 
         return response($pdf->Output('presupuesto_por_rubros.pdf', 'S'), 200, [
             'Content-Type' => 'application/pdf',

@@ -21,19 +21,21 @@ class ProjectInputsGroupedReportPdfService
         3 => 'MAQUINARIA Y HERRAMIENTAS',
     ];
 
-    public function stream(Project $project): Response
+    public function stream(Project $project, ?array $signatureLayout = null): Response
     {
         $rows = $this->rows($project);
         $pdf = MunicipalReportPdfFactory::make('REPORTE DE PROYECTO AGRUPADO POR INSUMOS');
-        $pdf->ln();
-
-        if ($rows === []) {
-            $pdf->writeHTML('<div><h1>No existen registros!</h1></div>', true, false, true, false, '');
-        } else {
-            $pdf->SetFont('dejavusans', '', 7, '', true);
+        MunicipalReportPdfFactory::render($pdf, function () use ($pdf, $project, $rows): void {
             $pdf->ln();
-            $pdf->writeHTML($this->buildHtml($project, $rows), true, false, true, false, '');
-        }
+
+            if ($rows === []) {
+                $pdf->writeHTML('<div><h1>No existen registros!</h1></div>', true, false, true, false, '');
+            } else {
+                $pdf->SetFont('dejavusans', '', 7, '', true);
+                $pdf->ln();
+                $pdf->writeHTML($this->buildHtml($project, $rows), true, false, true, false, '');
+            }
+        }, $signatureLayout);
 
         return MunicipalReportPdfFactory::inlineResponse($pdf, 'proyecto_agrupado_por_insumos.pdf');
     }

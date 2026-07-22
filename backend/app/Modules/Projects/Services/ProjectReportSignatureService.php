@@ -25,6 +25,8 @@ use setasign\Fpdi\Tcpdf\Fpdi;
 
 class ProjectReportSignatureService
 {
+    private const PROJECT_LAYOUT_ALGORITHM = 2;
+
     private const DEFAULT_PHYSICAL_SIGNATURE_WIDTH = 36.0;
 
     private const DEFAULT_PHYSICAL_SIGNATURE_HEIGHT = 18.0;
@@ -130,7 +132,7 @@ class ProjectReportSignatureService
                 ]);
             }
 
-            $reserved = $this->reserveProjectSignatureAreas($pdf['content'], $items->count(), $pageScope);
+            $reserved = $this->preparedProjectPdf($project, $reportKey, $normalizedParameters, $items->count(), $pageScope);
             $baseContent = $this->stampPhysicalSignatures($reserved['content'], $items, $pageScope);
             $basePath = $this->storeBasePdf($project, $reportKey, $baseContent);
         } else {
@@ -374,9 +376,10 @@ class ProjectReportSignatureService
             ]);
         }
 
-        $pdf = $this->pdfResolver->resolve($project, $reportKey, $this->normalizeParameters($parameters));
-        $reserved = $this->reserveProjectSignatureAreas(
-            $pdf['content'],
+        $reserved = $this->preparedProjectPdf(
+            $project,
+            $reportKey,
+            $this->normalizeParameters($parameters),
             count($status['items']),
             $status['page_scope']
         );
@@ -863,6 +866,7 @@ class ProjectReportSignatureService
     private function projectLayoutHash(Project $project, string $reportKey, array $parameters, string $pageScope, Collection $items): string
     {
         return hash('sha256', json_encode([
+            'algorithm' => self::PROJECT_LAYOUT_ALGORITHM,
             'project_id' => $project->id_proyecto,
             'report_key' => $reportKey,
             'parameters' => $this->normalizeParameters($parameters),
@@ -886,12 +890,39 @@ class ProjectReportSignatureService
 
     private function projectPreviewGeometry(Project $project, string $reportKey, array $parameters, string $pageScope, int $count): array
     {
-        $pdf = $this->pdfResolver->resolve($project, $reportKey, $parameters);
-
-        return Arr::except($this->reserveProjectSignatureAreas($pdf['content'], $count, $pageScope), ['content']);
+        return Arr::except($this->preparedProjectPdf($project, $reportKey, $parameters, $count, $pageScope), ['content']);
     }
 
-    private function reserveProjectSignatureAreas(string $sourcePdf, int $count, string $pageScope): array
+    private function preparedProjectPdf(Project $project, string $reportKey, array $parameters, int $count, string $pageScope): array
+    {
+        $source = $this->pdfResolver->resolve($project, $reportKey, $parameters);
+
+        if ($reportKey === 'specifications') {
+            return $this->reserveProjectSignatureAreas($source['content'], $count, $pageScope, true);
+        }
+
+        $pageSizes = $this->pdfPageSizes($source['content']);
+        $targetSizes = collect($pageSizes)
+            ->when($pageScope !== 'all', fn (Collection $pages): Collection => $pages->take(-1));
+
+        if ($targetSizes->isEmpty()) {
+            throw new RuntimeException('No se pudo determinar el tamaño del PDF para reservar las firmas.');
+        }
+
+        $layout = $this->physicalZoneLayout(
+            (float) $targetSizes->min('width'),
+            (float) $targetSizes->min('height'),
+            $count
+        );
+        $prepared = $this->pdfResolver->resolve($project, $reportKey, $parameters, [
+            'page_scope' => $pageScope,
+            'reserved_height' => self::SIGNATURE_FOOTER_HEIGHT + $layout['height'],
+        ]);
+
+        return $this->reserveProjectSignatureAreas($prepared['content'], $count, $pageScope, false);
+    }
+
+    private function reserveProjectSignatureAreas(string $sourcePdf, int $count, string $pageScope, bool $scaleContent): array
     {
         $sourcePath = tempnam(sys_get_temp_dir(), 'sipre_preview_');
 
@@ -936,13 +967,22 @@ class ProjectReportSignatureService
                 $pageHeight = (float) $template['height'];
                 $pdf->AddPage($template['orientation'], [$pageWidth, $pageHeight]);
 
-                if (in_array($page, $targetPages, true)) {
+                if (in_array($page, $targetPages, true) && $scaleContent) {
                     $scale = ($pageHeight - $totalReserved) / $pageHeight;
                     $scaledWidth = $pageWidth * $scale;
                     $scaledHeight = $pageHeight * $scale;
                     $pdf->useTemplate($template['id'], ($pageWidth - $scaledWidth) / 2, 0, $scaledWidth, $scaledHeight);
                 } else {
                     $pdf->useTemplate($template['id'], 0, 0, $pageWidth, $pageHeight);
+                }
+
+                if (in_array($page, $targetPages, true)) {
+                    $pdf->SetFillColor(255, 255, 255);
+                    $pdf->Rect(0, $pageHeight - $totalReserved, $pageWidth, $totalReserved, 'F');
+                    $pdf->SetTextColor(0, 0, 0);
+                    $pdf->SetFont('helvetica', '', 6);
+                    $pdf->SetXY(0, $pageHeight - $totalReserved + 0.25);
+                    $pdf->Cell($pageWidth, 2.5, "Pagina {$page}/{$pageCount}", 0, 0, 'C');
                 }
             }
 
@@ -1014,6 +1054,7 @@ class ProjectReportSignatureService
             if ($placement
                 && $placement['width'] >= self::MIN_PHYSICAL_SIGNATURE_WIDTH
                 && $placement['height'] >= self::MIN_PHYSICAL_SIGNATURE_HEIGHT
+                && ($pageScope === 'all' || $placement['page'] === (int) $geometry['signature_page'])
                 && $this->placementInsideEveryPage($placement, $targetPageSizes)
                 && ! $this->placementsOverlap([$placement, ['id' => 0, ...$geometry['digital_zone']]])
                 && ! $this->placementsOverlap([...$existing, $placement])) {

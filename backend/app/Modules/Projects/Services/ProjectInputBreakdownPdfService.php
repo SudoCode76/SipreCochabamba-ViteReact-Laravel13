@@ -15,19 +15,21 @@ class ProjectInputBreakdownPdfService
         private readonly ProjectItemInputSnapshotService $snapshotService,
     ) {}
 
-    public function stream(Project $project, int $type): Response
+    public function stream(Project $project, int $type, ?array $signatureLayout = null): Response
     {
         $rows = $this->rows($project, $type);
         $pdf = MunicipalReportPdfFactory::make($this->titleFor($type));
-        $pdf->ln();
-
-        if ($rows === []) {
-            $pdf->writeHTML('<div><h1>No existen registros!</h1></div>', true, false, true, false, '');
-        } else {
-            $pdf->SetFont('dejavusans', '', 8, '', true);
+        MunicipalReportPdfFactory::render($pdf, function () use ($pdf, $project, $rows, $type): void {
             $pdf->ln();
-            $pdf->writeHTML($this->buildHtml($project, $rows, $type), true, false, true, false, '');
-        }
+
+            if ($rows === []) {
+                $pdf->writeHTML('<div><h1>No existen registros!</h1></div>', true, false, true, false, '');
+            } else {
+                $pdf->SetFont('dejavusans', '', 8, '', true);
+                $pdf->ln();
+                $pdf->writeHTML($this->buildHtml($project, $rows, $type), true, false, true, false, '');
+            }
+        }, $signatureLayout);
 
         return MunicipalReportPdfFactory::inlineResponse($pdf, $this->filenameFor($type));
     }

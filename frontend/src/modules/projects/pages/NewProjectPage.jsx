@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import ProjectSignatureAccessSection from "../components/ProjectSignatureAccessSection";
+import { normalizeProjectCoordinates } from "../lib/project-coordinates";
 import { projectService } from "../services/project.service";
 
 const ProjectLocationMap = lazy(() => import("../components/ProjectLocationMap"));
@@ -94,12 +95,22 @@ export default function NewProjectPage() {
       return;
     }
 
+    const coordinates = normalizeProjectCoordinates(
+      template.latitud,
+      template.longitud,
+      template.coordinate_system,
+    );
+
+    if (!coordinates) {
+      setError("La planilla no tiene una ubicación válida. Seleccione el punto manualmente en el mapa.");
+    }
+
     setFormData((current) => ({
       ...current,
       nombre_proyecto: "",
       ubicacion: template.ubicacion || "",
-      latitud: template.latitud || "",
-      longitud: template.longitud || "",
+      latitud: coordinates ? coordinates.lat.toFixed(6) : "",
+      longitud: coordinates ? coordinates.lng.toFixed(6) : "",
       distrito: template.distrito || "",
       zona: template.zona || "",
       subdistrito: template.subdistrito || "",

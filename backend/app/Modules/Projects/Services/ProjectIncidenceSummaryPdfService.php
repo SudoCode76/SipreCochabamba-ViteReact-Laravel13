@@ -15,7 +15,7 @@ class ProjectIncidenceSummaryPdfService
         private readonly ProjectBudgetService $projectBudgetService,
     ) {}
 
-    public function stream(Project $project, string $format): Response
+    public function stream(Project $project, string $format, ?array $signatureLayout = null): Response
     {
         $percentages = $this->resolvePercentages($project, $format);
         $budget = $this->projectBudgetService->budgetByGroupPdfData($project);
@@ -24,20 +24,22 @@ class ProjectIncidenceSummaryPdfService
         $pdf = MunicipalReportPdfFactory::make('RESUMEN POR INCIDENCIA');
         $pdf->SetFont('dejavusans', '', 7, '', true);
 
-        if (! $this->hasRequiredPercentages($percentages)) {
-            $pdf->writeHTML(
-                '<div><h1>La configuración de parametros de calculo esta incompleta o algun parametro escencial esta inactivo, revise su configuracion.</h1></div>',
-                true,
-                false,
-                true,
-                false,
-                '',
-            );
-        } elseif ($items === []) {
-            $pdf->writeHTML('<div><h1>El proyecto no tiene items disponibles para resumir incidencias.</h1></div>', true, false, true, false, '');
-        } else {
-            $pdf->writeHTML($this->buildHtml($project, $items, $percentages), true, false, true, false, '');
-        }
+        MunicipalReportPdfFactory::render($pdf, function () use ($items, $pdf, $percentages, $project): void {
+            if (! $this->hasRequiredPercentages($percentages)) {
+                $pdf->writeHTML(
+                    '<div><h1>La configuración de parametros de calculo esta incompleta o algun parametro escencial esta inactivo, revise su configuracion.</h1></div>',
+                    true,
+                    false,
+                    true,
+                    false,
+                    '',
+                );
+            } elseif ($items === []) {
+                $pdf->writeHTML('<div><h1>El proyecto no tiene items disponibles para resumir incidencias.</h1></div>', true, false, true, false, '');
+            } else {
+                $pdf->writeHTML($this->buildHtml($project, $items, $percentages), true, false, true, false, '');
+            }
+        }, $signatureLayout);
 
         return MunicipalReportPdfFactory::inlineResponse($pdf, 'resumen_incidencia.pdf');
     }

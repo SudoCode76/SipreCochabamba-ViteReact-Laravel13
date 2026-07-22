@@ -5,13 +5,17 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
-import proj4 from "proj4";
 import "proj4leaflet";
 
 import { Button } from "@/components/ui/button";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
+import {
+  normalizeProjectCoordinates,
+  PROJECT_UTM_CRS,
+  PROJECT_UTM_DEFINITION,
+} from "../lib/project-coordinates";
 import { getProjectApprovalLabel } from "../lib/project-status";
 import { projectService } from "../services/project.service";
 
@@ -29,9 +33,6 @@ const MAX_ZOOM = 12;
 const NEARBY_RADIUS_METERS = 500;
 const MAP_PROJECT_LIMIT = 500;
 const MAP_REFRESH_DELAY_MS = 450;
-const CRS_CODE = "EPSG:32719";
-const GEOGRAPHIC_CRS = "EPSG:4326";
-const CRS_DEF = "+proj=utm +zone=19 +south +datum=WGS84 +units=m +no_defs";
 const CRS_RESOLUTIONS = [1600, 800, 400, 200, 100, 50, 25, 10, 5, 2.5, 1, 0.5, 0.25, 0.125, 0.0625];
 const MUNICIPAL_WMS = {
   imagenes: "https://busquedasgamc.cochabamba.bo/web/index.php?r=services/get-imagenes",
@@ -39,17 +40,14 @@ const MUNICIPAL_WMS = {
   catastro: "https://busquedasgamc.cochabamba.bo/web/index.php?r=services/get-info-catastro",
   featureInfo: "https://busquedasgamc.cochabamba.bo/web/index.php?r=services/get-feature-info-url-calles",
 };
-proj4.defs(CRS_CODE, CRS_DEF);
 
 function parseLatLng(value) {
-  const latitud = Number(value?.latitud);
-  const longitud = Number(value?.longitud);
-
-  if (!Number.isFinite(latitud) || !Number.isFinite(longitud)) {
-    return null;
-  }
-
-  return L.latLng(latitud, longitud);
+  const coordinates = normalizeProjectCoordinates(
+    value?.latitud,
+    value?.longitud,
+    value?.coordinate_system,
+  );
+  return coordinates ? L.latLng(coordinates.lat, coordinates.lng) : null;
 }
 
 function formatLatLng(latlng) {
@@ -87,7 +85,7 @@ function getFeatureInfoUrl(map, crs, layerUrl, latlng, params) {
   const defaultParams = {
     REQUEST: "GetFeatureInfo",
     SERVICE: "WMS",
-    SRS: CRS_CODE,
+    SRS: PROJECT_UTM_CRS,
     STYLES: "",
     VERSION: "1.1.1",
     FORMAT: "image/png",
@@ -128,36 +126,12 @@ function escapeHtml(value) {
 }
 
 function normalizeProject(project) {
-  const latitude = Number(project.latitude);
-  const longitude = Number(project.longitude);
-
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    return null;
-  }
-
-  if (project.coordinate_system === "geographic") {
-    return {
-      ...project,
-      lat: latitude,
-      lng: longitude,
-    };
-  }
-
-  if (project.coordinate_system === "utm_32719") {
-    const [lng, lat] = proj4(CRS_CODE, GEOGRAPHIC_CRS, [longitude, latitude]);
-
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      return null;
-    }
-
-    return {
-      ...project,
-      lat,
-      lng,
-    };
-  }
-
-  return null;
+  const coordinates = normalizeProjectCoordinates(
+    project.latitude,
+    project.longitude,
+    project.coordinate_system,
+  );
+  return coordinates ? { ...project, ...coordinates } : null;
 }
 
 function projectPopup(project, distance) {
@@ -362,7 +336,7 @@ export default function ProjectLocationMap({ value, onChange, showProjects = fal
       return undefined;
     }
 
-    const crs = new L.Proj.CRS(CRS_CODE, CRS_DEF, {
+    const crs = new L.Proj.CRS(PROJECT_UTM_CRS, PROJECT_UTM_DEFINITION, {
       resolutions: CRS_RESOLUTIONS,
     });
     crsRef.current = crs;
@@ -518,17 +492,28 @@ export default function ProjectLocationMap({ value, onChange, showProjects = fal
 
   useEffect(() => {
     const currentLatLng = parseLatLng(value);
+    const map = mapRef.current;
     const markerLatLng = markerRef.current?.getLatLng();
 
-    if (!currentLatLng || !markerLatLng) {
+    if (!map) {
+      return;
+    }
+
+    if (!currentLatLng) {
+      if (markerRef.current) {
+        map.removeLayer(markerRef.current);
+        markerRef.current = null;
+      }
       return;
     }
 
     if (
-      Math.abs(currentLatLng.lat - markerLatLng.lat) > 0.000001
+      !markerLatLng
+      || Math.abs(currentLatLng.lat - markerLatLng.lat) > 0.000001
       || Math.abs(currentLatLng.lng - markerLatLng.lng) > 0.000001
     ) {
       createOrMoveMarker(currentLatLng, false);
+      map.setView(currentLatLng, map.getZoom());
     }
   }, [createOrMoveMarker, value]);
 

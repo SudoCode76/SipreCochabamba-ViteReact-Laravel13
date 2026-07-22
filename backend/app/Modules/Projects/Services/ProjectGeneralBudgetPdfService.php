@@ -4,6 +4,7 @@ namespace App\Modules\Projects\Services;
 
 use App\Models\Project;
 use App\Support\Pdf\LegacyPdfFormat;
+use App\Support\Pdf\MunicipalReportPdfFactory;
 use App\Support\Pdf\ProjectGeneralBudgetPdf;
 use Illuminate\Http\Response;
 
@@ -14,16 +15,18 @@ class ProjectGeneralBudgetPdfService
         private readonly ProjectLegacyUnitPriceService $projectLegacyUnitPriceService,
     ) {}
 
-    public function stream(Project $project, string $format): Response
+    public function stream(Project $project, string $format, ?array $signatureLayout = null): Response
     {
         $items = $this->projectBudgetService->generalBudgetPdfItems($project, $format, $this->projectLegacyUnitPriceService);
         $pdf = $this->makePdf();
 
-        if ($items === []) {
-            $pdf->writeHTML('<div><h1 style="color:red" align="center">No existen registros!</h1></div>', true, false, true, false, '');
-        } else {
-            $this->writeCenteredBudgetHtml($pdf, $this->buildHtml($project, $items));
-        }
+        MunicipalReportPdfFactory::render($pdf, function () use ($items, $pdf, $project): void {
+            if ($items === []) {
+                $pdf->writeHTML('<div><h1 style="color:red" align="center">No existen registros!</h1></div>', true, false, true, false, '');
+            } else {
+                $this->writeCenteredBudgetHtml($pdf, $this->buildHtml($project, $items));
+            }
+        }, $signatureLayout);
 
         return response($pdf->Output('presupuesto_general.pdf', 'S'), 200, [
             'Content-Type' => 'application/pdf',

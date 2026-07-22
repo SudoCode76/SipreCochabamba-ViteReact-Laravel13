@@ -4,6 +4,7 @@ namespace App\Modules\Projects\Services;
 
 use App\Models\Project;
 use App\Modules\Items\Services\LegacyUnitPriceAnalysisPdfService;
+use App\Support\Pdf\MunicipalReportPdfFactory;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Response;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +19,7 @@ class ProjectUnitPricesPdfService
         private readonly LegacyUnitPriceAnalysisPdfService $legacyUnitPriceAnalysisPdfService,
     ) {}
 
-    public function stream(Project $project, string $format): Response
+    public function stream(Project $project, string $format, ?array $signatureLayout = null): Response
     {
         $items = $this->validatedItems($project, $format);
 
@@ -28,34 +29,38 @@ class ProjectUnitPricesPdfService
         $pdf->SetFont('dejavusans', '', 7, '', true);
         $pdf->Ln();
 
-        if ($items === []) {
-            $pdf->writeHTML('<p>No existen ítems activos para imprimir.</p>', true, false, true, false, '');
+        MunicipalReportPdfFactory::render($pdf, function () use ($items, $pdf): void {
+            if ($items === []) {
+                $pdf->writeHTML('<p>No existen ítems activos para imprimir.</p>', true, false, true, false, '');
 
-            return $this->inlineResponse($pdf);
-        }
-
-        foreach ($items as $row) {
-            try {
-                $analysis = $row['analysis'];
-                [$html, $missingParametersHtml] = $this->legacyUnitPriceAnalysisPdfService->buildLegacyHtml($analysis, true);
-            } catch (Throwable $exception) {
-                report($exception);
-
-                $itemName = $row['analysis']['item']['name'] ?? 'sin nombre';
-
-                $this->fail(
-                    "No se pudo generar precios unitarios: el ítem \"{$itemName}\" tiene datos incompletos o inválidos.",
-                    $row['analysis']['item'] ?? null,
-                    'invalid_data',
-                );
+                return;
             }
 
-            $pdf->Ln();
-            $pdf->SetFont('dejavusans', '', 8, '', true);
-            $pdf->writeHTML($missingParametersHtml ?? $html, true, false, true, false, '');
-            $pdf->AddPage();
-            $pdf->SetFont('dejavusans', '', 10, '', true);
-        }
+            foreach ($items as $index => $row) {
+                if ($index > 0) {
+                    $pdf->AddPage();
+                }
+
+                try {
+                    $analysis = $row['analysis'];
+                    [$html, $missingParametersHtml] = $this->legacyUnitPriceAnalysisPdfService->buildLegacyHtml($analysis, true);
+                } catch (Throwable $exception) {
+                    report($exception);
+
+                    $itemName = $row['analysis']['item']['name'] ?? 'sin nombre';
+
+                    $this->fail(
+                        "No se pudo generar precios unitarios: el ítem \"{$itemName}\" tiene datos incompletos o inválidos.",
+                        $row['analysis']['item'] ?? null,
+                        'invalid_data',
+                    );
+                }
+
+                $pdf->Ln();
+                $pdf->SetFont('dejavusans', '', 8, '', true);
+                $pdf->writeHTML($missingParametersHtml ?? $html, true, false, true, false, '');
+            }
+        }, $signatureLayout);
 
         return $this->inlineResponse($pdf);
     }

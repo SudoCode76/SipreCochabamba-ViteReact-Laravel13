@@ -21,17 +21,17 @@ class ProjectReportPdfResolver
         private readonly ProjectSpecificationsPdfMergeService $projectSpecificationsPdfMergeService,
     ) {}
 
-    public function resolve(Project $project, string $reportKey, array $parameters = []): array
+    public function resolve(Project $project, string $reportKey, array $parameters = [], ?array $signatureLayout = null): array
     {
         $response = match ($reportKey) {
-            'budget_by_group' => $this->projectBudgetByGroupPdfService->stream($project),
-            'budget_recalculation' => $this->budgetRecalculation($project, $parameters),
-            'incidence_summary' => $this->projectIncidenceSummaryPdfService->stream($project, $this->format($parameters)),
-            'general_budget' => $this->projectGeneralBudgetPdfService->stream($project, $this->format($parameters)),
-            'input_breakdown' => $this->projectInputBreakdownPdfService->stream($project, $this->type($parameters)),
-            'inputs_report' => $this->projectInputsReportPdfService->stream($project),
-            'grouped_inputs_report' => $this->projectInputsGroupedReportPdfService->stream($project),
-            'unit_prices' => $this->projectUnitPricesPdfService->stream($project, $this->format($parameters)),
+            'budget_by_group' => $this->projectBudgetByGroupPdfService->stream($project, $signatureLayout),
+            'budget_recalculation' => $this->budgetRecalculation($project, $parameters, $signatureLayout),
+            'incidence_summary' => $this->projectIncidenceSummaryPdfService->stream($project, $this->format($parameters), $signatureLayout),
+            'general_budget' => $this->projectGeneralBudgetPdfService->stream($project, $this->format($parameters), $signatureLayout),
+            'input_breakdown' => $this->projectInputBreakdownPdfService->stream($project, $this->type($parameters), $signatureLayout),
+            'inputs_report' => $this->projectInputsReportPdfService->stream($project, $signatureLayout),
+            'grouped_inputs_report' => $this->projectInputsGroupedReportPdfService->stream($project, $signatureLayout),
+            'unit_prices' => $this->projectUnitPricesPdfService->stream($project, $this->format($parameters), $signatureLayout),
             'specifications' => $this->projectSpecificationsPdfMergeService->stream($project),
             default => throw ValidationException::withMessages([
                 'report_key' => ['El reporte seleccionado no es firmable.'],
@@ -45,7 +45,7 @@ class ProjectReportPdfResolver
         ];
     }
 
-    private function budgetRecalculation(Project $project, array $parameters): Response
+    private function budgetRecalculation(Project $project, array $parameters, ?array $signatureLayout): Response
     {
         $fecha = $parameters['fecha'] ?? null;
 
@@ -57,7 +57,7 @@ class ProjectReportPdfResolver
 
         $budget = $this->projectBudgetService->budgetRecalculation($project, Carbon::parse($fecha));
 
-        return $this->projectBudgetByGroupPdfService->streamHistorical($project, $budget);
+        return $this->projectBudgetByGroupPdfService->streamHistorical($project, $budget, $signatureLayout);
     }
 
     private function format(array $parameters): string
