@@ -3659,6 +3659,7 @@ class ProjectApiTest extends TestCase
         $projectId = $projectResponse->json('data.project.id_proyecto');
 
         $this->assertSame(1, ProjectItem::query()->where('id_proyecto', $projectId)->where('estado', 'AC')->count());
+        $this->assertTrue(Project::query()->findOrFail($projectId)->project_access_restricted);
         $this->assertDatabaseHas('project_signature_authorized_users', [
             'id_proyecto_raiz' => $projectId,
             'id_usuario' => 1,
@@ -3718,6 +3719,101 @@ class ProjectApiTest extends TestCase
             'estado' => 'AC',
             'aprobado' => 'PD',
         ])->assertCreated();
+    }
+
+    public function test_new_projects_limit_changes_to_authorized_users_and_keep_existing_projects_open(): void
+    {
+        $admin = $this->createLegacyAuthUser();
+        $authorized = $this->createProjectUserWithPermissions([
+            'INDEX',
+            'EDITAR_PROYECTO',
+            'REGISTRAR_ITEM_PROYECTO',
+            'RECAL_PRESUPUESTO_RUBRO',
+            'CALCULAR_DESGLOSE',
+        ]);
+        $unauthorized = User::query()->create([
+            'id_usuario' => 3,
+            'funcionario' => 'Usuario Solo Lectura',
+            'ci' => '33445566',
+            'username' => 'solo.lectura',
+            'clave' => Hash::make('secret123'),
+            'estado' => 'AC',
+            'id_unidad' => $authorized->id_unidad,
+            'rol' => $authorized->rol,
+            'fecha' => now()->toDateString(),
+            'subalcaldia' => null,
+        ]);
+
+        Sanctum::actingAs($admin);
+        $created = $this->postJson('/api/v1/projects', [
+            'nombre_proyecto' => 'proyecto restringido',
+            'fecha' => '2026-07-22',
+            'ubicacion' => 'ubicacion',
+            'responsable' => 1,
+            'solicitante' => 1,
+            'estado' => 'AC',
+            'aprobado' => 'PD',
+            'signature_access' => [
+                'mode' => 'selected',
+                'user_ids' => [$authorized->id_usuario],
+            ],
+        ])->assertCreated()
+            ->assertJsonPath('data.project.access_restricted', true)
+            ->assertJsonPath('data.project.can_modify', true);
+        $projectId = $created->json('data.project.id_proyecto');
+
+        $updatePayload = [
+            'nombre_proyecto' => 'PROYECTO RESTRINGIDO',
+            'fecha' => '2026-07-22',
+            'ubicacion' => 'UBICACION',
+            'responsable' => 1,
+            'solicitante' => 1,
+            'observaciones' => null,
+            'estado' => 'AC',
+            'aprobado' => 'PD',
+        ];
+
+        Sanctum::actingAs($unauthorized);
+        $this->getJson("/api/v1/projects/{$projectId}")
+            ->assertOk()
+            ->assertJsonPath('data.project.can_modify', false);
+        $this->putJson("/api/v1/projects/{$projectId}", $updatePayload)->assertForbidden();
+        $this->postJson("/api/v1/projects/{$projectId}/items/sync", ['items' => []])->assertForbidden();
+        $this->postJson("/api/v1/projects/{$projectId}/synchronize")->assertForbidden();
+        $this->postJson("/api/v1/projects/{$projectId}/versions")->assertForbidden();
+        $this->postJson("/api/v1/projects/{$projectId}/budget-recalculation", ['fecha' => '2026-07-22'])->assertForbidden();
+        $this->postJson("/api/v1/projects/{$projectId}/template", ['nombre_proyecto' => 'NO PERMITIDA'])->assertForbidden();
+
+        Sanctum::actingAs($authorized);
+        $this->getJson("/api/v1/projects/{$projectId}")
+            ->assertOk()
+            ->assertJsonPath('data.project.can_modify', true);
+        $this->putJson("/api/v1/projects/{$projectId}", $updatePayload)->assertOk();
+
+        Sanctum::actingAs($admin);
+        $this->putJson("/api/v1/projects/{$projectId}", $updatePayload)->assertOk();
+
+        Sanctum::actingAs($authorized);
+        $this->postJson("/api/v1/projects/{$projectId}/finalize")->assertOk();
+        $this->postJson("/api/v1/projects/{$projectId}/versions")
+            ->assertCreated()
+            ->assertJsonPath('data.project.access_restricted', true)
+            ->assertJsonPath('data.project.can_modify', true);
+
+        $legacy = $this->createProjectRecord([
+            'id_proyecto' => 50,
+            'id_proyecto_raiz' => 50,
+            'nombre_proyecto' => 'PROYECTO EXISTENTE',
+        ]);
+        Sanctum::actingAs($unauthorized);
+        $this->getJson("/api/v1/projects/{$legacy->id_proyecto}")
+            ->assertOk()
+            ->assertJsonPath('data.project.access_restricted', false)
+            ->assertJsonPath('data.project.can_modify', true);
+        $this->putJson("/api/v1/projects/{$legacy->id_proyecto}", [
+            ...$updatePayload,
+            'nombre_proyecto' => 'PROYECTO EXISTENTE EDITADO',
+        ])->assertOk();
     }
 
     private function createProjectUserWithPermissions(array $functionNames): User

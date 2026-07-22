@@ -65,13 +65,13 @@ export default function ProjectSignatureAccessSection({
   if (isLoading) {
     return (
       <section className="flex items-center justify-center rounded-2xl border border-border/70 p-6 text-sm text-muted-foreground">
-        <Loader2 className="mr-2 size-4 animate-spin" /> Cargando configuración de firmas...
+        <Loader2 className="mr-2 size-4 animate-spin" /> Cargando usuarios autorizados...
       </section>
     );
   }
 
   if (isError || !configuration) {
-    return <section className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">No se pudo cargar la configuración de firmantes.</section>;
+    return <section className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">No se pudieron cargar los usuarios autorizados.</section>;
   }
 
   const editorKey = `${configuration.root_project_id}-${configuration.mode}-${configuration.authorized_users.map((user) => user.id).join("-")}`;
@@ -133,9 +133,9 @@ function ProjectSignatureAccessEditor({ people, configuration, onDraftChange = n
           <Users className="size-5" />
         </span>
         <div>
-          <h3 className="font-semibold text-foreground">Quiénes pueden firmar</h3>
+          <h3 className="font-semibold text-foreground">Usuarios autorizados para editar y firmar</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Estas firmas se insertarán automáticamente antes de enviar cada PDF a Ciudadanía Digital.
+            Podrán modificar el proyecto, gestionar sus versiones y firmar sus reportes.
           </p>
         </div>
       </div>

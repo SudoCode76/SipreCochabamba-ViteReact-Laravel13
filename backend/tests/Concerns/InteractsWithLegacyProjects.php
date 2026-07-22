@@ -50,6 +50,7 @@ trait InteractsWithLegacyProjects
             $table->string('signature_access_mode', 20)->default('selected');
             $table->timestamp('signature_signers_configured_at')->nullable();
             $table->timestamp('signature_signers_locked_at')->nullable();
+            $table->boolean('project_access_restricted')->default(false);
         });
 
         Schema::create('project_signature_authorized_users', function (Blueprint $table): void {

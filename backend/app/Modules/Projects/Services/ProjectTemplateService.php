@@ -122,6 +122,7 @@ class ProjectTemplateService
                 'numero_version' => 1,
                 'es_version_actual' => true,
                 'fecha_version' => now(),
+                'project_access_restricted' => true,
             ]);
             $project->update(['id_proyecto_raiz' => $project->id_proyecto]);
             $project->refresh();

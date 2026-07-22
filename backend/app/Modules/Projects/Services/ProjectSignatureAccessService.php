@@ -119,6 +119,17 @@ class ProjectSignatureAccessService
         return $user->isAdministrator() || $root->id_usuario === $user->id_usuario;
     }
 
+    public function canModify(Project $project, ?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return ! $project->project_access_restricted
+            || $user->isAdministrator()
+            || $this->allows($project, $user);
+    }
+
     public function allows(Project $project, ?User $user): bool
     {
         return $user

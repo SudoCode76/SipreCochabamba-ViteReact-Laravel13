@@ -47,6 +47,7 @@ class Project extends Model
         'signature_access_mode',
         'signature_signers_configured_at',
         'signature_signers_locked_at',
+        'project_access_restricted',
     ];
 
     protected function casts(): array
@@ -67,6 +68,7 @@ class Project extends Model
             'signature_access_mode' => 'string',
             'signature_signers_configured_at' => 'datetime',
             'signature_signers_locked_at' => 'datetime',
+            'project_access_restricted' => 'boolean',
         ];
     }
 

@@ -121,11 +121,13 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
 
   const project = projectData?.data?.project;
   const versions = versionsData?.data?.items ?? [];
-  const isReadOnly = Boolean(project && (!project.is_current_version || project.is_frozen));
+  const canModifyProject = Boolean(project?.can_modify);
+  const isReadOnly = Boolean(project && (!canModifyProject || !project.is_current_version || project.is_frozen));
   const canManageSignatureAccess = Boolean(signatureAccessData?.data?.can_manage);
   const hasPreviousVersion = versions.length > 1 && Number(project?.version_number || 1) > 1;
   const shouldAskBeforeLeavingUpdatedVersion = Boolean(
-    project?.aprobado === "AP"
+    canModifyProject
+      && project?.aprobado === "AP"
       && project?.is_current_version
       && !project?.is_frozen
       && hasPreviousVersion,
@@ -418,8 +420,10 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
         <div className="flex items-start gap-3 rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-800">
           <Lock className="mt-0.5 size-4 shrink-0" />
           <div>
-            <p className="font-semibold">Versión congelada de solo lectura</p>
-            <p>Puede consultarla y generar reportes, pero sus datos e ítems ya no pueden modificarse.</p>
+            <p className="font-semibold">{canModifyProject ? "Versión de solo lectura" : "Proyecto de solo lectura"}</p>
+            <p>{canModifyProject
+              ? "Puede consultarla y generar reportes, pero sus datos e ítems ya no pueden modificarse."
+              : "No está incluido entre los usuarios autorizados para modificar este proyecto."}</p>
           </div>
         </div>
       )}
@@ -535,7 +539,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
         <Button type="button" variant="outline" className="rounded-full border-border/70 bg-background/80" onClick={handleCancel} disabled={finalizingVersion}>
           Cancelar
         </Button>
-        {project?.is_current_version && project?.is_frozen && (
+        {canModifyProject && project?.is_current_version && project?.is_frozen && (
           <Button type="button" className="rounded-full bg-sky-700 text-white hover:bg-sky-600" onClick={handleCreateUpdatedVersion} disabled={versioning}>
             {versioning ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
             Crear versión actualizada

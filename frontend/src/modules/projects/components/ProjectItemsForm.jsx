@@ -352,7 +352,8 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const selectedDetail = selectedItemData?.data?.item ?? null;
   const currentProject = projectData?.data?.project;
   const versions = versionsData?.data?.items ?? [];
-  const isReadOnly = Boolean(currentProject && (!currentProject.is_current_version || currentProject.is_frozen));
+  const canModifyProject = Boolean(currentProject?.can_modify);
+  const isReadOnly = Boolean(currentProject && (!canModifyProject || !currentProject.is_current_version || currentProject.is_frozen));
   const displayProjectName = currentProject?.nombre_proyecto || projectName || "-";
   const selectedOption = itemOptions.find((option) => Number(option.id) === Number(draft.itemId));
   const effectiveModuleId = draft.moduleId || (generalModule ? String(generalModule.id_modulo) : "");
@@ -365,7 +366,8 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const currentVersionOption = versions.find((version) => Number(version.id_proyecto) === Number(projectId)) ?? currentProject;
   const hasPreviousVersion = versions.length > 1 && Number(currentProject?.version_number || 1) > 1;
   const shouldAskBeforeLeavingUpdatedVersion = Boolean(
-    currentProject?.aprobado === "AP"
+    canModifyProject
+      && currentProject?.aprobado === "AP"
       && currentProject?.is_current_version
       && !currentProject?.is_frozen
       && hasPreviousVersion,
@@ -1028,8 +1030,10 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
 
       {isReadOnly && (
         <div className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-800">
-          <p className="font-semibold">Versión {currentProject?.version_number} congelada</p>
-          <p>Los ítems son de solo lectura. Las acciones de PDF y especificaciones continúan disponibles.</p>
+          <p className="font-semibold">{canModifyProject ? `Versión ${currentProject?.version_number} de solo lectura` : "Proyecto de solo lectura"}</p>
+          <p>{canModifyProject
+            ? "Los ítems no pueden modificarse. Las acciones de PDF y especificaciones continúan disponibles."
+            : "No está incluido entre los usuarios autorizados. Puede consultar los ítems y generar reportes."}</p>
         </div>
       )}
 

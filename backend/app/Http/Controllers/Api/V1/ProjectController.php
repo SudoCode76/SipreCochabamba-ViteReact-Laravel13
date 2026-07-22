@@ -36,6 +36,7 @@ use App\Modules\Projects\Services\ProjectListService;
 use App\Modules\Projects\Services\ProjectMapService;
 use App\Modules\Projects\Services\ProjectPermissionService;
 use App\Modules\Projects\Services\ProjectSpecificationsPdfMergeService;
+use App\Modules\Projects\Services\ProjectSignatureAccessService;
 use App\Modules\Projects\Services\ProjectUnitPricesPdfService;
 use App\Modules\Projects\Services\ProjectVersionComparisonService;
 use App\Modules\Projects\Services\ProjectVersionService;
@@ -67,6 +68,7 @@ class ProjectController extends Controller
         private readonly AuditService $auditService,
         private readonly ProjectVersionService $projectVersionService,
         private readonly ProjectVersionComparisonService $projectVersionComparisonService,
+        private readonly ProjectSignatureAccessService $projectSignatureAccessService,
     ) {}
 
     public function context(Request $request): JsonResponse
@@ -702,6 +704,8 @@ class ProjectController extends Controller
             'is_current_version' => $project->es_version_actual === null ? true : (bool) $project->es_version_actual,
             'is_frozen' => $project->isFrozen(),
             'is_editable' => $project->isCurrentVersion() && ! $project->isFrozen(),
+            'access_restricted' => (bool) $project->project_access_restricted,
+            'can_modify' => $this->projectSignatureAccessService->canModify($project, request()->user()),
             'version_created_at' => $project->fecha_version?->toIso8601String(),
             'finalized_at' => $project->fecha_finalizacion?->toIso8601String(),
         ];
