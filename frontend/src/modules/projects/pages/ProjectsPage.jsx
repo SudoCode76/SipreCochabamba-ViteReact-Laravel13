@@ -43,6 +43,7 @@ const historyActionLabels = {
   version_finalized: "Version finalizada",
   version_synchronized: "Version sincronizada",
   version_input_excluded: "Insumo excluido",
+  signature_access_updated: "Acceso al proyecto",
 };
 
 const historyActionOptions = [
@@ -101,6 +102,7 @@ const historyStatusLabels = {
   1: "Material",
   2: "Mano de obra",
   3: "Maquinaria y herramientas",
+  selected: "Usuarios seleccionados",
 };
 
 const labelHistoryField = (field) => historyFieldLabels[field] || field.replaceAll("_", " ");
@@ -135,6 +137,14 @@ const metadataRow = (label, value) => (
     <div className="mt-1 text-sm text-foreground">{formatHistoryValue(label, value)}</div>
   </div>
 );
+
+const formatHistoryUsers = (users) => {
+  if (!Array.isArray(users) || users.length === 0) {
+    return "Ninguno";
+  }
+
+  return users.map((user) => user?.full_name || `Usuario #${user?.id || "-"}`).join(", ");
+};
 
 const itemLabel = (item) => `Item #${item?.id_item || "-"}`;
 
@@ -237,6 +247,16 @@ const renderHistoryMetadata = (entry) => {
         {renderItemChangeList("Items modificados", metadata.updated, "updated")}
         {renderItemChangeList("Items quitados", metadata.removed, "removed")}
       </div>
+    );
+  }
+
+  if (entry.action === "signature_access_updated") {
+    return (
+      <dl className="grid gap-2 sm:grid-cols-2">
+        {metadataRow("Tipo de acceso", metadata.mode)}
+        {metadataRow("Usuarios con acceso agregados", formatHistoryUsers(metadata.added_users))}
+        {metadataRow("Usuarios con acceso retirados", formatHistoryUsers(metadata.removed_users))}
+      </dl>
     );
   }
 
