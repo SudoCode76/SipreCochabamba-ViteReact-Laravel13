@@ -374,10 +374,13 @@ export default function ProjectLocationMap({ value, onChange, showProjects = fal
     }).addTo(map);
 
     mapRef.current = map;
-    const initialLatLng = parseLatLng(initialValueRef.current) || L.latLng(COCHABAMBA_CENTER);
-    setSelectedLocation(initialLatLng);
-    map.setView(initialLatLng, DEFAULT_ZOOM);
-    createOrMoveMarker(initialLatLng, !parseLatLng(initialValueRef.current));
+    const initialLatLng = parseLatLng(initialValueRef.current);
+    const mapCenter = initialLatLng || L.latLng(COCHABAMBA_CENTER);
+    setSelectedLocation(mapCenter);
+    map.setView(mapCenter, DEFAULT_ZOOM);
+    if (initialLatLng) {
+      createOrMoveMarker(initialLatLng, false);
+    }
 
     const updateScale = () => {
       const resolution = CRS_RESOLUTIONS[map.getZoom()];
