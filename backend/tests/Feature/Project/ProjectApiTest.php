@@ -2769,6 +2769,14 @@ class ProjectApiTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'El ítem seleccionado no está activo.');
 
+        Sanctum::actingAs($this->createProjectUserWithPermissions([
+            'INDEX',
+            'REGISTRAR_ITEM_PROYECTO',
+        ]));
+        $this->getJson('/api/v1/projects/items/1/incidence-price?format=PCA')
+            ->assertOk()
+            ->assertJsonPath('data.item.id_item', 1);
+
         $this->postJson('/api/v1/projects/1/items/sync', [
             'items' => [
                 ['id_item' => 3, 'precio' => 10, 'cantidad' => 1, 'prioridad' => 1],
@@ -2776,6 +2784,58 @@ class ProjectApiTest extends TestCase
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('items.0.id_item');
+    }
+
+    public function test_adding_an_item_preserves_existing_price_precision_without_false_history_changes(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        $this->createItemRecord();
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM NUEVO']);
+        $this->createProjectItemRecord([
+            'cantidad' => 1,
+            'precio' => 11455.182,
+            'prioridad' => 1,
+        ]);
+
+        $itemsResponse = $this->getJson('/api/v1/projects/1/items?format=PCA')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.precio', 11455.182);
+
+        $this->postJson('/api/v1/projects/1/items/sync', [
+            'items' => [
+                [
+                    'id_proyecto_item' => 1,
+                    'id_item' => 1,
+                    'id_modulo' => 1,
+                    'precio' => $itemsResponse->json('data.items.0.precio'),
+                    'cantidad' => 1,
+                    'prioridad' => 1,
+                ],
+                [
+                    'id_item' => 2,
+                    'id_modulo' => 1,
+                    'precio' => 20,
+                    'cantidad' => 1,
+                    'prioridad' => 2,
+                ],
+            ],
+        ])->assertOk();
+
+        $history = DB::table('proyecto_historial')
+            ->where('accion', 'items_synced')
+            ->orderByDesc('id_historial')
+            ->firstOrFail();
+        $metadata = json_decode($history->metadata, true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertCount(1, $metadata['added']);
+        $this->assertSame([], $metadata['updated']);
+        $this->assertEqualsWithDelta(11455.182, (float) ProjectItem::query()->findOrFail(1)->precio, 0.0001);
+        $this->assertEqualsWithDelta(11475.182, (float) Project::query()->findOrFail(1)->precio, 0.0001);
     }
 
     public function test_project_items_can_be_grouped_by_module_and_repeated(): void

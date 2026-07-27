@@ -133,9 +133,10 @@ function ProjectSignatureAccessEditor({ people, configuration, onDraftChange = n
           <Users className="size-5" />
         </span>
         <div>
-          <h3 className="font-semibold text-foreground">Usuarios autorizados para editar y firmar</h3>
+          <h3 className="font-semibold text-foreground">Usuarios con permiso para modificar el proyecto</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Podrán modificar el proyecto, gestionar sus versiones y firmar sus reportes.
+            Solo los usuarios seleccionados podrán editar datos e ítems, actualizar precios, recalcular,
+            crear versiones y firmar. Los demás usuarios únicamente podrán ver el proyecto.
           </p>
         </div>
       </div>

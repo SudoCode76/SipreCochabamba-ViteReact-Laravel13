@@ -143,7 +143,7 @@ class ProjectItemService
 
         return $items->map(function (ProjectItem $projectItem) use ($format, $warningItemsByProjectItem, $warningInputsByProjectItem): array {
             $item = $projectItem->item;
-            $price = round((float) $projectItem->precio, 2);
+            $price = round((float) $projectItem->precio, 4);
             $itemWarning = $warningItemsByProjectItem->get($projectItem->id_proyecto_item);
             $inputWarnings = $warningInputsByProjectItem->get($projectItem->id_proyecto_item, collect())->values();
 
