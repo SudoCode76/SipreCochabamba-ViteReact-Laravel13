@@ -153,8 +153,8 @@ class ProjectHistoryService
             $actor,
             $ip,
             'signature_access_updated',
-            'Se actualizó la configuración de firmantes',
-            'Se modificó quién puede firmar documentos de la familia del proyecto.',
+            'Se actualizó el acceso al proyecto',
+            'Se modificaron los usuarios autorizados para consultar y editar el proyecto, así como para firmar sus documentos.',
             $changes
         );
     }

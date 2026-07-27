@@ -899,6 +899,17 @@ class ProjectApiTest extends TestCase
             'user_ids' => [1, $signer->id_usuario],
         ])->assertOk();
 
+        $history = $this->getJson("/api/v1/projects/{$project->id_proyecto}/history")
+            ->assertOk()
+            ->json('data.items');
+        $accessHistory = collect($history)->firstWhere('action', 'signature_access_updated');
+
+        $this->assertNotNull($accessHistory);
+        $this->assertSame('Se actualizó el acceso al proyecto', $accessHistory['title']);
+        $this->assertSame('Se modificaron los usuarios autorizados para consultar y editar el proyecto, así como para firmar sus documentos.', $accessHistory['detail']);
+        $this->assertSame($signer->funcionario, $accessHistory['metadata']['added_users'][0]['full_name']);
+        $this->assertSame([], $accessHistory['metadata']['removed_users']);
+
         Sanctum::actingAs($signer);
         $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget&format=PCA")
             ->assertOk()
@@ -914,6 +925,38 @@ class ProjectApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.report.can_sign', false)
             ->assertJsonPath('data.signature_access.allowed', true);
+    }
+
+    public function test_history_resource_normalizes_legacy_project_access_entries(): void
+    {
+        $user = $this->createLegacyAuthUser();
+        $project = $this->createProjectRecord();
+
+        DB::table('proyecto_historial')->insert([
+            'id_proyecto' => $project->id_proyecto,
+            'id_usuario' => $user->id_usuario,
+            'usuario_nombre' => $user->funcionario,
+            'accion' => 'signature_access_updated',
+            'titulo' => 'Se actualizó la configuración de firmantes',
+            'detalle' => 'Se modificó quién puede firmar documentos de la familia del proyecto.',
+            'metadata' => json_encode([
+                'mode' => 'selected',
+                'added_users' => [['id' => $user->id_usuario, 'full_name' => $user->funcionario]],
+                'removed_users' => [],
+            ], JSON_THROW_ON_ERROR),
+            'ip' => '127.0.0.1',
+            'fecha_hora' => now(),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $entry = collect($this->getJson("/api/v1/projects/{$project->id_proyecto}/history")
+            ->assertOk()
+            ->json('data.items'))
+            ->firstWhere('action', 'signature_access_updated');
+
+        $this->assertSame('Se actualizó el acceso al proyecto', $entry['title']);
+        $this->assertSame('Se modificaron los usuarios autorizados para consultar y editar el proyecto, así como para firmar sus documentos.', $entry['detail']);
     }
 
     public function test_removing_signed_users_requires_confirmation_and_preserves_signatures_across_versions(): void
@@ -2769,6 +2812,14 @@ class ProjectApiTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'El ítem seleccionado no está activo.');
 
+        Sanctum::actingAs($this->createProjectUserWithPermissions([
+            'INDEX',
+            'REGISTRAR_ITEM_PROYECTO',
+        ]));
+        $this->getJson('/api/v1/projects/items/1/incidence-price?format=PCA')
+            ->assertOk()
+            ->assertJsonPath('data.item.id_item', 1);
+
         $this->postJson('/api/v1/projects/1/items/sync', [
             'items' => [
                 ['id_item' => 3, 'precio' => 10, 'cantidad' => 1, 'prioridad' => 1],
@@ -2776,6 +2827,58 @@ class ProjectApiTest extends TestCase
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('items.0.id_item');
+    }
+
+    public function test_adding_an_item_preserves_existing_price_precision_without_false_history_changes(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        $this->createItemRecord();
+        $this->createItemRecord(['id_item' => 2, 'item' => 'ITEM NUEVO']);
+        $this->createProjectItemRecord([
+            'cantidad' => 1,
+            'precio' => 11455.182,
+            'prioridad' => 1,
+        ]);
+
+        $itemsResponse = $this->getJson('/api/v1/projects/1/items?format=PCA')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.precio', 11455.182);
+
+        $this->postJson('/api/v1/projects/1/items/sync', [
+            'items' => [
+                [
+                    'id_proyecto_item' => 1,
+                    'id_item' => 1,
+                    'id_modulo' => 1,
+                    'precio' => $itemsResponse->json('data.items.0.precio'),
+                    'cantidad' => 1,
+                    'prioridad' => 1,
+                ],
+                [
+                    'id_item' => 2,
+                    'id_modulo' => 1,
+                    'precio' => 20,
+                    'cantidad' => 1,
+                    'prioridad' => 2,
+                ],
+            ],
+        ])->assertOk();
+
+        $history = DB::table('proyecto_historial')
+            ->where('accion', 'items_synced')
+            ->orderByDesc('id_historial')
+            ->firstOrFail();
+        $metadata = json_decode($history->metadata, true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertCount(1, $metadata['added']);
+        $this->assertSame([], $metadata['updated']);
+        $this->assertEqualsWithDelta(11455.182, (float) ProjectItem::query()->findOrFail(1)->precio, 0.0001);
+        $this->assertEqualsWithDelta(11475.182, (float) Project::query()->findOrFail(1)->precio, 0.0001);
     }
 
     public function test_project_items_can_be_grouped_by_module_and_repeated(): void

@@ -368,7 +368,7 @@ class ProjectController extends Controller
 
     public function incidencePrice(IncidencePriceRequest $request, Item $item): JsonResponse
     {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_view_incidence_summary', 'No tiene permisos para consultar precios por incidencia.')) {
+        if ($response = $this->denyIfMissingAnyPermission($request->user(), ['can_sync_items', 'can_view_incidence_summary'], 'No tiene permisos para consultar precios por incidencia.')) {
             return $response;
         }
 
