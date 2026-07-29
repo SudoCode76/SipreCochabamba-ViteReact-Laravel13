@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { loadListOrder, saveListOrder } from "@/lib/list-order";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { downloadUrl, openPdfViewer } from "@/lib/utils/pdf";
 import ProjectEditForm from "../components/ProjectEditForm";
@@ -289,7 +290,7 @@ export default function ProjectsPage() {
   const toast = useToast();
   const editFormRef = useRef(null);
   const [perPage, setPerPage] = useState(15);
-  const [order, setOrder] = useState("legacy");
+  const [order, setOrder] = useState(() => loadListOrder("projects"));
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [editOpen, setEditOpen] = useState(false);
@@ -338,7 +339,7 @@ export default function ProjectsPage() {
     placeholderData: (previousData) => previousData,
   });
   const { data: contextData } = useQuery({
-    queryKey: ["projects-context"],
+    queryKey: ["project-context"],
     queryFn: projectService.context,
     retry: false,
   });
@@ -430,6 +431,7 @@ export default function ProjectsPage() {
   const handleOrderChange = (event) => {
     setPage(1);
     setOrder(event.target.value);
+    saveListOrder("projects", event.target.value);
   };
 
   const handleSearchChange = (event) => {
@@ -443,6 +445,7 @@ export default function ProjectsPage() {
   };
 
   const openEdit = (project) => {
+    void import("../components/ProjectLocationMap");
     setEditProject(project);
     setEditOpen(true);
   };

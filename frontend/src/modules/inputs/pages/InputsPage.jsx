@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
+import { loadListOrder, saveListOrder } from "@/lib/list-order";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,7 +78,7 @@ export default function InputsPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const [perPage, setPerPage] = useState(15);
-  const [order, setOrder] = useState("legacy");
+  const [order, setOrder] = useState(() => loadListOrder("inputs"));
   const [categoryFilter, setCategoryFilter] = useState("");
   const [duplicatesOnly, setDuplicatesOnly] = useState(false);
   const [search, setSearch] = useState("");
@@ -319,6 +320,7 @@ export default function InputsPage() {
 
   const handleOrderChange = (event) => {
     setOrder(event.target.value);
+    saveListOrder("inputs", event.target.value);
     setPage(1);
   };
 

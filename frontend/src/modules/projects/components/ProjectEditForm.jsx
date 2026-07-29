@@ -98,12 +98,12 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
   const [updatedExitDialogOpen, setUpdatedExitDialogOpen] = useState(false);
   const updatedExitResolverRef = useRef(null);
 
-  const { data: contextData, isLoading: contextLoading } = useQuery({
+  const { data: contextData } = useQuery({
     queryKey: ["project-context"],
     queryFn: projectService.context,
   });
 
-  const { data: versionsData, isLoading: versionsLoading } = useQuery({
+  const { data: versionsData } = useQuery({
     queryKey: ["project-versions", projectId],
     queryFn: () => projectService.versions(projectId),
     enabled: Boolean(projectId),
@@ -122,7 +122,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
   });
 
   const project = projectData?.data?.project;
-  const versions = versionsData?.data?.items ?? [];
+  const versions = versionsData?.data?.items ?? (project ? [project] : []);
   const canModifyProject = Boolean(project?.can_modify);
   const isReadOnly = Boolean(project && (!canModifyProject || !project.is_current_version || project.is_frozen));
   const canManageSignatureAccess = Boolean(signatureAccessData?.data?.can_manage);
@@ -367,7 +367,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
     requestExit: handleCancel,
   }));
 
-  if (contextLoading || projectLoading || versionsLoading) {
+  if (projectLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="size-5 animate-spin" />
