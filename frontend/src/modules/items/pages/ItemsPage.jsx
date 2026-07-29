@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/toast";
+import { loadListOrder, saveListOrder } from "@/lib/list-order";
 import { downloadUrl, openPdfViewer } from "@/lib/utils/pdf";
 import { itemsService } from "@/modules/dashboard/services/items.service";
 import ReportSignatureStatus from "@/modules/projects/components/ReportSignatureStatus";
@@ -76,7 +77,7 @@ export default function ItemsPage() {
   const guidedReturnProjectId = searchParams.get("return_project_id") || location.state?.return_project_id || "";
   const initialFreshness = location.state?.freshness === "outdated" ? "outdated" : "";
   const [perPage, setPerPage] = useState(10);
-  const [order, setOrder] = useState("legacy");
+  const [order, setOrder] = useState(() => loadListOrder("items"));
   const [freshness, setFreshness] = useState(initialFreshness);
   const [reviewDays, setReviewDays] = useState("");
   const [duplicatesOnly, setDuplicatesOnly] = useState(false);
@@ -530,6 +531,7 @@ export default function ItemsPage() {
 
   const handleViewChange = (event) => {
     const value = event.target.value;
+    saveListOrder("items", value);
     setPage(1);
 
     if (value === "duplicates") {

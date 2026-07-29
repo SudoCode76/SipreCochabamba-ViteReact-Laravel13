@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, lazy, Suspense, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { History, Loader2, Lock, MapPin, RefreshCw, Save } from "lucide-react";
 
@@ -11,6 +11,8 @@ import { getProjectApprovalLabel } from "../lib/project-status";
 import { projectService } from "../services/project.service";
 import ProjectSignatureAccessSection from "./ProjectSignatureAccessSection";
 import { UpdatedProjectExitDialog } from "./UpdatedProjectExitDialog";
+
+const ProjectLocationMap = lazy(() => import("./ProjectLocationMap"));
 
 const emptyForm = {
   nombre_proyecto: "",
@@ -96,12 +98,12 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
   const [updatedExitDialogOpen, setUpdatedExitDialogOpen] = useState(false);
   const updatedExitResolverRef = useRef(null);
 
-  const { data: contextData, isLoading: contextLoading } = useQuery({
+  const { data: contextData } = useQuery({
     queryKey: ["project-context"],
     queryFn: projectService.context,
   });
 
-  const { data: versionsData, isLoading: versionsLoading } = useQuery({
+  const { data: versionsData } = useQuery({
     queryKey: ["project-versions", projectId],
     queryFn: () => projectService.versions(projectId),
     enabled: Boolean(projectId),
@@ -120,7 +122,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
   });
 
   const project = projectData?.data?.project;
-  const versions = versionsData?.data?.items ?? [];
+  const versions = versionsData?.data?.items ?? (project ? [project] : []);
   const canModifyProject = Boolean(project?.can_modify);
   const isReadOnly = Boolean(project && (!canModifyProject || !project.is_current_version || project.is_frozen));
   const canManageSignatureAccess = Boolean(signatureAccessData?.data?.can_manage);
@@ -181,6 +183,14 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...(prev ?? formData), [field]: value }));
+  };
+
+  const handleLocationChange = (changes) => {
+    setFormData((prev) => {
+      const next = { ...(prev ?? formData), ...changes };
+      delete next.subdistrito;
+      return next;
+    });
   };
 
   const handleSubmit = async (event) => {
@@ -357,7 +367,7 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
     requestExit: handleCancel,
   }));
 
-  if (contextLoading || projectLoading || versionsLoading) {
+  if (projectLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="size-5 animate-spin" />
@@ -434,13 +444,26 @@ const ProjectEditForm = forwardRef(function ProjectEditForm({ projectId, onCance
           Ubicación
         </span>
 
-        <MapPreview
-          distrito={formData.distrito}
-          zona={formData.zona}
-          otb={formData.otb}
-          latitud={formData.latitud}
-          longitud={formData.longitud}
-        />
+        {isReadOnly ? (
+          <MapPreview
+            distrito={formData.distrito}
+            zona={formData.zona}
+            otb={formData.otb}
+            latitud={formData.latitud}
+            longitud={formData.longitud}
+          />
+        ) : (
+          <Suspense
+            fallback={(
+              <div className="flex h-[360px] items-center justify-center rounded-xl border border-border/80 bg-muted/30 text-sm text-muted-foreground">
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Cargando mapa
+              </div>
+            )}
+          >
+            <ProjectLocationMap value={formData} onChange={handleLocationChange} showProjects />
+          </Suspense>
+        )}
 
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <div className="flex flex-col gap-2">
