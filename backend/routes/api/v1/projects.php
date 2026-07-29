@@ -65,6 +65,7 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::get('/projects/{project}/reports/{reportKey}/signed/latest', [ProjectReportSignatureController::class, 'latestSigned']);
     Route::get('/projects/{project}/reports/{reportKey}/physical-signatures', [ProjectReportSignatureController::class, 'physicalSignatures']);
     Route::post('/projects/{project}/reports/{reportKey}/physical-signatures', [ProjectReportSignatureController::class, 'markPhysicalSignature']);
+    Route::put('/projects/{project}/reports/{reportKey}/physical-signatures/pages', [ProjectReportSignatureController::class, 'updatePhysicalSignaturePages']);
     Route::put('/projects/{project}/reports/{reportKey}/physical-signatures/positions', [ProjectReportSignatureController::class, 'updatePhysicalSignaturePositions']);
     Route::get('/projects/{project}/reports/{reportKey}/physical-signatures/pdf', [ProjectReportSignatureController::class, 'physicalSignaturesPdf']);
     Route::post('/projects/{project}/reports/{reportKey}/signature-preview', [ProjectReportSignatureController::class, 'preparePreview']);

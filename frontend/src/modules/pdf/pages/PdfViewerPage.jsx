@@ -85,6 +85,34 @@ function readApiError(error, fallback) {
   return message;
 }
 
+function physicalPositionsFromStatus(status) {
+  const items = status?.items ?? [];
+
+  if (!status?.page_assignment?.required) {
+    return items.map((item) => ({
+      ...item,
+      page: Number(item.page ?? 1),
+      x: Number(item.x ?? 10),
+      y: Number(item.y ?? 10),
+      width: Number(item.width ?? 56),
+      height: Number(item.height ?? 28),
+    }));
+  }
+
+  return items.flatMap((item) => (item.selected_pages ?? []).map((page) => {
+    const position = item.page_positions?.[String(page)] ?? item;
+
+    return {
+      ...item,
+      page: Number(page),
+      x: Number(position.x ?? 10),
+      y: Number(position.y ?? 10),
+      width: Number(position.width ?? 56),
+      height: Number(position.height ?? 28),
+    };
+  }));
+}
+
 function readMissingSignatureUsers(payload) {
   const missing = payload?.data?.missing_users ?? payload?.missing_users ?? [];
 
@@ -227,6 +255,9 @@ export default function PdfViewerPage() {
   const [selectedPhysicalPage, setSelectedPhysicalPage] = useState(1);
   const [savingPhysicalPositions, setSavingPhysicalPositions] = useState(false);
   const [physicalPositionMessage, setPhysicalPositionMessage] = useState("");
+  const [assignmentPages, setAssignmentPages] = useState([]);
+  const [savingAssignment, setSavingAssignment] = useState(false);
+  const [assignmentMessage, setAssignmentMessage] = useState("");
   const physicalCanvasRef = useRef(null);
   const physicalPdfCanvasRef = useRef(null);
   const dragRef = useRef(null);
@@ -289,18 +320,11 @@ export default function PdfViewerPage() {
 
   const applyPhysicalStatus = (status) => {
     const pageSizes = status?.page_sizes ?? [];
-    const items = status?.items ?? [];
 
     setPhysicalStatus(status);
     setPhysicalPositionsDirty(false);
-    setPhysicalPositions(items.map((item) => ({
-      ...item,
-      page: Number(item.page ?? 1),
-      x: Number(item.x ?? 10),
-      y: Number(item.y ?? 10),
-      width: Number(item.width ?? 56),
-      height: Number(item.height ?? 28),
-    })));
+    setPhysicalPositions(physicalPositionsFromStatus(status));
+    setAssignmentPages((status?.page_assignment?.current_user_pages ?? []).map(Number));
 
     if (pageSizes.length > 0) {
       setSelectedPhysicalPage((page) => pageSizes.some((size) => Number(size.page) === Number(page)) ? page : Number(pageSizes.at(-1).page));
@@ -455,6 +479,14 @@ export default function PdfViewerPage() {
     () => (physicalStatus?.page_sizes ?? []).find((page) => Number(page.page) === Number(selectedPhysicalPage)),
     [physicalStatus, selectedPhysicalPage],
   );
+  const requiresPageAssignment = Boolean(physicalStatus?.page_assignment?.required);
+  const currentUserPages = physicalStatus?.page_assignment?.current_user_pages ?? assignmentPages;
+  const currentPageCanEdit = !requiresPageAssignment || currentUserPages.includes(Number(selectedPhysicalPage));
+  const currentPagePositions = useMemo(
+    () => physicalPositions.filter((position) => Number(position.page) === Number(selectedPhysicalPage)),
+    [physicalPositions, selectedPhysicalPage],
+  );
+  const pageMap = physicalStatus?.page_map?.modules ?? [];
   const physicalPageIsTarget = physicalStatus?.page_scope === "all"
     || Number(selectedPhysicalPage) === Number(physicalStatus?.signature_page);
   const physicalPageOffsetY = useMemo(() => {
@@ -776,12 +808,12 @@ export default function PdfViewerPage() {
   }, [physicalStatus]);
 
   const hasPhysicalOverlap = (positions) => positions.some((position, index) => (
-    positions.slice(index + 1).some((next) => boxesOverlap(position, next))
+    positions.slice(index + 1).some((next) => Number(position.page) === Number(next.page) && boxesOverlap(position, next))
   ));
 
-  const updatePhysicalPosition = (id, updater) => {
+  const updatePhysicalPosition = (id, page, updater) => {
     setPhysicalPositions((positions) => {
-      const current = positions.find((position) => position.id === id);
+      const current = positions.find((position) => position.id === id && Number(position.page) === Number(page));
 
       if (!current) {
         return positions;
@@ -794,7 +826,9 @@ export default function PdfViewerPage() {
         return positions;
       }
 
-      if (positions.some((position) => position.id !== id && boxesOverlap(candidate, position))) {
+      if (positions.some((position) => (
+        Number(position.page) === Number(page) && position.id !== id && boxesOverlap(candidate, position)
+      ))) {
         setPhysicalPositionMessage("Las firmas físicas no pueden superponerse.");
         return positions;
       }
@@ -802,12 +836,14 @@ export default function PdfViewerPage() {
       setPhysicalPositionsDirty(true);
       setPhysicalPositionMessage("Hay cambios sin guardar.");
 
-      return positions.map((position) => (position.id === id ? candidate : position));
+      return positions.map((position) => (
+        position.id === id && Number(position.page) === Number(page) ? candidate : position
+      ));
     });
   };
 
   const handlePhysicalPointerDown = (event, position) => {
-    if (!physicalStatus?.can_adjust || !physicalPageIsTarget || !currentPhysicalPageSize || !physicalCanvasRef.current) {
+    if (!physicalStatus?.can_adjust || !currentPageCanEdit || !physicalPageIsTarget || !currentPhysicalPageSize || !physicalCanvasRef.current) {
       return;
     }
 
@@ -818,6 +854,7 @@ export default function PdfViewerPage() {
     dragRef.current = {
       mode: "move",
       id: position.id,
+      page: position.page,
       offsetX: pointerX - position.x,
       offsetY: pointerY - position.y,
       previous: position,
@@ -836,7 +873,7 @@ export default function PdfViewerPage() {
     const pointerX = ((event.clientX - rect.left) / rect.width) * currentPhysicalPageSize.width;
     const pointerY = (((event.clientY - rect.top) / rect.height) * currentPhysicalPageSize.height) - physicalPageOffsetY;
 
-    updatePhysicalPosition(drag.id, (position) => {
+    updatePhysicalPosition(drag.id, drag.page, (position) => {
       if (drag.mode === "resize") {
         return {
           ...position,
@@ -856,13 +893,14 @@ export default function PdfViewerPage() {
   const handlePhysicalResizePointerDown = (event, position) => {
     event.stopPropagation();
 
-    if (!physicalStatus?.can_adjust || !physicalPageIsTarget || !physicalCanvasRef.current) {
+    if (!physicalStatus?.can_adjust || !currentPageCanEdit || !physicalPageIsTarget || !physicalCanvasRef.current) {
       return;
     }
 
     dragRef.current = {
       mode: "resize",
       id: position.id,
+      page: position.page,
       previous: position,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -881,7 +919,9 @@ export default function PdfViewerPage() {
       }
 
       setPhysicalPositionMessage("Las firmas físicas no pueden superponerse.");
-      return positions.map((position) => (position.id === drag.id ? drag.previous : position));
+      return positions.map((position) => (
+        position.id === drag.id && Number(position.page) === Number(drag.page) ? drag.previous : position
+      ));
     });
     dragRef.current = null;
   };
@@ -908,7 +948,9 @@ export default function PdfViewerPage() {
       const response = await updatePositions(signatureSubjectId, signatureReportKey, {
         ...signatureParameters,
         ...(signatureSubject === "project" ? { layout_hash: physicalStatus.layout_hash } : {}),
-        positions: physicalPositions.map(({ id, page, x, y, width, height }) => ({ id, page, x, y, width, height })),
+        positions: physicalPositions
+          .filter((position) => !requiresPageAssignment || currentUserPages.includes(Number(position.page)))
+          .map(({ id, page, x, y, width, height }) => ({ id, page, x, y, width, height })),
       });
       applyPhysicalStatus(response?.data ?? null);
       setPhysicalPositionMessage("Posiciones guardadas.");
@@ -916,6 +958,43 @@ export default function PdfViewerPage() {
       setPhysicalError(readApiError(saveError, "No se pudo guardar las posiciones."));
     } finally {
       setSavingPhysicalPositions(false);
+    }
+  };
+
+  const toggleAssignmentPages = (pages) => {
+    const normalized = [...new Set(pages.map(Number))].sort((a, b) => a - b);
+
+    setAssignmentPages((current) => {
+      const selected = normalized.every((page) => current.includes(page));
+
+      return selected
+        ? current.filter((page) => !normalized.includes(page))
+        : [...new Set([...current, ...normalized])].sort((a, b) => a - b);
+    });
+    setAssignmentMessage("");
+  };
+
+  const handleSaveAssignmentPages = async () => {
+    if (!requiresPageAssignment || assignmentPages.length === 0) {
+      setAssignmentMessage("Seleccione al menos una página.");
+      return;
+    }
+
+    setSavingAssignment(true);
+    setAssignmentMessage("");
+
+    try {
+      const response = await projectService.updatePhysicalSignaturePages(
+        signatureProjectId,
+        signatureReportKey,
+        assignmentPages,
+      );
+      applyPhysicalStatus(response?.data ?? null);
+      setAssignmentMessage("Páginas confirmadas.");
+    } catch (saveError) {
+      setAssignmentMessage(readApiError(saveError, "No se pudieron guardar las páginas."));
+    } finally {
+      setSavingAssignment(false);
     }
   };
 
@@ -1095,7 +1174,100 @@ export default function PdfViewerPage() {
               ) : null}
             </div>
 
-            <div className="min-h-0 flex-1 overflow-auto p-6">
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              {requiresPageAssignment ? (
+                <aside className="w-80 shrink-0 overflow-y-auto border-r border-slate-300 bg-white p-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <p className="font-semibold text-slate-800">Asignación de páginas</p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      {physicalStatus?.page_assignment?.confirmed_signers ?? 0} de {physicalStatus?.page_assignment?.total_signers ?? 0} firmantes confirmaron.
+                    </p>
+                    <p className={`mt-1 text-xs ${(physicalStatus?.page_assignment?.uncovered_pages ?? []).length > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                      {(physicalStatus?.page_assignment?.uncovered_pages ?? []).length > 0
+                        ? `Sin cobertura: ${physicalStatus.page_assignment.uncovered_pages.join(", ")}`
+                        : "Todas las páginas tienen cobertura."}
+                    </p>
+                    <ul className="mt-3 space-y-1 border-t border-slate-200 pt-2">
+                      {(physicalStatus?.items ?? []).map((signer) => (
+                        <li key={signer.id} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="truncate text-slate-700">{signer.user_name}</span>
+                          <span className={signer.pages_confirmed_at ? "text-emerald-700" : "text-amber-700"}>
+                            {signer.pages_confirmed_at ? "Confirmado" : "Pendiente"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="mt-4 space-y-4">
+                    {pageMap.map((module) => (
+                      <section key={module.module_id} className="rounded-xl border border-slate-200 p-3">
+                        <label className="flex cursor-pointer items-start gap-2 text-sm font-semibold text-slate-800">
+                          <input
+                            type="checkbox"
+                            checked={(module.pages ?? []).every((page) => assignmentPages.includes(Number(page)))}
+                            onChange={() => toggleAssignmentPages(module.pages ?? [])}
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300"
+                          />
+                          <span>{module.name}</span>
+                        </label>
+
+                        <div className="mt-3 space-y-3 border-l border-slate-200 pl-3">
+                          {(module.items ?? []).map((item) => (
+                            <div key={item.project_item_id}>
+                              <label className="flex cursor-pointer items-start gap-2 text-xs font-medium text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={(item.pages ?? []).every((page) => assignmentPages.includes(Number(page)))}
+                                  onChange={() => toggleAssignmentPages(item.pages ?? [])}
+                                  className="mt-0.5 h-4 w-4 rounded border-slate-300"
+                                />
+                                <span>{item.name} · hojas {item.start_page}–{item.end_page}</span>
+                              </label>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {(item.pages ?? []).map((page) => {
+                                  const selected = assignmentPages.includes(Number(page));
+
+                                  return (
+                                    <button
+                                      key={page}
+                                      type="button"
+                                      aria-pressed={selected}
+                                      onClick={() => toggleAssignmentPages([page])}
+                                      className={`h-7 min-w-7 rounded-md px-2 text-xs font-medium ${selected
+                                        ? "bg-slate-950 text-white"
+                                        : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                                    >
+                                      {page}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveAssignmentPages()}
+                    disabled={savingAssignment || assignmentPages.length === 0}
+                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {savingAssignment ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Confirmar mis páginas
+                  </button>
+                  {assignmentMessage ? (
+                    <p className={`mt-2 text-xs ${assignmentMessage.includes("confirmadas") ? "text-emerald-700" : "text-red-600"}`}>
+                      {assignmentMessage}
+                    </p>
+                  ) : null}
+                </aside>
+              ) : null}
+
+              <div className="min-h-0 flex-1 overflow-auto p-6">
               {currentPhysicalPageSize ? (
                 <div
                   ref={physicalCanvasRef}
@@ -1135,16 +1307,16 @@ export default function PdfViewerPage() {
                       Zona reservada para Ciudadanía Digital
                     </div>
                   ) : null}
-                  {!physicalPdfError && physicalPageIsTarget && physicalPositions.map((position) => (
+                  {!physicalPdfError && physicalPageIsTarget && currentPagePositions.map((position) => (
                     <div
-                      key={position.id}
+                      key={`${position.id}-${position.page}`}
                       role="button"
                       tabIndex={0}
                       onPointerDown={(event) => handlePhysicalPointerDown(event, position)}
                       onPointerMove={handlePhysicalPointerMove}
                       onPointerUp={handlePhysicalPointerUp}
                       onPointerCancel={handlePhysicalPointerUp}
-                      className="theme-fixed-light absolute z-10 touch-none cursor-move overflow-hidden border-2 border-emerald-500 bg-white/80 shadow-lg"
+                      className={`theme-fixed-light absolute z-10 touch-none overflow-hidden border-2 border-emerald-500 bg-white/80 shadow-lg ${currentPageCanEdit ? "cursor-move" : "cursor-default"}`}
                       style={{
                         left: `${(position.x / currentPhysicalPageSize.width) * 100}%`,
                         top: `${((position.y + physicalPageOffsetY) / currentPhysicalPageSize.height) * 100}%`,
@@ -1170,18 +1342,25 @@ export default function PdfViewerPage() {
                           {position.user_name || "Usuario"}
                         </div>
                       </div>
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        aria-label="Cambiar tamaño"
-                        onPointerDown={(event) => handlePhysicalResizePointerDown(event, position)}
-                        onPointerMove={handlePhysicalPointerMove}
-                        onPointerUp={handlePhysicalPointerUp}
-                        onPointerCancel={handlePhysicalPointerUp}
-                        className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize rounded-tl bg-emerald-500 shadow"
-                      />
+                      {currentPageCanEdit ? (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          aria-label="Cambiar tamaño"
+                          onPointerDown={(event) => handlePhysicalResizePointerDown(event, position)}
+                          onPointerMove={handlePhysicalPointerMove}
+                          onPointerUp={handlePhysicalPointerUp}
+                          onPointerCancel={handlePhysicalPointerUp}
+                          className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize rounded-tl bg-emerald-500 shadow"
+                        />
+                      ) : null}
                     </div>
                   ))}
+                  {!physicalPdfError && requiresPageAssignment && !currentPageCanEdit ? (
+                    <div className="theme-fixed-light pointer-events-none absolute inset-x-4 top-4 z-20 rounded-lg bg-slate-950/80 px-3 py-2 text-center text-xs font-medium text-white">
+                      Esta hoja está en modo lectura porque no forma parte de su asignación confirmada.
+                    </div>
+                  ) : null}
                   {!physicalPdfError && !physicalPageIsTarget ? (
                     <div className="theme-fixed-light pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/45 p-6 text-center text-sm font-medium text-slate-600">
                       Las firmas se aplicarán únicamente en la última página.
@@ -1193,6 +1372,7 @@ export default function PdfViewerPage() {
                   No hay firmas físicas para ajustar.
                 </div>
               )}
+              </div>
             </div>
           </div>
         ) : null}

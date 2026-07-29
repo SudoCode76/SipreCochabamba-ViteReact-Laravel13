@@ -450,6 +450,7 @@ class ProjectReportSignatureController extends Controller
             'layout_hash' => ['required', 'string', 'size:64'],
             'positions' => ['required', 'array'],
             'positions.*.id' => ['required', 'integer'],
+            'positions.*.page' => ['nullable', 'integer', 'min:1'],
             'positions.*.x' => ['required', 'numeric', 'min:0'],
             'positions.*.y' => ['required', 'numeric', 'min:0'],
             'positions.*.width' => ['required', 'numeric', 'min:20'],
@@ -576,6 +577,30 @@ class ProjectReportSignatureController extends Controller
         return $this->subjectUpdatePhysicalSignaturePositions($request, $project, $reportKey);
     }
 
+    public function updatePhysicalSignaturePages(Request $request, Project $project, string $reportKey): JsonResponse
+    {
+        if ($reportKey !== 'specifications') {
+            return ApiResponse::error('La asignación de páginas solo está disponible para especificaciones técnicas.', null, 422);
+        }
+
+        $validated = $request->validate([
+            'pages' => ['required', 'array', 'min:1'],
+            'pages.*' => ['required', 'integer', 'min:1', 'distinct'],
+        ]);
+
+        try {
+            $status = $this->signatureService->updateSpecificationPhysicalSignaturePages(
+                $project,
+                $validated['pages'],
+                $request->user()
+            );
+        } catch (AuthorizationException $exception) {
+            return ApiResponse::error($exception->getMessage(), ['authorization' => [$exception->getMessage()]], 403);
+        }
+
+        return ApiResponse::success($status, 'Páginas de firma confirmadas correctamente.');
+    }
+
     public function itemUpdatePhysicalSignaturePositions(Request $request, Item $item, string $reportKey): JsonResponse
     {
         return $this->subjectUpdatePhysicalSignaturePositions($request, $item, $reportKey);
@@ -597,7 +622,7 @@ class ProjectReportSignatureController extends Controller
             'tipo_desglose' => ['nullable', 'integer'],
             'positions' => ['required', 'array'],
             'positions.*.id' => ['required', 'integer'],
-            'positions.*.page' => ['required', 'integer', 'min:1'],
+            'positions.*.page' => ['nullable', 'integer', 'min:1'],
             'positions.*.x' => ['required', 'numeric', 'min:0'],
             'positions.*.y' => ['required', 'numeric', 'min:0'],
             'positions.*.width' => ['required', 'numeric', 'min:1'],
