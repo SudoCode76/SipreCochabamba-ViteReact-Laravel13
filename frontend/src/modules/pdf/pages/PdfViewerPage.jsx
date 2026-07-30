@@ -85,6 +85,16 @@ function readApiError(error, fallback) {
   return message;
 }
 
+function apiAssetUrl(value) {
+  try {
+    const source = new URL(value, apiOrigin);
+
+    return new URL(`${source.pathname}${source.search}`, apiOrigin).toString();
+  } catch {
+    return value;
+  }
+}
+
 function physicalPositionsFromStatus(status) {
   const items = status?.items ?? [];
 
@@ -1340,7 +1350,7 @@ export default function PdfViewerPage() {
                         <div className="min-h-0 flex-1">
                           {position.signature_image_url ? (
                             <img
-                              src={position.signature_image_url}
+                              src={apiAssetUrl(position.signature_image_url)}
                               alt=""
                               className="h-full w-full object-contain"
                               draggable="false"
