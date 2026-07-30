@@ -550,6 +550,61 @@ class ProjectApiTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public function test_signed_report_blocks_access_without_lock_timestamp_and_new_version_is_unlocked(): void
+    {
+        $creator = $this->createLegacyAuthUser();
+        $project = $this->createProjectRecord([
+            'aprobado' => 'RV',
+            'fecha_finalizacion' => now(),
+        ]);
+        $second = $this->createProjectUserWithPermissions(['INDEX']);
+        Sanctum::actingAs($creator);
+
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$creator->id_usuario],
+        ])->assertOk();
+
+        ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters_hash' => hash('sha256', 'parameters'),
+            'status' => 'signed',
+            'id_usuario' => $creator->id_usuario,
+            'base_file_path' => 'project-signatures/base.pdf',
+            'signed_file_path' => 'project-signatures/signed.pdf',
+            'signed_at' => now(),
+        ]);
+
+        $this->assertNull($project->fresh()->signature_signers_locked_at);
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-access")
+            ->assertOk()
+            ->assertJsonPath('data.locked', true)
+            ->assertJsonPath('data.can_manage', false);
+
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$creator->id_usuario, $second->id_usuario],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('user_ids');
+        $this->assertDatabaseMissing('project_version_signature_users', [
+            'id_proyecto' => $project->id_proyecto,
+            'id_usuario' => $second->id_usuario,
+        ]);
+
+        $versionId = $this->postJson("/api/v1/projects/{$project->id_proyecto}/versions")
+            ->assertCreated()
+            ->json('data.project.id_proyecto');
+        $this->getJson("/api/v1/projects/{$versionId}/signature-access")
+            ->assertOk()
+            ->assertJsonPath('data.locked', false)
+            ->assertJsonPath('data.can_manage', true);
+        $this->putJson("/api/v1/projects/{$versionId}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$creator->id_usuario, $second->id_usuario],
+        ])->assertOk();
+    }
+
     public function test_legacy_digital_signature_function_still_allows_signing(): void
     {
         ProjectSignableReport::query()

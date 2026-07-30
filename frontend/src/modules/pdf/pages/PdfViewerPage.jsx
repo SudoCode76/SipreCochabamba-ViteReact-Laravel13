@@ -990,6 +990,7 @@ export default function PdfViewerPage() {
         assignmentPages,
       );
       applyPhysicalStatus(response?.data ?? null);
+      setSelectedPhysicalPage(Number(assignmentPages[0]));
       setAssignmentMessage("Páginas confirmadas.");
     } catch (saveError) {
       setAssignmentMessage(readApiError(saveError, "No se pudieron guardar las páginas."));
@@ -1176,7 +1177,7 @@ export default function PdfViewerPage() {
 
             <div className="flex min-h-0 flex-1 overflow-hidden">
               {requiresPageAssignment ? (
-                <aside className="w-80 shrink-0 overflow-y-auto border-r border-slate-300 bg-white p-4">
+                <aside className="flex w-80 shrink-0 flex-col overflow-hidden border-r border-slate-300 bg-white p-4">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
                     <p className="font-semibold text-slate-800">Asignación de páginas</p>
                     <p className="mt-1 text-xs text-slate-600">
@@ -1199,7 +1200,27 @@ export default function PdfViewerPage() {
                     </ul>
                   </div>
 
-                  <div className="mt-4 space-y-4">
+                  <p className="mt-3 text-xs text-amber-700">
+                    {physicalStatus?.page_assignment?.current_user_confirmed
+                      ? "Puede cambiar su selección y volver a confirmarla."
+                      : "Confirme su selección para mostrar y acomodar las firmas."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveAssignmentPages()}
+                    disabled={savingAssignment || assignmentPages.length === 0}
+                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {savingAssignment ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Confirmar páginas y mostrar firmas
+                  </button>
+                  {assignmentMessage ? (
+                    <p className={`mt-2 text-xs ${assignmentMessage.includes("confirmadas") ? "text-emerald-700" : "text-red-600"}`}>
+                      {assignmentMessage}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
                     {pageMap.map((module) => (
                       <section key={module.module_id} className="rounded-xl border border-slate-200 p-3">
                         <label className="flex cursor-pointer items-start gap-2 text-sm font-semibold text-slate-800">
@@ -1249,25 +1270,15 @@ export default function PdfViewerPage() {
                       </section>
                     ))}
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => void handleSaveAssignmentPages()}
-                    disabled={savingAssignment || assignmentPages.length === 0}
-                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {savingAssignment ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Confirmar mis páginas
-                  </button>
-                  {assignmentMessage ? (
-                    <p className={`mt-2 text-xs ${assignmentMessage.includes("confirmadas") ? "text-emerald-700" : "text-red-600"}`}>
-                      {assignmentMessage}
-                    </p>
-                  ) : null}
                 </aside>
               ) : null}
 
               <div className="min-h-0 flex-1 overflow-auto p-6">
+              {!physicalPdfError && requiresPageAssignment && !currentPageCanEdit ? (
+                <p className="mx-auto mb-3 max-w-[920px] rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-medium text-amber-800">
+                  Esta hoja está en modo lectura porque no forma parte de su asignación confirmada.
+                </p>
+              ) : null}
               {currentPhysicalPageSize ? (
                 <div
                   ref={physicalCanvasRef}
@@ -1356,11 +1367,6 @@ export default function PdfViewerPage() {
                       ) : null}
                     </div>
                   ))}
-                  {!physicalPdfError && requiresPageAssignment && !currentPageCanEdit ? (
-                    <div className="theme-fixed-light pointer-events-none absolute inset-x-4 top-4 z-20 rounded-lg bg-slate-950/80 px-3 py-2 text-center text-xs font-medium text-white">
-                      Esta hoja está en modo lectura porque no forma parte de su asignación confirmada.
-                    </div>
-                  ) : null}
                   {!physicalPdfError && !physicalPageIsTarget ? (
                     <div className="theme-fixed-light pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/45 p-6 text-center text-sm font-medium text-slate-600">
                       Las firmas se aplicarán únicamente en la última página.

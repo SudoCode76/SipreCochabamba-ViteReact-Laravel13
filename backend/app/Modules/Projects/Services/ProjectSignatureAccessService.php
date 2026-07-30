@@ -71,13 +71,14 @@ class ProjectSignatureAccessService
     {
         $root = $this->rootProject($project)->loadMissing('creator');
         $signers = $this->signers($project);
+        $locked = $this->isLocked($project);
 
         return [
             'project_id' => $project->id_proyecto,
             'root_project_id' => $root->id_proyecto,
             'mode' => self::MODE_SELECTED,
             'configured' => filled($project->signature_signers_configured_at),
-            'locked' => filled($project->signature_signers_locked_at),
+            'locked' => $locked,
             'locked_at' => $project->signature_signers_locked_at?->toIso8601String(),
             'creator' => $root->creator ? $this->serializeUser($root->creator, true) : null,
             'authorized_users' => $signers->map(fn (User $signer): array => $this->serializeUser(
@@ -85,7 +86,7 @@ class ProjectSignatureAccessService
                 $signer->id_usuario === $root->id_usuario,
                 $signer->signature_image_path_snapshot ?? null,
             ))->values()->all(),
-            'can_manage' => $this->canManage($project, $user) && blank($project->signature_signers_locked_at),
+            'can_manage' => $this->canManage($project, $user) && ! $locked,
             'current_user_allowed' => $this->allows($project, $user),
         ];
     }
@@ -98,7 +99,7 @@ class ProjectSignatureAccessService
         return [
             'mode' => self::MODE_SELECTED,
             'configured' => $configured,
-            'locked' => filled($project->signature_signers_locked_at),
+            'locked' => $this->isLocked($project),
             'allowed' => $allowed,
             'message' => match (true) {
                 ! $configured => 'Debe configurar una lista de firmantes para esta versión antes de firmar.',
@@ -145,9 +146,9 @@ class ProjectSignatureAccessService
             throw new AuthorizationException('Solo el creador del proyecto o un administrador puede cambiar esta configuración.');
         }
 
-        if ($project->signature_signers_locked_at) {
+        if ($this->isLocked($project)) {
             throw ValidationException::withMessages([
-                'user_ids' => ['Los firmantes de esta versión quedaron bloqueados por su primera firma digital. Cree una nueva versión para cambiarlos.'],
+                'user_ids' => ['Esta versión ya tiene documentos firmados. Cree una nueva versión para cambiar los usuarios con acceso.'],
             ]);
         }
 
@@ -235,6 +236,15 @@ class ProjectSignatureAccessService
             ->where('id_proyecto', $project->id_proyecto)
             ->whereIn('status', ['pending', 'auth_pending', 'sent'])
             ->exists();
+    }
+
+    private function isLocked(Project $project): bool
+    {
+        return filled($project->signature_signers_locked_at)
+            || ProjectReportSignature::query()
+                ->where('id_proyecto', $project->id_proyecto)
+                ->where('status', 'signed')
+                ->exists();
     }
 
     private function replaceSigners(Project $project, Collection $ids): void
