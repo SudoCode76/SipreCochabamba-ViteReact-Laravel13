@@ -592,7 +592,8 @@ class ProjectReportSignatureController extends Controller
             $status = $this->signatureService->updateSpecificationPhysicalSignaturePages(
                 $project,
                 $validated['pages'],
-                $request->user()
+                $request->user(),
+                $request->ip()
             );
         } catch (AuthorizationException $exception) {
             return ApiResponse::error($exception->getMessage(), ['authorization' => [$exception->getMessage()]], 403);

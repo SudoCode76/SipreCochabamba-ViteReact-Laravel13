@@ -47,6 +47,7 @@ class ProjectReportSignatureService
         private readonly ProjectReportPdfResolver $pdfResolver,
         private readonly ItemReportPdfResolver $itemPdfResolver,
         private readonly ProjectSpecificationsPdfMergeService $projectSpecificationsPdfMergeService,
+        private readonly ProjectHistoryService $projectHistoryService,
         private readonly CiudadaniaDigitalClient $ciudadaniaDigitalClient,
     ) {}
 
@@ -614,7 +615,7 @@ class ProjectReportSignatureService
         return $this->physicalSignatureStatus($project, $reportKey, $normalizedParameters, $user);
     }
 
-    public function updateSpecificationPhysicalSignaturePages(Project $project, array $pages, User $user): array
+    public function updateSpecificationPhysicalSignaturePages(Project $project, array $pages, User $user, ?string $ip): array
     {
         $reportKey = 'specifications';
         $this->assertCanStart($project, $reportKey, $user);
@@ -642,16 +643,28 @@ class ProjectReportSignatureService
         }
 
         $existingPositions = $this->pagePositions($signature);
+        $previousPages = $this->selectedPages($signature);
         $default = Arr::except($this->placementFromSignature($signature), ['id', 'page']);
         $pagePositions = collect($pages)->mapWithKeys(fn (int $page): array => [
             (string) $page => $existingPositions[(string) $page] ?? $default,
         ])->all();
 
-        $signature->forceFill([
-            'selected_pages' => $pages,
-            'page_positions' => $pagePositions,
-            'pages_confirmed_at' => now(),
-        ])->save();
+        DB::transaction(function () use ($project, $signature, $user, $ip, $previousPages, $pages, $pagePositions, $totalPages): void {
+            $signature->forceFill([
+                'selected_pages' => $pages,
+                'page_positions' => $pagePositions,
+                'pages_confirmed_at' => now(),
+            ])->save();
+
+            $this->projectHistoryService->recordPhysicalSignaturePagesSelected(
+                $project,
+                $user,
+                $ip,
+                $previousPages,
+                $pages,
+                $totalPages
+            );
+        });
 
         return $this->projectPreviewStatus($project, $reportKey, [], $user);
     }

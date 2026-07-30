@@ -3246,24 +3246,53 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.can_send', true)
             ->assertJsonCount(0, 'data.page_assignment.uncovered_pages');
 
+        Sanctum::actingAs($creator);
+        $complete = $this->putJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/physical-signatures/pages", [
+            'pages' => [1, 2, 3, 4, 6],
+        ])->assertOk()
+            ->assertJsonPath('data.page_assignment.complete', true)
+            ->assertJsonPath('data.can_send', true);
+
+        $history = $this->getJson("/api/v1/projects/{$project->id_proyecto}/history?action=physical_signature_pages_selected&per_page=100")
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 4)
+            ->json('data.items');
+        $creatorHistory = collect($history)->where('user_id', $creator->id_usuario)->values();
+
+        $this->assertCount(2, $creatorHistory);
+        $this->assertSame('127.0.0.1', $creatorHistory[0]['ip']);
+        $this->assertSame(range(1, 5), $creatorHistory[0]['metadata']['previous_pages']);
+        $this->assertSame([1, 2, 3, 4, 6], $creatorHistory[0]['metadata']['selected_pages']);
+        $this->assertSame([6], $creatorHistory[0]['metadata']['added_pages']);
+        $this->assertSame([5], $creatorHistory[0]['metadata']['removed_pages']);
+        $this->assertSame('1–4, 6', $creatorHistory[0]['metadata']['selected_pages_summary']);
+        $this->assertSame('Ninguna', $creatorHistory[1]['metadata']['previous_pages_summary']);
+        $this->assertSame(5, $creatorHistory[0]['metadata']['selected_pages_count']);
+        $this->assertSame(20, $creatorHistory[0]['metadata']['total_pages']);
+        $this->assertSame(1, $creatorHistory[0]['metadata']['version_number']);
+        $this->assertSame(
+            [$creator->id_usuario, $creator->id_usuario, $second->id_usuario, $third->id_usuario],
+            collect($history)->pluck('user_id')->sort()->values()->all()
+        );
+
         $creatorSignature = collect($complete->json('data.items'))->firstWhere('user_id', $creator->id_usuario);
         $originalPageOne = $creatorSignature['page_positions']['1'];
-        $pageFive = $creatorSignature['page_positions']['5'];
+        $pageSix = $creatorSignature['page_positions']['6'];
 
         Sanctum::actingAs($second);
         $moved = $this->patchJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/signature-preview/positions", [
             'layout_hash' => $complete->json('data.layout_hash'),
             'positions' => [[
                 'id' => $creatorSignature['id'],
-                'page' => 5,
-                'x' => $pageFive['x'] + 1,
-                'y' => $pageFive['y'],
-                'width' => $pageFive['width'],
-                'height' => $pageFive['height'],
+                'page' => 6,
+                'x' => $pageSix['x'] + 1,
+                'y' => $pageSix['y'],
+                'width' => $pageSix['width'],
+                'height' => $pageSix['height'],
             ]],
         ])->assertOk();
         $updatedCreator = collect($moved->json('data.items'))->firstWhere('user_id', $creator->id_usuario);
-        $this->assertEquals($pageFive['x'] + 1, $updatedCreator['page_positions']['5']['x']);
+        $this->assertEquals($pageSix['x'] + 1, $updatedCreator['page_positions']['6']['x']);
         $this->assertSame($originalPageOne, $updatedCreator['page_positions']['1']);
 
         $this->patchJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/signature-preview/positions", [
