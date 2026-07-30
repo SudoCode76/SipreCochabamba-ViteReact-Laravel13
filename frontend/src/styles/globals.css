@@ -270,9 +270,12 @@
   }
 
   .theme-shell .hover\:bg-slate-50:hover,
-  .theme-shell .hover\:bg-slate-100:hover,
-  .theme-shell .hover\:bg-slate-800:hover {
+  .theme-shell .hover\:bg-slate-100:hover {
     background-color: var(--muted);
+  }
+
+  .theme-shell .hover\:bg-slate-800:hover {
+    background-color: color-mix(in oklab, var(--foreground) 85%, var(--background));
   }
 
   .theme-shell .text-slate-500,
