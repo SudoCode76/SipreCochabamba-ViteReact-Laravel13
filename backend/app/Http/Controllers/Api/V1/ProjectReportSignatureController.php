@@ -201,6 +201,7 @@ class ProjectReportSignatureController extends Controller
             $requiredSignersCount = null;
             $signedSignersCount = null;
             $currentUserSigned = false;
+            $currentUserSignature = null;
             $currentUserSignatureStatus = null;
 
             if ($subject instanceof Project) {
@@ -221,13 +222,22 @@ class ProjectReportSignatureController extends Controller
                     ->where('status', 'signed')
                     ->where('id_usuario', $request->user()->id_usuario)
                     ->exists();
+                $currentUserSignature = (clone $progressQuery)
+                    ->with('user')
+                    ->where('id_usuario', $request->user()->id_usuario)
+                    ->whereIn('status', ['pending', 'auth_pending', 'sent'])
+                    ->latest('id')
+                    ->first();
                 $currentUserSignatureStatus = $currentUserSigned
                     ? 'signed'
-                    : (clone $progressQuery)
-                        ->where('id_usuario', $request->user()->id_usuario)
-                        ->whereIn('status', ['pending', 'auth_pending', 'sent'])
-                        ->latest('id')
-                        ->value('status');
+                    : $currentUserSignature?->status;
+            }
+
+            $serializedLatest = $latest ? $this->signatureService->serialize($latest) : null;
+            if ($subject instanceof Project
+                && $latest
+                && in_array($latest->status, ['pending', 'auth_pending', 'sent'], true)) {
+                $serializedLatest['can_cancel'] = $this->signatureService->canCancel($subject, $latest, $request->user());
             }
 
             return ApiResponse::success([
@@ -237,7 +247,7 @@ class ProjectReportSignatureController extends Controller
                     ? (bool) ($report['is_enabled'] ?? false)
                     : ($report ? $projectIsFinalized : false),
                 'report' => $report,
-                'latest_signature' => $latest ? $this->signatureService->serialize($latest) : null,
+                'latest_signature' => $serializedLatest,
                 'latest_signed' => $latestSigned ? $this->signatureService->serialize($latestSigned) : null,
                 'current_document_hash' => $currentDocumentHash,
                 'signed_document_hash' => $signedDocumentHash,
@@ -248,6 +258,9 @@ class ProjectReportSignatureController extends Controller
                 'required_signers_count' => $requiredSignersCount,
                 'current_user_signed' => $currentUserSigned,
                 'current_user_signature_status' => $currentUserSignatureStatus,
+                'current_user_signature' => $currentUserSignature
+                    ? [...$this->signatureService->serialize($currentUserSignature), 'can_cancel' => true]
+                    : null,
             ], 'Estado de firma obtenido correctamente.');
         }
 
@@ -450,6 +463,7 @@ class ProjectReportSignatureController extends Controller
             'layout_hash' => ['required', 'string', 'size:64'],
             'positions' => ['required', 'array'],
             'positions.*.id' => ['required', 'integer'],
+            'positions.*.page' => ['nullable', 'integer', 'min:1'],
             'positions.*.x' => ['required', 'numeric', 'min:0'],
             'positions.*.y' => ['required', 'numeric', 'min:0'],
             'positions.*.width' => ['required', 'numeric', 'min:20'],
@@ -576,6 +590,31 @@ class ProjectReportSignatureController extends Controller
         return $this->subjectUpdatePhysicalSignaturePositions($request, $project, $reportKey);
     }
 
+    public function updatePhysicalSignaturePages(Request $request, Project $project, string $reportKey): JsonResponse
+    {
+        if ($reportKey !== 'specifications') {
+            return ApiResponse::error('La asignación de páginas solo está disponible para especificaciones técnicas.', null, 422);
+        }
+
+        $validated = $request->validate([
+            'pages' => ['required', 'array', 'min:1'],
+            'pages.*' => ['required', 'integer', 'min:1', 'distinct'],
+        ]);
+
+        try {
+            $status = $this->signatureService->updateSpecificationPhysicalSignaturePages(
+                $project,
+                $validated['pages'],
+                $request->user(),
+                $request->ip()
+            );
+        } catch (AuthorizationException $exception) {
+            return ApiResponse::error($exception->getMessage(), ['authorization' => [$exception->getMessage()]], 403);
+        }
+
+        return ApiResponse::success($status, 'Páginas de firma confirmadas correctamente.');
+    }
+
     public function itemUpdatePhysicalSignaturePositions(Request $request, Item $item, string $reportKey): JsonResponse
     {
         return $this->subjectUpdatePhysicalSignaturePositions($request, $item, $reportKey);
@@ -597,7 +636,7 @@ class ProjectReportSignatureController extends Controller
             'tipo_desglose' => ['nullable', 'integer'],
             'positions' => ['required', 'array'],
             'positions.*.id' => ['required', 'integer'],
-            'positions.*.page' => ['required', 'integer', 'min:1'],
+            'positions.*.page' => ['nullable', 'integer', 'min:1'],
             'positions.*.x' => ['required', 'numeric', 'min:0'],
             'positions.*.y' => ['required', 'numeric', 'min:0'],
             'positions.*.width' => ['required', 'numeric', 'min:1'],

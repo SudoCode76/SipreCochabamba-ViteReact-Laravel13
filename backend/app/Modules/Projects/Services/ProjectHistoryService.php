@@ -159,6 +159,65 @@ class ProjectHistoryService
         );
     }
 
+    public function recordPhysicalSignaturePagesSelected(
+        Project $project,
+        ?User $actor,
+        ?string $ip,
+        array $previousPages,
+        array $selectedPages,
+        int $totalPages
+    ): void {
+        $addedPages = array_values(array_diff($selectedPages, $previousPages));
+        $removedPages = array_values(array_diff($previousPages, $selectedPages));
+
+        $this->record(
+            $project,
+            $actor,
+            $ip,
+            'physical_signature_pages_selected',
+            'Se confirmaron páginas para la firma física',
+            'Se confirmaron '.count($selectedPages).' de '.$totalPages.' páginas de las especificaciones técnicas.',
+            [
+                'report_key' => 'specifications',
+                'version_number' => $project->numero_version,
+                'previous_pages' => $previousPages,
+                'previous_pages_summary' => $this->pageRanges($previousPages),
+                'selected_pages' => $selectedPages,
+                'selected_pages_summary' => $this->pageRanges($selectedPages),
+                'added_pages' => $addedPages,
+                'added_pages_summary' => $this->pageRanges($addedPages),
+                'removed_pages' => $removedPages,
+                'removed_pages_summary' => $this->pageRanges($removedPages),
+                'selected_pages_count' => count($selectedPages),
+                'total_pages' => $totalPages,
+            ]
+        );
+    }
+
+    private function pageRanges(array $pages): string
+    {
+        if ($pages === []) {
+            return 'Ninguna';
+        }
+
+        $ranges = [];
+        $start = $previous = $pages[0];
+
+        foreach (array_slice($pages, 1) as $page) {
+            if ($page === $previous + 1) {
+                $previous = $page;
+                continue;
+            }
+
+            $ranges[] = $start === $previous ? (string) $start : $start.'–'.$previous;
+            $start = $previous = $page;
+        }
+
+        $ranges[] = $start === $previous ? (string) $start : $start.'–'.$previous;
+
+        return implode(', ', $ranges);
+    }
+
     private function record(Project $project, ?User $actor, ?string $ip, string $action, string $title, ?string $detail, array $metadata = []): void
     {
         ProjectHistory::query()->create([

@@ -493,6 +493,98 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.signature.status', 'cancelled');
     }
 
+    public function test_pending_signature_can_only_be_cancelled_by_its_owner_or_an_administrator(): void
+    {
+        $administrator = $this->createLegacyAuthUser();
+        $project = $this->createProjectRecord();
+        $owner = $this->createProjectUserWithPermissions([]);
+        $otherSigner = User::query()->create([
+            'id_usuario' => 3,
+            'funcionario' => 'Otro Firmante',
+            'ci' => '76543210',
+            'username' => 'otro-firmante',
+            'clave' => Hash::make('secret123'),
+            'estado' => 'AC',
+            'id_unidad' => 2,
+            'rol' => 2,
+            'fecha' => now()->toDateString(),
+        ]);
+        DB::table('project_version_signature_users')->insert([
+            [
+                'id_proyecto' => $project->id_proyecto,
+                'id_usuario' => $owner->id_usuario,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id_proyecto' => $project->id_proyecto,
+                'id_usuario' => $otherSigner->id_usuario,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+        $parameters = ['format' => 'PCA'];
+        $parametersHash = app(ProjectReportSignatureService::class)->parametersHash($parameters);
+        $pending = ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters' => $parameters,
+            'parameters_hash' => $parametersHash,
+            'status' => 'auth_pending',
+            'id_usuario' => $owner->id_usuario,
+            'base_file_path' => 'project-signatures/pending.pdf',
+            'response_payload' => ['redirect_url' => 'https://ciudadania.test/login'],
+        ]);
+        $statusUrl = "/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget&format=PCA";
+
+        Sanctum::actingAs($otherSigner);
+        $this->getJson($statusUrl)
+            ->assertOk()
+            ->assertJsonPath('data.latest_signature.id', $pending->id)
+            ->assertJsonPath('data.latest_signature.user_name', $owner->funcionario)
+            ->assertJsonPath('data.latest_signature.can_cancel', false)
+            ->assertJsonPath('data.current_user_signature', null);
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/signatures/{$pending->id}/cancel")
+            ->assertForbidden();
+        $this->assertDatabaseHas('project_report_signatures', [
+            'id' => $pending->id,
+            'status' => 'auth_pending',
+        ]);
+
+        Sanctum::actingAs($owner);
+        $this->getJson($statusUrl)
+            ->assertOk()
+            ->assertJsonPath('data.current_user_signature.id', $pending->id)
+            ->assertJsonPath('data.current_user_signature.can_cancel', true)
+            ->assertJsonPath('data.latest_signature.can_cancel', true);
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/signatures/{$pending->id}/cancel")
+            ->assertOk()
+            ->assertJsonPath('data.signature.status', 'cancelled');
+
+        $administratorPending = ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters' => $parameters,
+            'parameters_hash' => $parametersHash,
+            'status' => 'auth_pending',
+            'id_usuario' => $owner->id_usuario,
+            'base_file_path' => 'project-signatures/administrator-pending.pdf',
+        ]);
+        Sanctum::actingAs($administrator);
+        $this->getJson($statusUrl)
+            ->assertOk()
+            ->assertJsonPath('data.latest_signature.id', $administratorPending->id)
+            ->assertJsonPath('data.latest_signature.can_cancel', true)
+            ->assertJsonPath('data.current_user_signature', null);
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/signatures/{$administratorPending->id}/cancel")
+            ->assertOk();
+
+        $administratorPending->forceFill(['status' => 'signed'])->save();
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/signatures/{$administratorPending->id}/cancel")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['signature']);
+    }
+
     public function test_first_completed_project_signature_locks_version_signers_and_layout(): void
     {
         Storage::fake('local');
@@ -548,6 +640,61 @@ class ProjectApiTest extends TestCase
             'mode' => 'selected',
             'user_ids' => [$creator->id_usuario],
         ])->assertUnprocessable();
+    }
+
+    public function test_signed_report_blocks_access_without_lock_timestamp_and_new_version_is_unlocked(): void
+    {
+        $creator = $this->createLegacyAuthUser();
+        $project = $this->createProjectRecord([
+            'aprobado' => 'RV',
+            'fecha_finalizacion' => now(),
+        ]);
+        $second = $this->createProjectUserWithPermissions(['INDEX']);
+        Sanctum::actingAs($creator);
+
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$creator->id_usuario],
+        ])->assertOk();
+
+        ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters_hash' => hash('sha256', 'parameters'),
+            'status' => 'signed',
+            'id_usuario' => $creator->id_usuario,
+            'base_file_path' => 'project-signatures/base.pdf',
+            'signed_file_path' => 'project-signatures/signed.pdf',
+            'signed_at' => now(),
+        ]);
+
+        $this->assertNull($project->fresh()->signature_signers_locked_at);
+        $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-access")
+            ->assertOk()
+            ->assertJsonPath('data.locked', true)
+            ->assertJsonPath('data.can_manage', false);
+
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$creator->id_usuario, $second->id_usuario],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('user_ids');
+        $this->assertDatabaseMissing('project_version_signature_users', [
+            'id_proyecto' => $project->id_proyecto,
+            'id_usuario' => $second->id_usuario,
+        ]);
+
+        $versionId = $this->postJson("/api/v1/projects/{$project->id_proyecto}/versions")
+            ->assertCreated()
+            ->json('data.project.id_proyecto');
+        $this->getJson("/api/v1/projects/{$versionId}/signature-access")
+            ->assertOk()
+            ->assertJsonPath('data.locked', false)
+            ->assertJsonPath('data.can_manage', true);
+        $this->putJson("/api/v1/projects/{$versionId}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$creator->id_usuario, $second->id_usuario],
+        ])->assertOk();
     }
 
     public function test_legacy_digital_signature_function_still_allows_signing(): void
@@ -3099,6 +3246,188 @@ class ProjectApiTest extends TestCase
             ->assertHeader('content-disposition', 'inline; filename="especificaciones_proyecto.pdf"');
 
         $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_specification_signers_assign_pages_and_only_move_shared_page_signatures(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+        $creator = $this->createLegacyAuthUser();
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $project = $this->createProjectRecord(['aprobado' => 'RV', 'fecha_finalizacion' => now()]);
+        $second = $this->createProjectUserWithPermissions(['INDEX', 'FIRMAR_REPORTES']);
+        $third = User::query()->create([
+            'funcionario' => 'Tercer Firmante',
+            'ci' => '7654321',
+            'username' => 'firmante3',
+            'clave' => Hash::make('secret123'),
+            'estado' => 'AC',
+            'id_unidad' => $second->id_unidad,
+            'rol' => $second->rol,
+            'fecha' => now()->toDateString(),
+        ]);
+        DB::table('project_signature_authorized_users')->insert([
+            'id_proyecto_raiz' => $project->id_proyecto,
+            'id_usuario' => $third->id_usuario,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        ProjectSignableReport::query()->where('report_key', 'specifications')->update(['is_enabled' => true]);
+
+        $image = imagecreatetruecolor(20, 10);
+        ob_start();
+        imagepng($image);
+        $png = ob_get_clean();
+        imagedestroy($image);
+        foreach ([$creator, $second, $third] as $signer) {
+            $path = "signatures/{$signer->id_usuario}.png";
+            Storage::disk('public')->put($path, $png);
+            $signer->forceFill(['firma_imagen_path' => $path])->save();
+        }
+
+        DB::table('modulo')->insert([
+            ['id_modulo' => 2, 'nombre_modulo' => 'Módulo 1', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
+            ['id_modulo' => 3, 'nombre_modulo' => 'Módulo 2', 'estado' => 'AC', 'id_usuario' => 1, 'fecha' => now()->toDateString()],
+        ]);
+        Storage::disk('public')->put(
+            'archivos/items/especificaciones/repetida.pdf',
+            $this->fakePdf('Especificación repetida', array_fill(0, 10, 'A4'))
+        );
+        $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'ITEM REPETIDO',
+            'especificacion' => 'archivos/items/especificaciones/repetida.pdf',
+        ]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 1, 'id_item' => 1, 'id_modulo' => 2, 'prioridad' => 1]);
+        $this->createProjectItemRecord(['id_proyecto_item' => 2, 'id_item' => 1, 'id_modulo' => 3, 'prioridad' => 2]);
+
+        Sanctum::actingAs($creator);
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/signature-access", [
+            'mode' => 'selected',
+            'user_ids' => [$creator->id_usuario, $second->id_usuario, $third->id_usuario],
+        ])->assertOk();
+
+        $preview = $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/signature-preview", [
+            'page_scope' => 'all',
+        ])->assertOk()
+            ->assertJsonPath('data.page_map.total_pages', 20)
+            ->assertJsonCount(2, 'data.page_map.modules')
+            ->assertJsonPath('data.page_assignment.complete', false)
+            ->assertJsonPath('data.can_send', false);
+        $this->assertSame([1, 11], collect($preview->json('data.page_map.modules'))->pluck('items.0.start_page')->all());
+
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/physical-signatures/pages", [
+            'pages' => [],
+        ])->assertUnprocessable()->assertJsonValidationErrors('pages');
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/physical-signatures/pages", [
+            'pages' => range(1, 5),
+        ])->assertOk()->assertJsonPath('data.page_assignment.complete', false);
+
+        Sanctum::actingAs($second);
+        $this->putJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/physical-signatures/pages", [
+            'pages' => range(5, 10),
+        ])->assertOk()->assertJsonPath('data.page_assignment.complete', false);
+
+        Sanctum::actingAs($third);
+        $complete = $this->putJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/physical-signatures/pages", [
+            'pages' => range(11, 20),
+        ])->assertOk()
+            ->assertJsonPath('data.page_assignment.complete', true)
+            ->assertJsonPath('data.can_send', true)
+            ->assertJsonCount(0, 'data.page_assignment.uncovered_pages');
+
+        Sanctum::actingAs($creator);
+        $complete = $this->putJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/physical-signatures/pages", [
+            'pages' => [1, 2, 3, 4, 6],
+        ])->assertOk()
+            ->assertJsonPath('data.page_assignment.complete', true)
+            ->assertJsonPath('data.can_send', true);
+
+        $history = $this->getJson("/api/v1/projects/{$project->id_proyecto}/history?action=physical_signature_pages_selected&per_page=100")
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 4)
+            ->json('data.items');
+        $creatorHistory = collect($history)->where('user_id', $creator->id_usuario)->values();
+
+        $this->assertCount(2, $creatorHistory);
+        $this->assertSame('127.0.0.1', $creatorHistory[0]['ip']);
+        $this->assertSame(range(1, 5), $creatorHistory[0]['metadata']['previous_pages']);
+        $this->assertSame([1, 2, 3, 4, 6], $creatorHistory[0]['metadata']['selected_pages']);
+        $this->assertSame([6], $creatorHistory[0]['metadata']['added_pages']);
+        $this->assertSame([5], $creatorHistory[0]['metadata']['removed_pages']);
+        $this->assertSame('1–4, 6', $creatorHistory[0]['metadata']['selected_pages_summary']);
+        $this->assertSame('Ninguna', $creatorHistory[1]['metadata']['previous_pages_summary']);
+        $this->assertSame(5, $creatorHistory[0]['metadata']['selected_pages_count']);
+        $this->assertSame(20, $creatorHistory[0]['metadata']['total_pages']);
+        $this->assertSame(1, $creatorHistory[0]['metadata']['version_number']);
+        $this->assertSame(
+            [$creator->id_usuario, $creator->id_usuario, $second->id_usuario, $third->id_usuario],
+            collect($history)->pluck('user_id')->sort()->values()->all()
+        );
+
+        $creatorSignature = collect($complete->json('data.items'))->firstWhere('user_id', $creator->id_usuario);
+        $secondSignature = collect($complete->json('data.items'))->firstWhere('user_id', $second->id_usuario);
+        $originalPageOne = $creatorSignature['page_positions']['1'];
+        $pageSix = $creatorSignature['page_positions']['6'];
+
+        $creatorPhysicalSignature = ProjectReportPhysicalSignature::query()->findOrFail($creatorSignature['id']);
+        $originalPagePositions = $creatorPhysicalSignature->page_positions;
+        $overlappingPagePositions = $originalPagePositions;
+        $overlappingPagePositions['6'] = $secondSignature['page_positions']['6'];
+        $creatorPhysicalSignature->forceFill(['page_positions' => $overlappingPagePositions])->save();
+
+        $overlapping = $this->getJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/physical-signatures")
+            ->assertOk()
+            ->assertJsonPath('data.has_overlapping_signatures', true)
+            ->assertJsonPath('data.can_send', false);
+
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/sign", [
+            'page_scope' => 'all',
+            'layout_hash' => $overlapping->json('data.layout_hash'),
+            'access_token' => 'no-debe-usarse',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('positions');
+        $this->assertDatabaseCount('project_report_signatures', 0);
+
+        $creatorPhysicalSignature->forceFill(['page_positions' => $originalPagePositions])->save();
+
+        Sanctum::actingAs($second);
+        $moved = $this->patchJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/signature-preview/positions", [
+            'layout_hash' => $complete->json('data.layout_hash'),
+            'positions' => [[
+                'id' => $creatorSignature['id'],
+                'page' => 6,
+                'x' => $pageSix['x'] + 1,
+                'y' => $pageSix['y'],
+                'width' => $pageSix['width'],
+                'height' => $pageSix['height'],
+            ]],
+        ])->assertOk();
+        $updatedCreator = collect($moved->json('data.items'))->firstWhere('user_id', $creator->id_usuario);
+        $this->assertEquals($pageSix['x'] + 1, $updatedCreator['page_positions']['6']['x']);
+        $this->assertSame($originalPageOne, $updatedCreator['page_positions']['1']);
+
+        $this->patchJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/signature-preview/positions", [
+            'layout_hash' => $moved->json('data.layout_hash'),
+            'positions' => [[
+                'id' => $creatorSignature['id'],
+                'page' => 1,
+                ...$originalPageOne,
+            ]],
+        ])->assertForbidden();
+
+        Storage::disk('public')->put(
+            'archivos/items/especificaciones/repetida.pdf',
+            $this->fakePdf('Especificación modificada', array_fill(0, 11, 'A4'))
+        );
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/signature-preview", [
+            'page_scope' => 'all',
+        ])->assertOk()
+            ->assertJsonPath('data.page_map.total_pages', 22)
+            ->assertJsonPath('data.page_assignment.current_user_confirmed', false)
+            ->assertJsonPath('data.can_send', false);
     }
 
     public function test_project_specifications_pdf_returns_validation_error_when_file_is_missing(): void

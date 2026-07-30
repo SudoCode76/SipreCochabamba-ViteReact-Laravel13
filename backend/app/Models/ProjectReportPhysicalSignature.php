@@ -16,6 +16,9 @@ class ProjectReportPhysicalSignature extends Model
         'id_usuario',
         'signature_image_path',
         'page_scope',
+        'selected_pages',
+        'page_positions',
+        'pages_confirmed_at',
         'page',
         'x',
         'y',
@@ -28,6 +31,9 @@ class ProjectReportPhysicalSignature extends Model
     {
         return [
             'marked_at' => 'datetime',
+            'selected_pages' => 'array',
+            'page_positions' => 'array',
+            'pages_confirmed_at' => 'datetime',
             'page' => 'integer',
             'x' => 'float',
             'y' => 'float',

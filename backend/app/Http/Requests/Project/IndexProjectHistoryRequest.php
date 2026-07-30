@@ -15,7 +15,7 @@ class IndexProjectHistoryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'action' => ['nullable', 'string', Rule::in(['created', 'updated', 'items_synced', 'budget_recalculated', 'pdf_generated', 'version_created', 'version_finalized', 'version_synchronized', 'version_input_excluded'])],
+            'action' => ['nullable', 'string', Rule::in(['created', 'updated', 'items_synced', 'budget_recalculated', 'pdf_generated', 'version_created', 'version_finalized', 'version_synchronized', 'version_input_excluded', 'physical_signature_pages_selected'])],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
             'user' => ['nullable', 'string', 'max:100'],

@@ -143,14 +143,14 @@ function ProjectSignatureAccessEditor({ people, configuration, onDraftChange = n
 
       {configuration.locked ? (
         <p className="mt-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          La lista quedó bloqueada por la primera firma digital. Cree una nueva versión para cambiarla.
+          Esta versión ya tiene documentos firmados. Cree una nueva versión para cambiar los usuarios con acceso.
         </p>
       ) : null}
 
       <div className="mt-5">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre o usuario" className="h-11 rounded-xl pl-9" />
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} disabled={!configuration.can_manage || configuration.locked} placeholder="Buscar por nombre o usuario" className="h-11 rounded-xl pl-9" />
           </div>
           <div className="mt-3 max-h-64 space-y-2 overflow-y-auto rounded-2xl border border-border/70 bg-background p-3">
             {filteredUsers.map((user) => {

@@ -127,6 +127,11 @@ export const projectService = {
     return response.data;
   },
 
+  updatePhysicalSignaturePages: async (projectId, reportKey, pages) => {
+    const response = await apiClient.put(`/v1/projects/${projectId}/reports/${reportKey}/physical-signatures/pages`, { pages });
+    return response.data;
+  },
+
   updatePhysicalSignaturePositions: async (projectId, reportKey, payload = {}) => {
     const response = await apiClient.put(`/v1/projects/${projectId}/reports/${reportKey}/physical-signatures/positions`, payload);
     return response.data;

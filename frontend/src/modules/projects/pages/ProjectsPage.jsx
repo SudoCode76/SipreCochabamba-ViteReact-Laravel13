@@ -45,6 +45,7 @@ const historyActionLabels = {
   version_synchronized: "Version sincronizada",
   version_input_excluded: "Insumo excluido",
   signature_access_updated: "Acceso al proyecto",
+  physical_signature_pages_selected: "Páginas de firma",
 };
 
 const historyActionOptions = [
@@ -60,6 +61,7 @@ const historyActionOptions = [
   { value: "version_input_excluded", label: "Insumo excluido" },
   { value: "template_created", label: "Planilla creada" },
   { value: "created_from_template", label: "Creado desde planilla" },
+  { value: "physical_signature_pages_selected", label: "Páginas de firma física" },
 ];
 
 const hasMetadata = (metadata) => metadata && Object.keys(metadata).length > 0;
@@ -257,6 +259,19 @@ const renderHistoryMetadata = (entry) => {
         {metadataRow("Tipo de acceso", metadata.mode)}
         {metadataRow("Usuarios con acceso agregados", formatHistoryUsers(metadata.added_users))}
         {metadataRow("Usuarios con acceso retirados", formatHistoryUsers(metadata.removed_users))}
+      </dl>
+    );
+  }
+
+  if (entry.action === "physical_signature_pages_selected") {
+    return (
+      <dl className="grid gap-2 sm:grid-cols-2">
+        {metadataRow("Versión", metadata.version_number)}
+        {metadataRow("Páginas seleccionadas", metadata.selected_pages_summary)}
+        {metadataRow("Selección anterior", metadata.previous_pages_summary)}
+        {metadataRow("Páginas agregadas", metadata.added_pages_summary)}
+        {metadataRow("Páginas retiradas", metadata.removed_pages_summary)}
+        {metadataRow("Total seleccionado", `${metadata.selected_pages_count} de ${metadata.total_pages}`)}
       </dl>
     );
   }

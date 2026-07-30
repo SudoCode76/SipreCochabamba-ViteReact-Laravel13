@@ -19,7 +19,7 @@ class ProjectSpecificationsPdfMergeService
 
     public function stream(Project $project): Response
     {
-        $projectItems = $this->validatedProjectItems($project);
+        $entries = $this->validatedEntries($project);
 
         $pdf = new Fpdi('P', 'mm', 'A4', true, 'UTF-8', false);
         $pdf->SetPrintHeader(false);
@@ -27,25 +27,20 @@ class ProjectSpecificationsPdfMergeService
         $pdf->SetAutoPageBreak(false);
         $pdf->SetMargins(0, 0, 0);
 
-        foreach ($projectItems as $index => $projectItem) {
+        foreach ($entries as $index => $entry) {
+            $projectItem = $entry['project_item'];
             $item = $projectItem->item;
-            $filePath = $this->resolveSpecificationPath($item?->especificacion);
-
-            if ($filePath === null) {
-                $this->failWithItems([
-                    $this->itemError($projectItem, 'La especificación técnica no existe o no se encuentra en la carpeta.', 'specification'),
-                ]);
-            }
+            $filePath = $entry['path'];
 
             try {
-                $pageCount = $pdf->setSourceFile($filePath);
+                $pdf->setSourceFile($filePath);
             } catch (Throwable) {
                 $this->failWithItems([
                     $this->itemError($projectItem, 'La especificación técnica no es un PDF legible o está dañada.', 'specification'),
                 ]);
             }
 
-            for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
+            for ($pageNumber = 1; $pageNumber <= $entry['page_count']; $pageNumber++) {
                 $templateId = $pdf->importPage($pageNumber);
                 $size = $pdf->getTemplateSize($templateId);
                 $orientation = ($size['width'] ?? 0) > ($size['height'] ?? 0) ? 'L' : 'P';
@@ -77,19 +72,62 @@ class ProjectSpecificationsPdfMergeService
 
     public function validate(Project $project): void
     {
-        $this->validatedProjectItems($project);
+        $this->validatedEntries($project);
     }
 
-    private function validatedProjectItems(Project $project)
+    public function manifest(Project $project): array
+    {
+        $entries = $this->validatedEntries($project);
+        $modules = collect($entries)
+            ->groupBy(fn (array $entry): string => (string) ($entry['project_item']->id_modulo ?? 'none'))
+            ->map(function ($moduleEntries): array {
+                $first = $moduleEntries->first()['project_item'];
+                $items = $moduleEntries->map(function (array $entry): array {
+                    $projectItem = $entry['project_item'];
+
+                    return [
+                        'project_item_id' => (int) $projectItem->id_proyecto_item,
+                        'item_id' => (int) $projectItem->id_item,
+                        'name' => (string) ($projectItem->item?->item ?? 'Ítem sin nombre'),
+                        'start_page' => $entry['start_page'],
+                        'end_page' => $entry['end_page'],
+                        'page_count' => $entry['page_count'],
+                        'pages' => range($entry['start_page'], $entry['end_page']),
+                    ];
+                })->values();
+
+                return [
+                    'module_id' => $first->id_modulo ? (int) $first->id_modulo : null,
+                    'name' => (string) ($first->module?->nombre_modulo ?? 'Sin módulo'),
+                    'pages' => $items->pluck('pages')->flatten()->unique()->sort()->values()->all(),
+                    'items' => $items->all(),
+                ];
+            })->values()->all();
+
+        return [
+            'total_pages' => collect($entries)->sum('page_count'),
+            'modules' => $modules,
+            'fingerprint' => hash('sha256', json_encode(collect($entries)->map(fn (array $entry): array => [
+                'project_item_id' => (int) $entry['project_item']->id_proyecto_item,
+                'item_id' => (int) $entry['project_item']->id_item,
+                'module_id' => $entry['project_item']->id_modulo ? (int) $entry['project_item']->id_modulo : null,
+                'page_count' => $entry['page_count'],
+                'file_hash' => $entry['file_hash'],
+            ])->values()->all(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
+        ];
+    }
+
+    private function validatedEntries(Project $project): array
     {
         $projectItems = ProjectItem::query()
-            ->with('item')
+            ->with(['item', 'module'])
             ->where('id_proyecto', $project->id_proyecto)
             ->where('estado', 'AC')
             ->whereNotNull('id_item')
             ->whereHas('item')
             ->orderBy('prioridad')
             ->orderBy('id_item')
+            ->orderBy('id_proyecto_item')
             ->get();
 
         if ($projectItems->isEmpty()) {
@@ -100,6 +138,8 @@ class ProjectSpecificationsPdfMergeService
 
         $pdf = new Fpdi('P', 'mm', 'A4', true, 'UTF-8', false);
         $errors = [];
+        $entries = [];
+        $nextPage = 1;
 
         foreach ($projectItems as $projectItem) {
             $item = $projectItem->item;
@@ -111,17 +151,28 @@ class ProjectSpecificationsPdfMergeService
             }
 
             try {
-                $pdf->setSourceFile($filePath);
+                $pageCount = $pdf->setSourceFile($filePath);
             } catch (Throwable) {
                 $errors[] = $this->itemError($projectItem, 'La especificación técnica no es un PDF legible o está dañada.', 'specification');
+                continue;
             }
+
+            $entries[] = [
+                'project_item' => $projectItem,
+                'path' => $filePath,
+                'page_count' => $pageCount,
+                'start_page' => $nextPage,
+                'end_page' => $nextPage + $pageCount - 1,
+                'file_hash' => hash_file('sha256', $filePath),
+            ];
+            $nextPage += $pageCount;
         }
 
         if ($errors !== []) {
             $this->failWithItems($errors);
         }
 
-        return $projectItems;
+        return $entries;
     }
 
     private function resolveSpecificationPath(?string $value): ?string
