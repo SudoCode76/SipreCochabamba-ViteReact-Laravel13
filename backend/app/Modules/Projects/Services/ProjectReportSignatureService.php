@@ -403,7 +403,7 @@ class ProjectReportSignatureService
             throw new AuthorizationException('La solicitud no pertenece a este proyecto.');
         }
 
-        if ($signature->id_usuario !== $user->id_usuario && ! $this->signatureAccessService->canManage($project, $user)) {
+        if (! $this->canCancel($project, $signature, $user)) {
             throw new AuthorizationException('No puede cancelar esta solicitud de firma.');
         }
 
@@ -422,6 +422,13 @@ class ProjectReportSignatureService
         ])->save();
 
         return $signature->refresh();
+    }
+
+    public function canCancel(Project $project, ProjectReportSignature $signature, User $user): bool
+    {
+        return (int) $signature->id_proyecto === (int) $project->id_proyecto
+            && ((int) $signature->id_usuario === (int) $user->id_usuario
+                || $this->signatureAccessService->canManage($project, $user));
     }
 
     public function physicalSignatureStatus(Project|Item $project, string $reportKey, array $parameters, User $user): array
@@ -1015,11 +1022,19 @@ class ProjectReportSignatureService
         $logicalHash = $this->currentDocumentHash($project, $reportKey, $parameters);
         $latestSigned = $this->latestSignedForHash($project, $reportKey, $parametersHash, $logicalHash);
         $pending = $this->forSubject(ProjectReportSignature::query(), $project)
+            ->with('user')
             ->where('report_key', $reportKey)
             ->where('parameters_hash', $parametersHash)
             ->whereIn('status', ['pending', 'auth_pending', 'sent'])
             ->latest('id')
             ->first();
+        $serializedPending = $pending ? [
+            ...$this->serialize($pending),
+            'can_cancel' => $this->canCancel($project, $pending, $user),
+        ] : null;
+        $currentUserSignature = $pending && (int) $pending->id_usuario === (int) $user->id_usuario
+            ? $serializedPending
+            : null;
         $access = $this->signatureAccessService->decision($project, $user);
         $ready = $missing === [] && $items->isNotEmpty() && filled($project->signature_signers_configured_at);
         $assignmentRequired = $reportKey === 'specifications' && $pageScope === 'all';
@@ -1054,7 +1069,8 @@ class ProjectReportSignatureService
             'signature_access' => $access,
             'signers_locked' => filled($project->signature_signers_locked_at),
             'latest_signed' => $latestSigned ? $this->serialize($latestSigned) : null,
-            'pending_signature' => $pending ? $this->serialize($pending) : null,
+            'pending_signature' => $serializedPending,
+            'current_user_signature' => $currentUserSignature,
             'page_sizes' => $geometry['page_sizes'] ?? [],
             'physical_zone' => $geometry['physical_zone'] ?? null,
             'digital_zone' => $geometry['digital_zone'] ?? null,

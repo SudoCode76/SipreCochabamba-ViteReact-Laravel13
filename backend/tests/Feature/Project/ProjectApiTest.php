@@ -493,6 +493,98 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.signature.status', 'cancelled');
     }
 
+    public function test_pending_signature_can_only_be_cancelled_by_its_owner_or_an_administrator(): void
+    {
+        $administrator = $this->createLegacyAuthUser();
+        $project = $this->createProjectRecord();
+        $owner = $this->createProjectUserWithPermissions([]);
+        $otherSigner = User::query()->create([
+            'id_usuario' => 3,
+            'funcionario' => 'Otro Firmante',
+            'ci' => '76543210',
+            'username' => 'otro-firmante',
+            'clave' => Hash::make('secret123'),
+            'estado' => 'AC',
+            'id_unidad' => 2,
+            'rol' => 2,
+            'fecha' => now()->toDateString(),
+        ]);
+        DB::table('project_version_signature_users')->insert([
+            [
+                'id_proyecto' => $project->id_proyecto,
+                'id_usuario' => $owner->id_usuario,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id_proyecto' => $project->id_proyecto,
+                'id_usuario' => $otherSigner->id_usuario,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+        $parameters = ['format' => 'PCA'];
+        $parametersHash = app(ProjectReportSignatureService::class)->parametersHash($parameters);
+        $pending = ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters' => $parameters,
+            'parameters_hash' => $parametersHash,
+            'status' => 'auth_pending',
+            'id_usuario' => $owner->id_usuario,
+            'base_file_path' => 'project-signatures/pending.pdf',
+            'response_payload' => ['redirect_url' => 'https://ciudadania.test/login'],
+        ]);
+        $statusUrl = "/api/v1/projects/{$project->id_proyecto}/signature-status?report_key=general_budget&format=PCA";
+
+        Sanctum::actingAs($otherSigner);
+        $this->getJson($statusUrl)
+            ->assertOk()
+            ->assertJsonPath('data.latest_signature.id', $pending->id)
+            ->assertJsonPath('data.latest_signature.user_name', $owner->funcionario)
+            ->assertJsonPath('data.latest_signature.can_cancel', false)
+            ->assertJsonPath('data.current_user_signature', null);
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/signatures/{$pending->id}/cancel")
+            ->assertForbidden();
+        $this->assertDatabaseHas('project_report_signatures', [
+            'id' => $pending->id,
+            'status' => 'auth_pending',
+        ]);
+
+        Sanctum::actingAs($owner);
+        $this->getJson($statusUrl)
+            ->assertOk()
+            ->assertJsonPath('data.current_user_signature.id', $pending->id)
+            ->assertJsonPath('data.current_user_signature.can_cancel', true)
+            ->assertJsonPath('data.latest_signature.can_cancel', true);
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/signatures/{$pending->id}/cancel")
+            ->assertOk()
+            ->assertJsonPath('data.signature.status', 'cancelled');
+
+        $administratorPending = ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters' => $parameters,
+            'parameters_hash' => $parametersHash,
+            'status' => 'auth_pending',
+            'id_usuario' => $owner->id_usuario,
+            'base_file_path' => 'project-signatures/administrator-pending.pdf',
+        ]);
+        Sanctum::actingAs($administrator);
+        $this->getJson($statusUrl)
+            ->assertOk()
+            ->assertJsonPath('data.latest_signature.id', $administratorPending->id)
+            ->assertJsonPath('data.latest_signature.can_cancel', true)
+            ->assertJsonPath('data.current_user_signature', null);
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/signatures/{$administratorPending->id}/cancel")
+            ->assertOk();
+
+        $administratorPending->forceFill(['status' => 'signed'])->save();
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/signatures/{$administratorPending->id}/cancel")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['signature']);
+    }
+
     public function test_first_completed_project_signature_locks_version_signers_and_layout(): void
     {
         Storage::fake('local');

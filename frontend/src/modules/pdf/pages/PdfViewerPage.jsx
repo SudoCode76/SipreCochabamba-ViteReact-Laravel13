@@ -280,6 +280,9 @@ export default function PdfViewerPage() {
     || (["pending", "auth_pending", "sent"].includes(signatureStatus?.latest_signature?.status)
       ? signatureStatus.latest_signature
       : null);
+  const currentUserSignature = physicalStatus?.current_user_signature || signatureStatus?.current_user_signature;
+  const cancelableSignature = currentUserSignature || (pendingSignature?.can_cancel ? pendingSignature : null);
+  const projectPendingSignature = signatureSubject === "project" ? pendingSignature : null;
   const staleNoticeKey = `${pdfUrl || ""}|${reloadKey}|${signatureSubject || ""}|${signatureSubjectId || ""}|${signatureReportKey || ""}|${signatureParametersRaw}`;
   const staleNoticeAccepted = acceptedStaleNoticeKey === staleNoticeKey;
   const canRenderPdf = Boolean(
@@ -298,7 +301,8 @@ export default function PdfViewerPage() {
       && signatureStatus?.project_status_allows_signing
       && signatureStatus?.report?.is_enabled
       && signatureStatus?.report?.can_sign
-      && !signatureStatus?.current_user_signed,
+      && !signatureStatus?.current_user_signed
+      && !projectPendingSignature,
   );
   const signatureRestrictionMessage = useMemo(() => {
     if (!showSignatureToolbar || signatureLoading || signatureError || !signatureStatus?.report) {
@@ -311,6 +315,18 @@ export default function PdfViewerPage() {
 
     if (signatureStatus.current_user_signed) {
       return "Ya firmó digitalmente esta variante del reporte.";
+    }
+
+    if (projectPendingSignature) {
+      const userName = projectPendingSignature.user_name || "otro firmante";
+
+      if (currentUserSignature) {
+        return "Su solicitud de firma quedó pendiente. Cancélela para volver a iniciar.";
+      }
+
+      return projectPendingSignature.can_cancel
+        ? `Hay una firma pendiente de ${userName}. Puede cancelarla para desbloquear el documento.`
+        : `Hay una firma pendiente de ${userName}. Espere a que finalice o solicite al administrador cancelarla.`;
     }
 
     if (!signatureStatus.report.is_enabled) {
@@ -326,7 +342,7 @@ export default function PdfViewerPage() {
     }
 
     return "";
-  }, [showSignatureToolbar, signatureError, signatureLoading, signatureStatus]);
+  }, [currentUserSignature, projectPendingSignature, showSignatureToolbar, signatureError, signatureLoading, signatureStatus]);
 
   const applyPhysicalStatus = (status) => {
     const pageSizes = status?.page_sizes ?? [];
@@ -790,13 +806,15 @@ export default function PdfViewerPage() {
   };
 
   const handleCancelSignature = async () => {
-    if (!pendingSignature?.id || signatureSubject !== "project") {
+    if (!cancelableSignature?.id || signatureSubject !== "project") {
       return;
     }
 
     setSignatureError("");
     try {
-      await projectService.cancelSignature(signatureProjectId, pendingSignature.id);
+      await projectService.cancelSignature(signatureProjectId, cancelableSignature.id);
+      sessionStorage.removeItem(SIGNATURE_SESSION_KEY);
+      localStorage.removeItem(SIGNATURE_SESSION_KEY);
       window.location.reload();
     } catch (cancelError) {
       setSignatureError(readApiError(cancelError, "No se pudo cancelar la firma pendiente."));
@@ -1077,7 +1095,7 @@ export default function PdfViewerPage() {
                 Enviar a Ciudadanía Digital
               </button>
             ) : null}
-            {!error && pendingSignature && signatureSubject === "project" ? (
+            {!error && cancelableSignature && signatureSubject === "project" ? (
               <button
                 type="button"
                 onClick={handleCancelSignature}
