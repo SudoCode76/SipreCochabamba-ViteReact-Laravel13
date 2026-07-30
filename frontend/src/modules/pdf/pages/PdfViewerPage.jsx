@@ -334,6 +334,9 @@ export default function PdfViewerPage() {
     setPhysicalStatus(status);
     setPhysicalPositionsDirty(false);
     setPhysicalPositions(physicalPositionsFromStatus(status));
+    setPhysicalPositionMessage(status?.has_overlapping_signatures
+      ? "Las firmas físicas no pueden superponerse. Acomódelas y guarde las posiciones antes de enviar."
+      : "");
     setAssignmentPages((status?.page_assignment?.current_user_pages ?? []).map(Number));
 
     if (pageSizes.length > 0) {

@@ -127,6 +127,11 @@ class ProjectReportSignatureService
             if ($reportKey === 'specifications' && $pageScope === 'all') {
                 $this->assertSpecificationAssignmentsComplete($project, $items);
             }
+            if ($this->physicalSignaturesOverlap($items, $reportKey, $pageScope)) {
+                throw ValidationException::withMessages([
+                    'positions' => ['Las firmas físicas no pueden superponerse. Acomódelas antes de enviar a Ciudadanía Digital.'],
+                ]);
+            }
             $currentLayoutHash = $items->isEmpty()
                 ? ''
                 : $this->projectLayoutHash($project, $reportKey, $normalizedParameters, $pageScope, $items);
@@ -1034,13 +1039,15 @@ class ProjectReportSignatureService
             || ($confirmed->count() === $items->count() && $uncoveredPages === []);
         $currentPhysicalSignature = $items->firstWhere('id_usuario', $user->id_usuario);
         $layoutHash = $ready ? $this->projectLayoutHash($project, $reportKey, $parameters, $pageScope, $items) : null;
+        $hasOverlappingSignatures = $ready && $this->physicalSignaturesOverlap($items, $reportKey, $pageScope);
 
         return [
             'ready' => $ready,
-            'can_send' => $ready && $assignmentsComplete && ! $latestSigned && ! $pending && $access['allowed']
+            'can_send' => $ready && $assignmentsComplete && ! $hasOverlappingSignatures && ! $latestSigned && ! $pending && $access['allowed']
                 && $this->signableReportService->canSign($user, $reportKey),
             'can_adjust' => $ready && ! $latestSigned && ! $pending && $access['allowed']
                 && $this->signableReportService->canSign($user, $reportKey),
+            'has_overlapping_signatures' => $hasOverlappingSignatures,
             'page_scope' => $pageScope,
             'layout_hash' => $layoutHash,
             'missing_users' => $missing,
@@ -1669,6 +1676,29 @@ class ProjectReportSignatureService
         }
 
         return false;
+    }
+
+    private function physicalSignaturesOverlap(Collection $signatures, string $reportKey, string $pageScope): bool
+    {
+        if ($reportKey !== 'specifications' || $pageScope !== 'all') {
+            return $this->placementsOverlap(
+                $signatures->map(fn (ProjectReportPhysicalSignature $signature): array => $this->placementFromSignature($signature))->all()
+            );
+        }
+
+        return $signatures
+            ->flatMap(fn (ProjectReportPhysicalSignature $signature): array => $this->selectedPages($signature))
+            ->unique()
+            ->contains(function (int $page) use ($signatures): bool {
+                $placements = $signatures
+                    ->filter(fn (ProjectReportPhysicalSignature $signature): bool => in_array($page, $this->selectedPages($signature), true))
+                    ->map(fn (ProjectReportPhysicalSignature $signature): array => [
+                        'id' => $signature->id,
+                        ...($this->pagePositions($signature)[(string) $page] ?? $this->defaultPagePosition($signature)),
+                    ])->values()->all();
+
+                return $this->placementsOverlap($placements);
+            });
     }
 
     public function serialize(ProjectReportSignature $signature): array

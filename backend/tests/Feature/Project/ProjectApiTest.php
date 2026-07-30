@@ -3276,8 +3276,30 @@ class ProjectApiTest extends TestCase
         );
 
         $creatorSignature = collect($complete->json('data.items'))->firstWhere('user_id', $creator->id_usuario);
+        $secondSignature = collect($complete->json('data.items'))->firstWhere('user_id', $second->id_usuario);
         $originalPageOne = $creatorSignature['page_positions']['1'];
         $pageSix = $creatorSignature['page_positions']['6'];
+
+        $creatorPhysicalSignature = ProjectReportPhysicalSignature::query()->findOrFail($creatorSignature['id']);
+        $originalPagePositions = $creatorPhysicalSignature->page_positions;
+        $overlappingPagePositions = $originalPagePositions;
+        $overlappingPagePositions['6'] = $secondSignature['page_positions']['6'];
+        $creatorPhysicalSignature->forceFill(['page_positions' => $overlappingPagePositions])->save();
+
+        $overlapping = $this->getJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/physical-signatures")
+            ->assertOk()
+            ->assertJsonPath('data.has_overlapping_signatures', true)
+            ->assertJsonPath('data.can_send', false);
+
+        $this->postJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/sign", [
+            'page_scope' => 'all',
+            'layout_hash' => $overlapping->json('data.layout_hash'),
+            'access_token' => 'no-debe-usarse',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('positions');
+        $this->assertDatabaseCount('project_report_signatures', 0);
+
+        $creatorPhysicalSignature->forceFill(['page_positions' => $originalPagePositions])->save();
 
         Sanctum::actingAs($second);
         $moved = $this->patchJson("/api/v1/projects/{$project->id_proyecto}/reports/specifications/signature-preview/positions", [
