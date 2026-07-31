@@ -1,119 +1,115 @@
-import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, FileSignature, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, FileSignature, Loader2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { formatDateTime } from "@/lib/utils";
 import { buildPdfViewerUrl } from "@/lib/utils/pdf";
 import { projectService } from "../services/project.service";
 
-const FORMATS = ["PCA", "PC_FPS", "PC_UPRE", "PC_FNDR", "PC_OBRAS"];
-const BREAKDOWNS = [
-  [1, "Material"],
-  [2, "Mano de obra"],
-  [3, "Maquinaria y herramientas"],
-];
-
-const REPORTS = {
-  budget_by_group: { pdf: (id) => projectService.budgetByGroupPdfUrl(id) },
-  budget_recalculation: { parameter: "fecha", pdf: (id, parameters) => projectService.budgetRecalculationPdfUrl(id, parameters.fecha) },
-  incidence_summary: { parameter: "format", defaultValue: "PCA", pdf: (id, parameters) => projectService.incidenceSummaryPdfUrl(id, parameters.format) },
-  general_budget: { parameter: "format", defaultValue: "PCA", pdf: (id, parameters) => projectService.generalBudgetPdfUrl(id, parameters.format) },
-  input_breakdown: { parameter: "type", defaultValue: 1, pdf: (id, parameters) => projectService.inputBreakdownPdfUrl(id, parameters.type) },
-  inputs_report: { pdf: (id) => projectService.inputsReportPdfUrl(id) },
-  grouped_inputs_report: { pdf: (id) => projectService.groupedInputsReportPdfUrl(id) },
-  unit_prices: { parameter: "format", defaultValue: "PCA", pdf: (id, parameters) => projectService.unitPricesPdfUrl(id, parameters.format) },
-  specifications: { pdf: (id) => projectService.specificationsPdfUrl(id) },
+const BREAKDOWNS = { 1: "Material", 2: "Mano de obra", 3: "Maquinaria y herramientas" };
+const STATUS = {
+  prepared: ["Preparado", "outline"],
+  pending: ["Pendiente", "outline"],
+  auth_pending: ["Autenticando", "outline"],
+  sent: ["En firma", "outline"],
+  signed: ["Firmado", "secondary"],
+  error: ["Error", "destructive"],
+  cancelled: ["Cancelado", "destructive"],
 };
 
-function viewerPath(projectId, report, parameters, signed = false) {
-  const definition = REPORTS[report.report_key];
-  const pdfUrl = signed
-    ? projectService.latestSignedReportUrl(projectId, report.report_key, parameters)
-    : definition.pdf(projectId, parameters);
-  const url = new URL(buildPdfViewerUrl(pdfUrl, {
-    title: report.name,
-    signature: { projectId, reportKey: report.report_key, parameters },
-  }));
+const REPORTS = {
+  budget_by_group: (id) => projectService.budgetByGroupPdfUrl(id),
+  budget_recalculation: (id, parameters) => projectService.budgetRecalculationPdfUrl(id, parameters.fecha),
+  incidence_summary: (id, parameters) => projectService.incidenceSummaryPdfUrl(id, parameters.format),
+  general_budget: (id, parameters) => projectService.generalBudgetPdfUrl(id, parameters.format),
+  input_breakdown: (id, parameters) => projectService.inputBreakdownPdfUrl(id, parameters.type),
+  inputs_report: (id) => projectService.inputsReportPdfUrl(id),
+  grouped_inputs_report: (id) => projectService.groupedInputsReportPdfUrl(id),
+  unit_prices: (id, parameters) => projectService.unitPricesPdfUrl(id, parameters.format),
+  specifications: (id) => projectService.specificationsPdfUrl(id),
+};
 
+function parameterLabels(parameters) {
+  return Object.entries(parameters ?? {}).map(([key, value]) => {
+    if (key === "format") return `Formato: ${value}`;
+    if (key === "type") return `Desglose: ${BREAKDOWNS[value] ?? value}`;
+    if (key === "fecha") return `Fecha: ${value}`;
+    return `${key}: ${value}`;
+  });
+}
+
+function viewerPath(projectId, document) {
+  if (!document.parameters_available || !REPORTS[document.report_key]) return null;
+
+  const signature = {
+    projectId,
+    reportKey: document.report_key,
+    parameters: document.parameters,
+  };
+  let pdfUrl;
+  let options;
+
+  if (document.has_signed_file) {
+    pdfUrl = projectService.latestSignedReportUrl(projectId, document.report_key, document.parameters);
+    options = { title: `${document.name} firmado`, signature, signedView: true };
+  } else if (document.has_physical_activity) {
+    pdfUrl = projectService.signaturePreviewPdfUrl(projectId, document.report_key, {
+      ...document.parameters,
+      page_scope: document.page_scope,
+    });
+    options = {
+      title: "Previsualización de firmas",
+      signature,
+      adjustPhysicalSignatures: true,
+      pageScope: document.page_scope,
+    };
+  } else {
+    pdfUrl = REPORTS[document.report_key](projectId, document.parameters);
+    options = { title: document.name, signature };
+  }
+
+  const url = new URL(buildPdfViewerUrl(pdfUrl, options));
   return `${url.pathname}${url.search}`;
 }
 
-function ReportCard({ projectId, report }) {
+function DocumentCard({ projectId, document }) {
   const navigate = useNavigate();
-  const definition = REPORTS[report.report_key];
-  const [value, setValue] = useState(definition.defaultValue ?? "");
-  const parameters = useMemo(
-    () => definition.parameter && value !== "" ? { [definition.parameter]: value } : {},
-    [definition.parameter, value],
-  );
-  const ready = !definition.parameter || value !== "";
-  const statusQuery = useQuery({
-    queryKey: ["project-signature-status", projectId, report.report_key, parameters],
-    queryFn: () => projectService.signatureStatus(projectId, { report_key: report.report_key, ...parameters }),
-    enabled: ready,
-  });
-  const status = statusQuery.data?.data;
-  const pending = ["pending", "auth_pending", "sent"].includes(status?.current_user_signature_status);
-  const state = status?.current_user_signed ? "Firmado" : pending ? "Firma en proceso" : "Pendiente";
+  const [statusLabel, statusVariant] = STATUS[document.latest_status] ?? [document.latest_status, "outline"];
+  const path = viewerPath(projectId, document);
+  const labels = parameterLabels(document.parameters);
 
   return (
-    <Card className="border border-border/70 bg-background/90">
+    <Card className={document.current_user_needs_action ? "border-red-300 bg-red-50/30" : "border-border/70 bg-background/90"}>
       <CardHeader className="border-b border-border/60">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>{report.name}</CardTitle>
-            <CardDescription className="mt-1">{report.description}</CardDescription>
+            <CardTitle>{document.name}</CardTitle>
+            <CardDescription className="mt-1">{document.description}</CardDescription>
           </div>
-          <Badge variant={status?.current_user_signed ? "secondary" : pending ? "outline" : "default"}>{state}</Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            {document.current_user_needs_action && <Badge variant="destructive">Te falta firmar</Badge>}
+            <Badge variant={statusVariant}>{statusLabel}</Badge>
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {definition.parameter === "format" && (
-          <label className="grid gap-2 text-sm font-medium">
-            Formato
-            <select className="h-10 rounded-md border border-input bg-background px-3" value={value} onChange={(event) => setValue(event.target.value)}>
-              {FORMATS.map((format) => <option key={format} value={format}>{format}</option>)}
-            </select>
-          </label>
-        )}
-        {definition.parameter === "type" && (
-          <label className="grid gap-2 text-sm font-medium">
-            Desglose
-            <select className="h-10 rounded-md border border-input bg-background px-3" value={value} onChange={(event) => setValue(Number(event.target.value))}>
-              {BREAKDOWNS.map(([type, label]) => <option key={type} value={type}>{label}</option>)}
-            </select>
-          </label>
-        )}
-        {definition.parameter === "fecha" && (
-          <label className="grid gap-2 text-sm font-medium">
-            Fecha de recálculo
-            <Input type="date" value={value} onChange={(event) => setValue(event.target.value)} />
-          </label>
-        )}
-
-        <div className="flex min-h-6 items-center text-sm text-muted-foreground">
-          {statusQuery.isFetching ? (
-            <><Loader2 className="mr-2 size-4 animate-spin" /> Actualizando avance...</>
-          ) : statusQuery.isError ? (
-            <span className="text-destructive">No se pudo consultar el avance.</span>
-          ) : ready ? (
-            <span><strong className="text-foreground">{status?.signed_signers_count ?? 0} de {status?.required_signers_count ?? 0}</strong> firmantes</span>
-          ) : (
-            <span>Seleccione una fecha para consultar el avance.</span>
-          )}
+      <CardContent className="space-y-4 pt-5">
+        <div className="flex flex-wrap gap-2">
+          {document.has_physical_activity && <Badge variant="outline">Firma física</Badge>}
+          {document.has_digital_activity && <Badge variant="outline">Firma digital</Badge>}
+          {labels.map((label) => <Badge key={label} variant="secondary">{label}</Badge>)}
+          {!document.parameters_available && <Badge variant="destructive">Parámetros no disponibles</Badge>}
         </div>
-
-        <Button
-          type="button"
-          disabled={!ready || statusQuery.isFetching || statusQuery.isError || pending}
-          onClick={() => navigate(viewerPath(projectId, report, parameters, Boolean(status?.current_user_signed)))}
-        >
-          {status?.current_user_signed ? "Ver PDF firmado" : pending ? "Firma en proceso" : "Abrir PDF y firmar"}
+        <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+          <span><strong className="text-foreground">{document.signed_signers_count} de {document.required_signers_count}</strong> firmantes digitales</span>
+          <span>{document.physical_signers_count} firmas físicas preparadas</span>
+          <span className="sm:col-span-2">Última actividad: {document.last_activity_at ? formatDateTime(document.last_activity_at) : "Sin fecha"}</span>
+        </div>
+        <Button type="button" disabled={!path} onClick={() => path && navigate(path)} className="w-full">
+          {document.has_signed_file ? "Ver PDF firmado" : document.has_physical_activity ? "Abrir previsualización" : "Abrir PDF y reintentar"}
         </Button>
       </CardContent>
     </Card>
@@ -127,29 +123,14 @@ export default function ProjectSignatureReportsPage() {
     queryKey: ["project", projectId],
     queryFn: () => projectService.show(projectId),
   });
-  const reportsQuery = useQuery({
-    queryKey: ["signable-project-reports"],
-    queryFn: projectService.signableReports,
-  });
   const summaryQuery = useQuery({
     queryKey: ["project-signature-status", projectId],
     queryFn: () => projectService.signatureStatus(projectId),
   });
   const project = projectQuery.data?.data?.project;
-  const summary = summaryQuery.data?.data;
-  const reports = (reportsQuery.data?.data?.items ?? []).filter(
-    (report) => report.scope === "project" && report.is_enabled && report.can_sign && REPORTS[report.report_key],
-  );
-  const loading = projectQuery.isLoading || reportsQuery.isLoading || summaryQuery.isLoading;
-  const failed = projectQuery.isError || reportsQuery.isError || summaryQuery.isError;
-  const allowed = summary?.signature_access?.allowed !== false;
-  const directReport = reports.length === 1 && !REPORTS[reports[0].report_key].parameter ? reports[0] : null;
-
-  useEffect(() => {
-    if (!loading && !failed && allowed && summary?.project_is_finalized && directReport) {
-      navigate(viewerPath(projectId, directReport, {}), { replace: true });
-    }
-  }, [allowed, directReport, failed, loading, navigate, projectId, summary?.project_is_finalized]);
+  const documents = summaryQuery.data?.data?.documents ?? [];
+  const loading = projectQuery.isLoading || summaryQuery.isLoading;
+  const failed = projectQuery.isError || summaryQuery.isError;
 
   return (
     <div className="space-y-5">
@@ -161,19 +142,19 @@ export default function ProjectSignatureReportsPage() {
           <FileSignature className="size-5" />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Firmas digitales del proyecto</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">PDF con procesos de firma</h1>
           <p className="text-sm text-muted-foreground">{project?.nombre_proyecto ?? "Proyecto"}{project?.numero_version ? ` · Versión ${project.numero_version}` : ""}</p>
         </div>
       </div>
 
-      {loading && <div className="flex items-center justify-center p-10 text-muted-foreground"><Loader2 className="mr-2 size-5 animate-spin" /> Cargando reportes...</div>}
-      {failed && <Alert variant="destructive"><AlertDescription>No se pudieron cargar los reportes pendientes de firma.</AlertDescription></Alert>}
-      {!loading && !failed && (!allowed || !summary?.project_is_finalized || reports.length === 0) && (
-        <Alert><AlertDescription>{summary?.signature_access?.message || "No existen reportes habilitados que pueda firmar en esta versión."}</AlertDescription></Alert>
+      {loading && <div className="flex items-center justify-center p-10 text-muted-foreground"><Loader2 className="mr-2 size-5 animate-spin" /> Cargando documentos...</div>}
+      {failed && <Alert variant="destructive"><AlertCircle className="size-4" /><AlertDescription>No se pudieron cargar los documentos con firmas.</AlertDescription></Alert>}
+      {!loading && !failed && documents.length === 0 && (
+        <Alert><CheckCircle2 className="size-4" /><AlertDescription>Esta versión todavía no tiene PDF con procesos de firma.</AlertDescription></Alert>
       )}
-      {!loading && !failed && allowed && summary?.project_is_finalized && !directReport && reports.length > 0 && (
+      {!loading && !failed && documents.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2">
-          {reports.map((report) => <ReportCard key={report.report_key} projectId={projectId} report={report} />)}
+          {documents.map((document) => <DocumentCard key={`${document.report_key}:${document.parameters_hash}`} projectId={projectId} document={document} />)}
         </div>
       )}
     </div>

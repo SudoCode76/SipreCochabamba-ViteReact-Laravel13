@@ -58,6 +58,10 @@ export function buildPdfViewerUrl(url, options = {}) {
     viewerUrl.searchParams.set("layout_hash", options.layoutHash);
   }
 
+  if (options.signedView) {
+    viewerUrl.searchParams.set("signed_view", "1");
+  }
+
   if (signature?.reportKey && (signature?.projectId || signature?.itemId)) {
     const subject = signature.subject || (signature.itemId ? "item" : "project");
     viewerUrl.searchParams.set("sign_subject", subject);

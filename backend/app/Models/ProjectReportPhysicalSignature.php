@@ -11,6 +11,7 @@ class ProjectReportPhysicalSignature extends Model
         'id_proyecto',
         'id_item',
         'report_key',
+        'parameters',
         'parameters_hash',
         'logical_document_hash',
         'id_usuario',
@@ -31,6 +32,7 @@ class ProjectReportPhysicalSignature extends Model
     {
         return [
             'marked_at' => 'datetime',
+            'parameters' => 'array',
             'selected_pages' => 'array',
             'page_positions' => 'array',
             'pages_confirmed_at' => 'datetime',

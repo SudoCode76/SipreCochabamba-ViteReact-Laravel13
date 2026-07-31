@@ -277,6 +277,9 @@ class ProjectReportSignatureController extends Controller
         return ApiResponse::success([
             'project_is_finalized' => $projectIsFinalized,
             'reports' => $reports,
+            'documents' => $subject instanceof Project
+                ? $this->signatureService->projectDocuments($subject, $request->user())
+                : [],
             'signature_access' => $signatureAccess,
             'required_signers_count' => $requiredSignersCount,
         ], 'Estado de firma obtenido correctamente.');

@@ -1550,6 +1550,119 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.current_user_signature_status', null);
     }
 
+    public function test_signature_status_lists_project_report_variants_with_physical_and_digital_activity(): void
+    {
+        ProjectSignableReport::query()
+            ->whereIn('report_key', ['general_budget', 'specifications'])
+            ->update(['is_enabled' => true]);
+        $project = $this->createProjectRecord([
+            'aprobado' => 'RV',
+            'fecha_aprob' => now()->toDateString(),
+            'fecha_finalizacion' => now(),
+        ]);
+        $user = $this->createLegacyAuthUser();
+        DB::table('project_version_signature_users')->insertOrIgnore([
+            'id_proyecto' => $project->id_proyecto,
+            'id_usuario' => $user->id_usuario,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $service = app(ProjectReportSignatureService::class);
+        $pca = ['format' => 'PCA'];
+        $pcaHash = $service->parametersHash($pca);
+        $fps = ['format' => 'PC_FPS'];
+        $fpsHash = $service->parametersHash($fps);
+        $emptyHash = $service->parametersHash([]);
+
+        ProjectReportPhysicalSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters' => $pca,
+            'parameters_hash' => $pcaHash,
+            'logical_document_hash' => str_repeat('a', 64),
+            'id_usuario' => $user->id_usuario,
+            'signature_image_path' => 'signatures/1.png',
+            'page_scope' => 'last',
+        ]);
+        foreach (['error', 'cancelled'] as $status) {
+            ProjectReportSignature::query()->create([
+                'id_proyecto' => $project->id_proyecto,
+                'report_key' => 'general_budget',
+                'parameters' => $pca,
+                'parameters_hash' => $pcaHash,
+                'status' => $status,
+                'id_usuario' => $user->id_usuario,
+            ]);
+        }
+        ProjectReportSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters' => $fps,
+            'parameters_hash' => $fpsHash,
+            'status' => 'signed',
+            'id_usuario' => $user->id_usuario,
+            'signed_file_path' => 'signed/general-budget.pdf',
+            'signed_at' => now(),
+        ]);
+        ProjectReportPhysicalSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'specifications',
+            'parameters' => [],
+            'parameters_hash' => $emptyHash,
+            'logical_document_hash' => str_repeat('b', 64),
+            'id_usuario' => $user->id_usuario,
+            'signature_image_path' => 'signatures/1.png',
+            'page_scope' => 'all',
+        ]);
+        ProjectReportPhysicalSignature::query()->create([
+            'id_proyecto' => $project->id_proyecto,
+            'report_key' => 'general_budget',
+            'parameters_hash' => str_repeat('c', 64),
+            'logical_document_hash' => str_repeat('d', 64),
+            'id_usuario' => $user->id_usuario,
+            'signature_image_path' => 'signatures/1.png',
+            'page_scope' => 'last',
+        ]);
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createUnitMeasure();
+        $item = $this->createItemRecord();
+        ProjectReportSignature::query()->create([
+            'id_proyecto' => null,
+            'id_item' => $item->id_item,
+            'report_key' => 'item_unit_price_analysis',
+            'parameters' => [],
+            'parameters_hash' => $emptyHash,
+            'status' => 'error',
+            'id_usuario' => $user->id_usuario,
+        ]);
+
+        Sanctum::actingAs($user);
+        $documents = $this->getJson("/api/v1/projects/{$project->id_proyecto}/signature-status")
+            ->assertOk()
+            ->assertJsonCount(4, 'data.documents')
+            ->json('data.documents');
+
+        $pcaDocument = collect($documents)->firstWhere('parameters_hash', $pcaHash);
+        $this->assertTrue($pcaDocument['has_physical_activity']);
+        $this->assertTrue($pcaDocument['has_digital_activity']);
+        $this->assertSame('cancelled', $pcaDocument['latest_status']);
+        $this->assertTrue($pcaDocument['current_user_needs_action']);
+
+        $signedDocument = collect($documents)->firstWhere('parameters_hash', $fpsHash);
+        $this->assertTrue($signedDocument['has_signed_file']);
+        $this->assertSame(1, $signedDocument['signed_signers_count']);
+        $this->assertFalse($signedDocument['current_user_needs_action']);
+
+        $specifications = collect($documents)->firstWhere('report_key', 'specifications');
+        $this->assertFalse($specifications['current_user_pages_confirmed']);
+        $this->assertTrue($specifications['current_user_needs_action']);
+
+        $unknown = collect($documents)->firstWhere('parameters_hash', str_repeat('c', 64));
+        $this->assertFalse($unknown['parameters_available']);
+        $this->assertNull(collect($documents)->firstWhere('report_key', 'item_unit_price_analysis'));
+    }
+
     public function test_report_signing_sends_derivation_code_and_validity_to_firmagamc(): void
     {
         Storage::fake('local');

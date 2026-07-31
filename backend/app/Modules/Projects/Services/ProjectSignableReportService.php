@@ -105,6 +105,7 @@ class ProjectSignableReportService
                     'is_enabled' => (bool) $report->is_enabled,
                     'requires_finalized_project' => $scope !== 'item',
                     'validity_days' => (int) ($report->validity_days ?? 30),
+                    'can_view' => $canManage || $canViewReport,
                     'can_sign' => (bool) $report->is_enabled
                         && $canSignReports
                         && $canViewReport,

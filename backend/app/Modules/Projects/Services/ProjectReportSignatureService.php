@@ -324,6 +324,109 @@ class ProjectReportSignatureService
             : [];
     }
 
+    public function projectDocuments(Project $project, User $user): array
+    {
+        $reports = $this->signableReportService->list($user)
+            ->where('scope', 'project')
+            ->where('can_view', true)
+            ->keyBy('report_key');
+        $reportKeys = $reports->keys();
+
+        if ($reportKeys->isEmpty()) {
+            return [];
+        }
+
+        $digital = ProjectReportSignature::query()
+            ->with('user')
+            ->where('id_proyecto', $project->id_proyecto)
+            ->whereNull('id_item')
+            ->whereIn('report_key', $reportKeys)
+            ->get();
+        $physical = ProjectReportPhysicalSignature::query()
+            ->with('user')
+            ->where('id_proyecto', $project->id_proyecto)
+            ->whereNull('id_item')
+            ->whereIn('report_key', $reportKeys)
+            ->get();
+        $requiredSignerIds = DB::table('project_version_signature_users')
+            ->where('id_proyecto', $project->id_proyecto)
+            ->pluck('id_usuario')
+            ->map(fn ($id): int => (int) $id);
+        $currentUserId = (int) $user->id_usuario;
+        $emptyParametersHash = $this->parametersHash([]);
+        $groupKeys = $digital->map(fn ($item): string => $item->report_key.'|'.$item->parameters_hash)
+            ->merge($physical->map(fn ($item): string => $item->report_key.'|'.$item->parameters_hash))
+            ->unique();
+
+        return $groupKeys->map(function (string $groupKey) use (
+            $digital,
+            $physical,
+            $reports,
+            $requiredSignerIds,
+            $currentUserId,
+            $emptyParametersHash
+        ): array {
+            [$reportKey, $parametersHash] = explode('|', $groupKey, 2);
+            $digitalItems = $digital->where('report_key', $reportKey)->where('parameters_hash', $parametersHash);
+            $physicalItems = $physical->where('report_key', $reportKey)->where('parameters_hash', $parametersHash);
+            $latestDigital = $digitalItems->sortByDesc('id')->first();
+            $latestPhysical = $physicalItems->sortByDesc('id')->first();
+            $currentPhysicalItems = $latestPhysical
+                ? $physicalItems->where('logical_document_hash', $latestPhysical->logical_document_hash)
+                : collect();
+            $latestSigned = $digitalItems
+                ->filter(fn (ProjectReportSignature $signature): bool => $signature->status === 'signed' && filled($signature->signed_file_path))
+                ->sortByDesc('id')
+                ->first();
+            $parametersSource = $digitalItems->first(fn (ProjectReportSignature $signature): bool => is_array($signature->parameters))
+                ?->parameters;
+            if ($parametersSource === null) {
+                $parametersSource = $physicalItems->first(fn (ProjectReportPhysicalSignature $signature): bool => is_array($signature->parameters))
+                    ?->parameters;
+            }
+            if ($parametersSource === null && hash_equals($emptyParametersHash, $parametersHash)) {
+                $parametersSource = [];
+            }
+
+            $currentUserPhysical = $currentPhysicalItems->firstWhere('id_usuario', $currentUserId);
+            $pageScope = (string) ($latestPhysical?->page_scope ?: data_get($latestDigital?->request_payload, 'page_scope', 'last'));
+            $physicalConfirmationRequired = $reportKey === 'specifications' && $pageScope === 'all' && $physicalItems->isNotEmpty();
+            $currentUserSigned = $digitalItems
+                ->where('status', 'signed')
+                ->contains(fn (ProjectReportSignature $signature): bool => (int) $signature->id_usuario === $currentUserId);
+            $currentUserPagesConfirmed = ! $physicalConfirmationRequired || filled($currentUserPhysical?->pages_confirmed_at);
+            $lastActivityAt = collect([
+                $latestDigital?->updated_at,
+                $latestPhysical?->updated_at,
+            ])->filter()->sortDesc()->first();
+            $report = $reports->get($reportKey);
+
+            return [
+                'report_key' => $reportKey,
+                'name' => $report['name'] ?? $reportKey,
+                'description' => $report['description'] ?? null,
+                'parameters' => $parametersSource ?? [],
+                'parameters_hash' => $parametersHash,
+                'parameters_available' => $parametersSource !== null,
+                'page_scope' => $pageScope,
+                'has_physical_activity' => $physicalItems->isNotEmpty(),
+                'has_digital_activity' => $digitalItems->isNotEmpty(),
+                'latest_status' => $latestDigital?->status ?? 'prepared',
+                'last_activity_at' => $lastActivityAt?->toIso8601String(),
+                'has_signed_file' => (bool) $latestSigned,
+                'latest_signed' => $latestSigned ? $this->serialize($latestSigned) : null,
+                'signed_signers_count' => $digitalItems->where('status', 'signed')->pluck('id_usuario')->filter()->unique()->count(),
+                'physical_signers_count' => $currentPhysicalItems->pluck('id_usuario')->unique()->count(),
+                'required_signers_count' => $requiredSignerIds->count(),
+                'current_user_is_signer' => $requiredSignerIds->contains($currentUserId),
+                'current_user_signed' => $currentUserSigned,
+                'current_user_pages_confirmed' => $currentUserPagesConfirmed,
+                'current_user_needs_action' => $requiredSignerIds->contains($currentUserId)
+                    && (! $currentUserSigned || ! $currentUserPagesConfirmed),
+            ];
+        })->sortByDesc('last_activity_at')->values()->all();
+    }
+
     public function prepareProjectPreview(Project $project, string $reportKey, array $parameters, string $pageScope, User $user): array
     {
         $this->assertCanStart($project, $reportKey, $user);
@@ -347,6 +450,7 @@ class ProjectReportSignatureService
         $items = $this->syncProjectPhysicalSignatures(
             $project,
             $reportKey,
+            $normalized,
             $parametersHash,
             $logicalHash,
             $pageScope,
@@ -524,6 +628,7 @@ class ProjectReportSignatureService
         if ($existing) {
             Storage::disk('public')->delete($existing->signature_image_path);
             $existing->forceFill([
+                'parameters' => $normalizedParameters,
                 'signature_image_path' => $snapshotPath,
                 'page' => null,
                 'x' => null,
@@ -536,6 +641,7 @@ class ProjectReportSignatureService
             ProjectReportPhysicalSignature::query()->create([
                 ...$this->subjectColumns($project),
                 'report_key' => $reportKey,
+                'parameters' => $normalizedParameters,
                 'parameters_hash' => $parametersHash,
                 'logical_document_hash' => $logicalHash,
                 'id_usuario' => $user->id_usuario,
@@ -930,6 +1036,7 @@ class ProjectReportSignatureService
     private function syncProjectPhysicalSignatures(
         Project $project,
         string $reportKey,
+        array $parameters,
         string $parametersHash,
         string $logicalHash,
         string $pageScope,
@@ -974,6 +1081,7 @@ class ProjectReportSignatureService
                 if ($signature) {
                     Storage::disk('public')->delete($signature->signature_image_path);
                     $signature->forceFill([
+                        'parameters' => $parameters,
                         'signature_image_path' => $snapshotPath,
                         'selected_pages' => null,
                         'page_positions' => null,
@@ -983,6 +1091,7 @@ class ProjectReportSignatureService
                     $signature = ProjectReportPhysicalSignature::query()->create([
                         ...$this->subjectColumns($project),
                         'report_key' => $reportKey,
+                        'parameters' => $parameters,
                         'parameters_hash' => $parametersHash,
                         'logical_document_hash' => $logicalHash,
                         'id_usuario' => $signer->id_usuario,
@@ -995,6 +1104,7 @@ class ProjectReportSignatureService
 
             if ($scopeChanged || $signature->page_scope !== $pageScope) {
                 $signature->forceFill([
+                    'parameters' => $parameters,
                     'page_scope' => $pageScope,
                     'selected_pages' => null,
                     'page_positions' => null,
@@ -1005,6 +1115,10 @@ class ProjectReportSignatureService
                     'width' => null,
                     'height' => null,
                 ])->save();
+            }
+
+            if ($signature->parameters !== $parameters) {
+                $signature->forceFill(['parameters' => $parameters])->save();
             }
         }
 

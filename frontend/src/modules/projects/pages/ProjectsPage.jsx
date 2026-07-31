@@ -2,7 +2,7 @@ import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Package, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Eye, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, ClipboardList, X, Loader2, History, Copy, FileDown } from "lucide-react";
+import { AlertTriangle, Package, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Eye, ListPlus, Calculator, RefreshCw, PieChart, FileSpreadsheet, Layers, ClipboardList, X, Loader2, History, Copy, FileDown, FileCheck2 } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -487,6 +487,10 @@ export default function ProjectsPage() {
     setHistoryProject(project);
     setHistoryPage(1);
     setHistoryOpen(true);
+  };
+
+  const openSignedPdfs = (project) => {
+    navigate(`/Proyecto/${project.id_proyecto}/firmas`);
   };
 
   const closeHistory = () => {
@@ -1170,6 +1174,12 @@ export default function ProjectsPage() {
                                 <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openHistory(project)}>
                                   <History className="h-4 w-4 text-muted-foreground" />
                                   <span>Historial</span>
+                                </DropdownMenuItem>
+                              )}
+                              {canViewHistory && (
+                                <DropdownMenuItem className="flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer" onClick={() => openSignedPdfs(project)}>
+                                  <FileCheck2 className="h-4 w-4 text-muted-foreground" />
+                                  <span>Ver PDF firmados</span>
                                 </DropdownMenuItem>
                               )}
                               {canManageTemplates && project.can_modify && (

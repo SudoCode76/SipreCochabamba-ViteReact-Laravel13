@@ -223,6 +223,7 @@ export default function PdfViewerPage() {
   const [searchParams] = useSearchParams();
   const pdfUrl = useMemo(() => resolveAllowedPdfUrl(searchParams.get("url")), [searchParams]);
   const title = searchParams.get("title") || "Documento PDF";
+  const isSignedPdfView = searchParams.get("signed_view") === "1";
   const isPhysicalSignedPdfView = title === "PDF con firmas físicas";
   const isAdjustPhysicalMode = searchParams.get("adjust_physical") === "1";
   const fallbackMessage = searchParams.get("message") || DEFAULT_ERROR_MESSAGE;
@@ -378,6 +379,7 @@ export default function PdfViewerPage() {
 
     openUrlInNewTab(buildPdfViewerUrl(signedUrl, {
       title: "PDF firmado",
+      signedView: true,
       signature: {
         subject: signedSubject,
         ...(signedSubject === "item"
@@ -1142,6 +1144,16 @@ export default function PdfViewerPage() {
               >
                 <History className="h-4 w-4" />
                 Ver firmantes
+              </button>
+            ) : null}
+            {!error && showSignatureToolbar && hasSignedPdf && !isSignedPdfView ? (
+              <button
+                type="button"
+                onClick={() => openSignedPdf()}
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 shadow-sm transition hover:bg-emerald-100"
+              >
+                <ExternalLink className="h-4 w-4" />
+                {isSignedStale ? "Ver PDF firmado anterior" : "Ver PDF firmado"}
               </button>
             ) : null}
             {canSignPdf ? (
