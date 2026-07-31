@@ -1032,8 +1032,8 @@ export default function PdfViewerPage() {
   return (
     <main className="theme-shell flex min-h-screen flex-col bg-background text-foreground">
       {showChrome ? (
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
-          <div className="flex items-center gap-3">
+        <header className="flex flex-wrap items-center gap-4 border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
+          <div className="flex shrink-0 items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-white">
               <FileText className="h-5 w-5" />
             </span>
@@ -1042,7 +1042,37 @@ export default function PdfViewerPage() {
               <p className="text-sm text-slate-500">SIPRE</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          {!error && isAdjustPhysicalMode ? (
+            <div className="flex min-w-64 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                Página
+                <select
+                  value={selectedPhysicalPage}
+                  onChange={(event) => {
+                    setPhysicalPdfError("");
+                    setPhysicalPdfLoading(true);
+                    setSelectedPhysicalPage(Number(event.target.value));
+                  }}
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                >
+                  {(physicalStatus?.page_sizes ?? []).map((page) => (
+                    <option key={page.page} value={page.page}>{page.page}</option>
+                  ))}
+                </select>
+              </label>
+              <span className="text-xs text-slate-500">
+                Si mueve o redimensiona una firma, guarde las posiciones antes de enviar.
+              </span>
+              {physicalPositionMessage ? (
+                <span className={`text-sm ${physicalPositionMessage.includes("guardadas")
+                  ? "text-emerald-700"
+                  : physicalPositionMessage.includes("sin guardar") ? "text-amber-700" : "text-red-600"}`}>
+                  {physicalPositionMessage}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
             <ThemeSwitcher />
             {!error && showSignatureToolbar && !signatureLoading ? (
               <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${statusMeta.className}`}>
@@ -1174,61 +1204,19 @@ export default function PdfViewerPage() {
 
         {canRenderPdf && isAdjustPhysicalMode ? (
           <div className="flex flex-1 flex-col overflow-hidden bg-slate-200">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-white px-4 py-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-slate-700">Página</span>
-                  <select
-                    value={selectedPhysicalPage}
-                    onChange={(event) => {
-                      setPhysicalPdfError("");
-                      setPhysicalPdfLoading(true);
-                      setSelectedPhysicalPage(Number(event.target.value));
-                    }}
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                  >
-                    {(physicalStatus?.page_sizes ?? []).map((page) => (
-                      <option key={page.page} value={page.page}>{page.page}</option>
-                    ))}
-                  </select>
-                </div>
-                <p className="mt-2 text-xs text-slate-500">
-                  Si mueve o redimensiona una firma, debe guardar las posiciones antes de enviar.
-                </p>
-              </div>
-              {physicalPositionMessage ? (
-                <span className={`text-sm ${physicalPositionMessage.includes("guardadas")
-                  ? "text-emerald-700"
-                  : physicalPositionMessage.includes("sin guardar") ? "text-amber-700" : "text-red-600"}`}>
-                  {physicalPositionMessage}
-                </span>
-              ) : null}
-            </div>
-
             <div className="flex min-h-0 flex-1 overflow-hidden">
               {requiresPageAssignment ? (
                 <aside className="flex w-80 shrink-0 flex-col overflow-hidden border-r border-slate-300 bg-white p-4">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-                    <p className="font-semibold text-slate-800">Asignación de páginas</p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      {physicalStatus?.page_assignment?.confirmed_signers ?? 0} de {physicalStatus?.page_assignment?.total_signers ?? 0} firmantes confirmaron.
-                    </p>
-                    <p className={`mt-1 text-xs ${(physicalStatus?.page_assignment?.uncovered_pages ?? []).length > 0 ? "text-amber-700" : "text-emerald-700"}`}>
-                      {(physicalStatus?.page_assignment?.uncovered_pages ?? []).length > 0
-                        ? `Sin cobertura: ${physicalStatus.page_assignment.uncovered_pages.join(", ")}`
-                        : "Todas las páginas tienen cobertura."}
-                    </p>
-                    <ul className="mt-3 space-y-1 border-t border-slate-200 pt-2">
-                      {(physicalStatus?.items ?? []).map((signer) => (
-                        <li key={signer.id} className="flex items-center justify-between gap-2 text-xs">
-                          <span className="truncate text-slate-700">{signer.user_name}</span>
-                          <span className={signer.pages_confirmed_at ? "text-emerald-700" : "text-amber-700"}>
-                            {signer.pages_confirmed_at ? "Confirmado" : "Pendiente"}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <ul className="space-y-1 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    {(physicalStatus?.items ?? []).map((signer) => (
+                      <li key={signer.id} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="truncate text-slate-700">{signer.user_name}</span>
+                        <span className={signer.pages_confirmed_at ? "text-emerald-700" : "text-amber-700"}>
+                          {signer.pages_confirmed_at ? "Confirmado" : "Pendiente"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
 
                   <p className="mt-3 text-xs text-amber-700">
                     {physicalStatus?.page_assignment?.current_user_confirmed
