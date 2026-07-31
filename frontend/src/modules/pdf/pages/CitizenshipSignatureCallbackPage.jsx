@@ -65,6 +65,10 @@ function clearPendingSignature() {
   localStorage.removeItem(SIGNATURE_SESSION_KEY);
 }
 
+function wasAutomaticallyCancelled(error) {
+  return error?.response?.data?.errors?.auto_cancelled === true;
+}
+
 function showDebugToken(token) {
   if (!token) {
     return;
@@ -144,7 +148,16 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
         showDebugToken(debugAccessToken || sessionStorage.getItem(DEBUG_TOKEN_SESSION_KEY));
 
         if (backendError) {
-          setError(backendError);
+          const autoCancelled = searchParams.get("auto_cancelled") === "1";
+
+          if (autoCancelled) {
+            clearPendingSignature();
+            void queryClient.invalidateQueries({ queryKey: citizenshipSessionKey });
+          }
+
+          setError(autoCancelled
+            ? `${backendError} El intento se canceló automáticamente. Puede volver a iniciar la firma.`
+            : backendError);
           setStatus("");
           return;
         }
@@ -207,7 +220,16 @@ export default function CitizenshipSignatureCallbackPage({ phase = "login" }) {
         setStatus(response.data?.message || config.successStatus);
       } catch (callbackError) {
         if (!cancelled) {
-          setError(readApiError(callbackError));
+          const autoCancelled = wasAutomaticallyCancelled(callbackError);
+
+          if (autoCancelled) {
+            clearPendingSignature();
+            void queryClient.invalidateQueries({ queryKey: citizenshipSessionKey });
+          }
+
+          setError(autoCancelled
+            ? `${readApiError(callbackError)} El intento se canceló automáticamente. Puede volver a iniciar la firma.`
+            : readApiError(callbackError));
           setStatus("");
         }
       }

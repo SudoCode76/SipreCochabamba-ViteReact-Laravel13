@@ -30,6 +30,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Sanctum;
 use Mockery;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -1810,6 +1811,74 @@ class ProjectApiTest extends TestCase
         $this->assertStringContainsString('redirect_url=https%3A%2F%2Faprobador.test%2Fsolicitudes%2Fabc', $response->headers->get('Location'));
     }
 
+    public function test_missing_login_token_automatically_cancels_signature_before_external_request(): void
+    {
+        $this->createProjectRecord(['id_proyecto' => 1]);
+        $signature = ProjectReportSignature::query()->create([
+            'id_proyecto' => 1,
+            'trace_id' => 'trace-missing-token',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
+            'status' => 'auth_pending',
+            'id_usuario' => 1,
+            'base_file_path' => 'project-signatures/base.pdf',
+        ]);
+
+        $response = $this
+            ->get('/api/v1/citizenship/signature/login-callback?signature='.$signature->id)
+            ->assertRedirect();
+
+        $signature->refresh();
+        $this->assertSame('cancelled', $signature->status);
+        $this->assertTrue((bool) data_get($signature->response_payload, 'auto_cancelled'));
+        $this->assertNotEmpty(data_get($signature->response_payload, 'auto_cancelled_at'));
+        $this->assertFalse(Cache::has('ciudadania_digital_signature_token:'.$signature->id));
+        $this->assertStringContainsString('auto_cancelled=1', $response->headers->get('Location'));
+    }
+
+    public function test_external_signing_request_failure_remains_recoverable_error(): void
+    {
+        $this->createProjectRecord(['id_proyecto' => 1]);
+        $signature = ProjectReportSignature::query()->create([
+            'id_proyecto' => 1,
+            'trace_id' => 'trace-external-error',
+            'report_key' => 'general_budget',
+            'parameters' => ['format' => 'PCA'],
+            'parameters_hash' => app(ProjectReportSignatureService::class)->parametersHash(['format' => 'PCA']),
+            'status' => 'auth_pending',
+            'id_usuario' => 1,
+            'base_file_path' => 'project-signatures/base.pdf',
+        ]);
+
+        $client = Mockery::mock(CiudadaniaDigitalClient::class);
+        $client->shouldReceive('userInfo')->once()->andReturn(['data' => ['nombre' => 'Firmante']]);
+        $client->shouldReceive('createSigningUrl')->once()->andThrow(new CiudadaniaDigitalException(
+            'No se pudo confirmar la solicitud externa.',
+            '/firmar',
+            null,
+            null,
+            null,
+            'request',
+            'network_error'
+        ));
+        $this->app->instance(CiudadaniaDigitalClient::class, $client);
+
+        try {
+            app(ProjectReportSignatureService::class)->continueAfterAuthentication($signature->id, [
+                'access_token' => 'token-ciudadania',
+            ]);
+            $this->fail('The external request error should stop the signature flow.');
+        } catch (ValidationException) {
+            // Expected external failure.
+        }
+
+        $signature->refresh();
+        $this->assertSame('error', $signature->status);
+        $this->assertFalse((bool) data_get($signature->response_payload, 'auto_cancelled'));
+        $this->assertTrue(Cache::has('ciudadania_digital_signature_token:'.$signature->id));
+    }
+
     public function test_signature_logout_callback_redirects_even_without_signature_cookie(): void
     {
         $this->get('/api/v1/citizenship/signature/logout-callback')
@@ -2140,6 +2209,16 @@ class ProjectApiTest extends TestCase
             'id_usuario' => 1,
             'base_file_path' => 'project-signatures/signed.pdf',
             'signed_file_path' => 'project-signatures/signed.pdf',
+            'response_payload' => [
+                'validation' => [
+                    'data' => [
+                        'registros' => [
+                            ['nro_documento' => '1111111', 'nombres' => 'UNO'],
+                            ['nro_documento' => '2222222', 'nombres' => 'DOS'],
+                        ],
+                    ],
+                ],
+            ],
         ]);
         ProjectReportSignature::query()->create([
             'id_proyecto' => $project->id_proyecto,
@@ -2158,7 +2237,10 @@ class ProjectApiTest extends TestCase
         $this->getJson("/api/v1/projects/{$project->id_proyecto}/reports/general_budget/signatures?format=PCA")
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
-            ->assertJsonPath('data.items.0.status', 'signed');
+            ->assertJsonPath('data.items.0.status', 'signed')
+            ->assertJsonCount(2, 'data.signers')
+            ->assertJsonPath('data.signers.0.nro_documento', '1111111')
+            ->assertJsonPath('data.signers.1.nro_documento', '2222222');
     }
 
     public function test_late_login_callback_for_replaced_signature_does_not_use_another_pending_signature(): void

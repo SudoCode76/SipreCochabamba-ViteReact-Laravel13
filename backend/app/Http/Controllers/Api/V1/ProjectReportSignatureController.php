@@ -801,16 +801,25 @@ class ProjectReportSignatureController extends Controller
                 'signature' => $serializedSignature,
                 'redirect_url' => $redirectUrl,
             ], 'Autenticación validada correctamente.');
-        } catch (RuntimeException $exception) {
+        } catch (ValidationException|RuntimeException $exception) {
+            $message = $exception instanceof ValidationException
+                ? (collect($exception->errors())->flatten()->first() ?: $exception->getMessage())
+                : $exception->getMessage();
+            $failedSignature = $signature->fresh() ?: $signature;
+            $autoCancelled = $failedSignature->status === 'cancelled'
+                && (bool) data_get($failedSignature->response_payload, 'auto_cancelled');
+
             if (! $this->wantsJson($request)) {
                 return redirect()->to($this->frontendSignatureCallbackUrl('login', [
                     'signature' => $signatureId,
-                    'error_message' => $exception->getMessage(),
+                    'error_message' => $message,
+                    'auto_cancelled' => $autoCancelled ? '1' : null,
                 ]));
             }
 
-            return ApiResponse::error($exception->getMessage(), [
-                'signature' => [$exception->getMessage()],
+            return ApiResponse::error((string) $message, [
+                'signature' => [$message],
+                'auto_cancelled' => $autoCancelled,
             ], 422);
         }
     }

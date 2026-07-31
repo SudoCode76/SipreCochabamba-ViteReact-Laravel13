@@ -224,7 +224,7 @@ export default function ReportSignatureStatus({ subject = "project", projectId, 
             ) : null}
             <Button type="button" variant="outline" size="sm" className="rounded-full gap-2" onClick={() => setHistoryOpen(true)}>
               <History className="h-4 w-4" />
-              Historial
+              Ver firmantes
             </Button>
           </div>
         </div>
@@ -313,8 +313,8 @@ export default function ReportSignatureStatus({ subject = "project", projectId, 
         <DialogContent className="max-w-3xl">
           <DialogHeader className="flex-row items-start justify-between gap-4">
             <div>
-              <DialogTitle>Historial de firmas</DialogTitle>
-              <p className="mt-1 text-sm text-muted-foreground">Firmas registradas para este reporte y sus parámetros.</p>
+              <DialogTitle>Firmantes del PDF</DialogTitle>
+              <p className="mt-1 text-sm text-muted-foreground">Identidades certificadas en el último PDF firmado.</p>
             </div>
             <Button type="button" variant="ghost" size="icon-sm" className="rounded-full" onClick={() => setHistoryOpen(false)}>
               <X className="h-4 w-4" />

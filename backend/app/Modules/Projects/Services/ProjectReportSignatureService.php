@@ -197,7 +197,10 @@ class ProjectReportSignatureService
         $accessToken = $this->accessTokenFrom($payload);
 
         if (! $accessToken) {
-            throw new RuntimeException($this->messageWithTrace('Ciudadanía Digital no devolvió el token de acceso.', $signature));
+            $message = $this->messageWithTrace('Ciudadanía Digital no devolvió el token de acceso.', $signature);
+            $this->cancelBeforeExternalRequest($signature, $message);
+
+            throw new RuntimeException($message);
         }
 
         Cache::put($this->accessTokenCacheKey($signature), $accessToken, now()->addMinutes(30));
@@ -2583,18 +2586,18 @@ class ProjectReportSignatureService
             return $signature->refresh();
         } catch (CiudadaniaDigitalException $exception) {
             $this->recordExternalError($signature, $exception);
+            $message = $this->messageWithTrace($exception->getMessage(), $signature);
+            $this->cancelBeforeExternalRequest($signature, $message);
 
             throw ValidationException::withMessages([
-                'signature' => [$this->messageWithTrace($exception->getMessage(), $signature)],
+                'signature' => [$message],
             ]);
         } catch (RuntimeException $exception) {
-            $signature->forceFill([
-                'status' => 'error',
-                'error_message' => $this->messageWithTrace($exception->getMessage(), $signature),
-            ])->save();
+            $message = $this->messageWithTrace($exception->getMessage(), $signature);
+            $this->cancelBeforeExternalRequest($signature, $message);
 
             throw ValidationException::withMessages([
-                'signature' => [$this->messageWithTrace($exception->getMessage(), $signature)],
+                'signature' => [$message],
             ]);
         }
     }
@@ -2630,6 +2633,7 @@ class ProjectReportSignatureService
 
     private function requestApprovalUnlocked(ProjectReportSignature $signature, array $parameters): ProjectReportSignature
     {
+        $externalRequestStarted = false;
         $accessToken = $this->accessTokenFrom($parameters);
         $signatureCode = $this->signatureCode($signature);
         $validFrom = now();
@@ -2673,12 +2677,14 @@ class ProjectReportSignatureService
                     $userInfo,
                     $accessToken
                 );
+                $externalRequestStarted = true;
                 $response = $this->ciudadaniaDigitalClient->createDerivedSigningUrl($payload);
             } else {
                 $payload['is_derivated'] = 'true';
                 if ($signAllPages) {
                     $payload['page'] = 'ALL';
                 }
+                $externalRequestStarted = true;
                 $response = $this->ciudadaniaDigitalClient->createSigningUrl($signature->base_file_path, $payload);
             }
             $safeRequestPayload = Arr::except($payload, ['acces_token']);
@@ -2705,20 +2711,40 @@ class ProjectReportSignatureService
             ])->save();
 
             return $signature->refresh();
+        } catch (ValidationException $exception) {
+            if (! $externalRequestStarted) {
+                $message = collect(Arr::flatten($exception->errors()))->first() ?: $exception->getMessage();
+                $this->cancelBeforeExternalRequest($signature, (string) $message);
+            }
+
+            throw $exception;
         } catch (CiudadaniaDigitalException $exception) {
             $this->recordExternalError($signature, $exception);
+
+            if (! $externalRequestStarted) {
+                $this->cancelBeforeExternalRequest(
+                    $signature,
+                    $this->messageWithTrace($exception->getMessage(), $signature)
+                );
+            }
 
             throw ValidationException::withMessages([
                 'signature' => [$this->messageWithTrace($exception->getMessage(), $signature)],
             ]);
         } catch (RuntimeException $exception) {
-            $signature->forceFill([
-                'status' => 'error',
-                'error_message' => $this->messageWithTrace($exception->getMessage(), $signature),
-            ])->save();
+            $message = $this->messageWithTrace($exception->getMessage(), $signature);
+
+            if ($externalRequestStarted) {
+                $signature->forceFill([
+                    'status' => 'error',
+                    'error_message' => $message,
+                ])->save();
+            } else {
+                $this->cancelBeforeExternalRequest($signature, $message);
+            }
 
             throw ValidationException::withMessages([
-                'signature' => [$this->messageWithTrace($exception->getMessage(), $signature)],
+                'signature' => [$message],
             ]);
         }
     }
@@ -2761,6 +2787,12 @@ class ProjectReportSignatureService
             if ($signature->status === 'error') {
                 throw new RuntimeException(
                     $signature->error_message ?: $this->messageWithTrace('La solicitud de firma tiene un error previo.', $signature)
+                );
+            }
+
+            if ($signature->status === 'cancelled') {
+                throw new RuntimeException(
+                    $signature->error_message ?: 'El intento de firma fue cancelado automáticamente. Puede volver a iniciarlo.'
                 );
             }
         }
@@ -3020,6 +3052,20 @@ class ProjectReportSignatureService
     private function accessTokenCacheKey(ProjectReportSignature $signature): string
     {
         return 'ciudadania_digital_signature_token:'.$signature->id;
+    }
+
+    private function cancelBeforeExternalRequest(ProjectReportSignature $signature, string $message): void
+    {
+        Cache::forget($this->accessTokenCacheKey($signature));
+        $signature->forceFill([
+            'status' => 'cancelled',
+            'error_message' => $message,
+            'response_payload' => array_merge($signature->response_payload ?? [], [
+                'auto_cancelled' => true,
+                'auto_cancelled_at' => now()->toIso8601String(),
+                'auto_cancelled_reason' => $message,
+            ]),
+        ])->save();
     }
 
     private function recordExternalError(ProjectReportSignature $signature, CiudadaniaDigitalException $exception, array $extraResponse = []): void

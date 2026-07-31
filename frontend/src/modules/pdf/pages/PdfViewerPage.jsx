@@ -275,7 +275,6 @@ export default function PdfViewerPage() {
   const latestSigned = signatureStatus?.latest_signed;
   const hasSignedPdf = Boolean(latestSigned?.has_signed_file);
   const isSignedStale = Boolean(signatureStatus?.is_signed_stale);
-  const physicalSignatures = physicalStatus?.items ?? [];
   const pendingSignature = physicalStatus?.pending_signature
     || (["pending", "auth_pending", "sent"].includes(signatureStatus?.latest_signature?.status)
       ? signatureStatus.latest_signature
@@ -1112,7 +1111,7 @@ export default function PdfViewerPage() {
                 className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
                 <History className="h-4 w-4" />
-                Historial
+                Ver firmantes
               </button>
             ) : null}
             {canSignPdf ? (
@@ -1535,8 +1534,8 @@ export default function PdfViewerPage() {
           <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
               <div>
-                <h2 className="text-lg font-semibold">Historial de firmas</h2>
-                <p className="mt-1 text-sm text-slate-500">Firmas del reporte y parámetros visualizados.</p>
+                <h2 className="text-lg font-semibold">Firmantes del PDF</h2>
+                <p className="mt-1 text-sm text-slate-500">Identidades certificadas en el último PDF firmado.</p>
               </div>
               <button
                 type="button"
@@ -1584,21 +1583,6 @@ export default function PdfViewerPage() {
                 </div>
               ) : null}
 
-              {!historyLoading && !historyError && physicalSignatures.length > 0 ? (
-                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-                  <h3 className="text-sm font-semibold text-slate-900">Firmas físicas marcadas</h3>
-                  <div className="mt-3 space-y-2">
-                    {physicalSignatures.map((physicalSignature) => (
-                      <div key={physicalSignature.id} className="rounded-lg bg-white px-3 py-2 text-sm">
-                        <div className="font-medium text-slate-900">{physicalSignature.user_name || "Usuario"}</div>
-                        <div className="mt-0.5 text-xs text-slate-500">
-                          Marcado: {physicalSignature.marked_at || "-"}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
             </div>
           </div>
         </div>
