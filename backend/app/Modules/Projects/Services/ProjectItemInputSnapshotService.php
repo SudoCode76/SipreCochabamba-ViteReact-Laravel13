@@ -5,9 +5,7 @@ namespace App\Modules\Projects\Services;
 use App\Models\Project;
 use App\Models\ProjectItem;
 use App\Models\ProjectItemInputSnapshot;
-use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class ProjectItemInputSnapshotService
 {
@@ -25,7 +23,6 @@ class ProjectItemInputSnapshotService
             $projectItem->update(['estado_catalogo_snapshot' => 'NO_DISPONIBLE']);
             ProjectItemInputSnapshot::query()
                 ->where('id_proyecto_item', $projectItem->id_proyecto_item)
-                ->where('estado', '<>', 'EX')
                 ->update(['estado' => 'DP']);
 
             return;
@@ -70,7 +67,7 @@ class ProjectItemInputSnapshotService
                 ->first();
 
             $catalogStatus = $row->id_insumo === null ? 'DP' : strtoupper((string) ($row->insumo_estado ?? 'DP'));
-            $status = $snapshot?->estado === 'EX' ? 'EX' : ($catalogStatus === 'AC' ? 'AC' : $catalogStatus);
+            $status = $catalogStatus === 'AC' ? 'AC' : $catalogStatus;
             $payload = [
                 'id_insumo' => $row->id_insumo !== null ? (int) $row->id_insumo : $snapshot?->id_insumo,
                 'descripcion' => (string) ($row->descripcion ?? $snapshot?->descripcion ?? 'Insumo no disponible'),
@@ -99,7 +96,6 @@ class ProjectItemInputSnapshotService
 
         ProjectItemInputSnapshot::query()
             ->where('id_proyecto_item', $projectItem->id_proyecto_item)
-            ->where('estado', '<>', 'EX')
             ->when($seenSourceIds !== [], fn ($query) => $query->whereNotIn('id_item_insumo_origen', $seenSourceIds))
             ->when($seenSourceIds === [], fn ($query) => $query)
             ->update(['estado' => 'DP']);
@@ -128,31 +124,6 @@ class ProjectItemInputSnapshotService
                 ->where('id_proyecto_item', $projectItem->id_proyecto_item)
                 ->exists())
             ->each(fn (ProjectItem $projectItem) => $this->syncForProjectItem($projectItem));
-    }
-
-    public function exclude(Project $project, ProjectItemInputSnapshot $snapshot, User $user): ProjectItemInputSnapshot
-    {
-        if ($project->isFrozen() || ! $project->isCurrentVersion()) {
-            throw ValidationException::withMessages([
-                'version' => ['La versión seleccionada está congelada y no puede modificarse.'],
-            ]);
-        }
-
-        if ((int) $snapshot->projectItem?->id_proyecto !== (int) $project->id_proyecto) {
-            throw ValidationException::withMessages([
-                'snapshot' => ['El insumo no pertenece a la versión seleccionada.'],
-            ]);
-        }
-
-        $snapshot->update([
-            'estado' => 'EX',
-            'excluido_por' => $user->id_usuario,
-            'excluido_en' => now(),
-        ]);
-
-        $this->recalculateProject($project);
-
-        return $snapshot->refresh();
     }
 
     public function recalculateProject(Project $project, ?iterable $items = null): void
@@ -273,7 +244,6 @@ class ProjectItemInputSnapshotService
             'AC' => 'HABILITADO',
             'DC' => 'INHABILITADO',
             'DP' => 'ELIMINADO',
-            'EX' => 'EXCLUIDO DE LA VERSIÓN',
             default => 'NO DISPONIBLE',
         };
     }

@@ -138,14 +138,6 @@ class ProjectHistoryService
         ]);
     }
 
-    public function recordInputExcluded(Project $project, ?User $actor, ?string $ip, int $snapshotId): void
-    {
-        $this->record($project, $actor, $ip, 'version_input_excluded', 'Se excluyó un insumo de la versión', 'El insumo dejó de participar en los cálculos de esta versión.', [
-            'version_number' => $project->numero_version,
-            'snapshot_id' => $snapshotId,
-        ]);
-    }
-
     public function recordSignatureAccessUpdated(Project $project, ?User $actor, ?string $ip, array $changes): void
     {
         $this->record(

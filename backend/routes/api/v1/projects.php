@@ -29,7 +29,6 @@ Route::middleware(['auth:sanctum', 'active_user'])->group(function (): void {
     Route::post('/projects/{project}/versions', [ProjectCatalogController::class, 'createUpdatedVersion'])->middleware(EnsureProjectModificationAccess::class);
     Route::post('/projects/{project}/finalize', [ProjectCatalogController::class, 'finalizeVersion'])->middleware(EnsureProjectModificationAccess::class);
     Route::post('/projects/{project}/synchronize', [ProjectCatalogController::class, 'synchronizeVersion'])->middleware(EnsureProjectModificationAccess::class);
-    Route::post('/projects/{project}/input-snapshots/{snapshot}/exclude', [ProjectCatalogController::class, 'excludeVersionInput'])->middleware(EnsureProjectModificationAccess::class);
     Route::get('/projects/{project}/report-warnings', [ProjectReportController::class, 'reportWarnings']);
     Route::get('/projects/{project}/signature-access', [ProjectReportSignatureController::class, 'projectAccess']);
     Route::put('/projects/{project}/signature-access', [ProjectReportSignatureController::class, 'updateProjectAccess']);

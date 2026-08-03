@@ -1,7 +1,7 @@
 import { forwardRef, Fragment, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronsUpDown, GitCompare, History, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, CheckCircle2, GitCompare, History, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import apiClient from "@/lib/api/client";
 import { openPdfViewer } from "@/lib/utils/pdf";
+import { itemsService } from "@/modules/dashboard/services/items.service";
 import { modulesService } from "@/modules/modules/services/modules.service";
 import { getProjectApprovalLabel } from "../lib/project-status";
 import { projectService } from "../services/project.service";
@@ -202,6 +203,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const [compareTargetId, setCompareTargetId] = useState("");
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [moduleMove, setModuleMove] = useState(null);
+  const [missingSpecificationItem, setMissingSpecificationItem] = useState(null);
   const [error, setError] = useState(null);
   const [finalizingVersion, setFinalizingVersion] = useState(false);
   const [loadingReport, setLoadingReport] = useState(null);
@@ -238,9 +240,17 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     queryFn: modulesService.activeForProjects,
   });
 
+  const { data: itemContextData, isLoading: isLoadingItemContext } = useQuery({
+    queryKey: ["items-context-for-project-specification"],
+    queryFn: itemsService.context,
+    enabled: Boolean(missingSpecificationItem),
+    retry: false,
+  });
+
   const { data: searchData, isFetching: isSearching } = useQuery({
     queryKey: ["project-item-search", search],
     queryFn: () => projectService.searchItems(search.trim()),
+    enabled: search.trim().length > 0,
   });
 
   const { data: selectedItemData, isFetching: isLoadingItem, isError: selectedItemFailed, error: selectedItemError } = useQuery({
@@ -333,20 +343,6 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     },
   });
 
-  const excludeInputMutation = useMutation({
-    mutationFn: (snapshotId) => projectService.excludeVersionInput(projectId, snapshotId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["project-items", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["project-report-warnings", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Insumo excluido de esta versión.");
-    },
-    onError: (mutationError) => {
-      setError(mutationError.response?.data?.message || "No se pudo excluir el insumo de esta versión.");
-    },
-  });
-
   const itemOptions = (searchData?.data?.items ?? []).filter((option) => (
     !option.estado || String(option.estado).trim().toUpperCase() === "AC"
   ));
@@ -378,6 +374,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const uploadedReportItemIds = reportErrorDialog?.uploadedItemIds ?? [];
   const allReportItemsUploaded = Boolean(reportErrorDialog?.items?.length)
     && reportErrorDialog.items.every((item) => uploadedReportItemIds.includes(Number(item.id_item)));
+  const canUploadMissingSpecification = Boolean(itemContextData?.data?.permissions?.can_edit);
 
   useEffect(() => {
     const uploadedItemId = location.state?.uploaded_item_id;
@@ -390,6 +387,11 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     const stored = readReportFilesSession(projectId);
 
     if (!stored?.items?.length) {
+      queueMicrotask(() => {
+        queryClient.invalidateQueries({ queryKey: ["project-items", projectId] });
+        toast.success("Especificación técnica cargada correctamente.");
+        navigate(location.pathname, { replace: true, state: null });
+      });
       return;
     }
 
@@ -408,7 +410,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
       setError(stored.message ?? null);
       navigate(location.pathname, { replace: true, state: null });
     });
-  }, [location.pathname, location.state, navigate, projectId]);
+  }, [location.pathname, location.state, navigate, projectId, queryClient, toast]);
 
   useEffect(() => {
     if (!selectedItemFailed || !draft.itemId) {
@@ -470,7 +472,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
 
   const handleItemSearchChange = (value) => {
     setSearch(value);
-    setItemComboboxOpen(true);
+    setItemComboboxOpen(value.trim().length > 0);
 
     if (draft.itemId) {
       handleDraftChange("itemId", "");
@@ -563,16 +565,6 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     toast.success("Ítems reasignados. Guarda los cambios para aplicarlos al proyecto.");
   };
 
-  const handleViewSpecification = (row) => {
-    if (!row.especificacion_url) {
-      setError("No existe el PDF de especificacion para este item.");
-      return;
-    }
-
-    setError(null);
-    window.open(row.especificacion_url, "_blank", "noopener,noreferrer");
-  };
-
   const runWithReportWarning = (action) => {
     if (!reportWarningsSummary?.has_warnings) {
       action();
@@ -626,7 +618,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     }
 
     const query = new URLSearchParams();
-    query.set("search", item.name || "");
+    query.set("search", item.name || item.item || "");
     query.set("open_files_for", String(item.id_item ?? ""));
     query.set("return_to", `/Proyecto/${projectId}/items`);
     query.set("return_project_id", String(projectId));
@@ -637,6 +629,16 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
         source: "project-report-missing-files",
       },
     });
+  };
+
+  const handleUploadMissingSpecification = () => {
+    if (!missingSpecificationItem) {
+      return;
+    }
+
+    const item = missingSpecificationItem;
+    setMissingSpecificationItem(null);
+    handleGoToItemFiles(item);
   };
 
   const handleCloseReportErrorDialog = () => {
@@ -1134,31 +1136,19 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
               aria-controls="project-item-options"
               value={search || selectedOption?.text || ""}
               onChange={(event) => handleItemSearchChange(event.target.value)}
-              onFocus={() => setItemComboboxOpen(true)}
+              onFocus={() => setItemComboboxOpen(search.trim().length > 0)}
               placeholder="Buscar item..."
-              className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
-              clearButtonClassName="right-10"
+              className="h-12 rounded-2xl border-border/80 bg-background/90"
               isLoading={isSearching}
-              loadingIndicatorClassName="right-16"
               onClear={() => {
                 setSearch("");
                 handleDraftChange("itemId", "");
-                setItemComboboxOpen(true);
+                setItemComboboxOpen(false);
               }}
               disabled={isReadOnly}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full text-muted-foreground"
-              onClick={() => setItemComboboxOpen((current) => !current)}
-              disabled={isReadOnly}
-            >
-              <ChevronsUpDown className="size-4" />
-            </Button>
 
-            {itemComboboxOpen && (
+            {itemComboboxOpen && search.trim().length > 0 && (
               <div
                 id="project-item-options"
                 className="absolute z-30 mt-2 max-h-64 w-full overflow-y-auto rounded-2xl border border-border/80 bg-white p-1 shadow-xl"
@@ -1333,17 +1323,6 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
                                 <span className="text-xs font-medium text-rose-700">
                                   {inputWarnings.length} insumo(s) desactivado(s) o eliminado(s)
                                 </span>
-                                {!isReadOnly && inputWarnings.map((warning) => (
-                                  <button
-                                    key={warning.id_snapshot}
-                                    type="button"
-                                    className="w-fit text-left text-xs font-semibold text-rose-700 underline underline-offset-2"
-                                    onClick={() => excludeInputMutation.mutate(warning.id_snapshot)}
-                                    disabled={excludeInputMutation.isPending}
-                                  >
-                                    Excluir {warning.description} de esta versión
-                                  </button>
-                                ))}
                               </div>
                             )}
                           </div>
@@ -1353,7 +1332,13 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
                         <td className="px-3 py-3 text-right">{formatNumber(row.precio, 2)}</td>
                         <td className="px-3 py-3 text-right">{formatNumber(partial, 2)}</td>
                         <td className="px-3 py-3">
-                          <Button type="button" variant="outline" className="rounded-full" onClick={() => handleViewSpecification(row)}>Ver</Button>
+                          {row.especificacion_url ? (
+                            <Button asChild variant="outline" className="rounded-full">
+                              <a href={row.especificacion_url} target="_blank" rel="noopener noreferrer">Ver</a>
+                            </Button>
+                          ) : (
+                            <Button type="button" variant="outline" className="rounded-full" onClick={() => setMissingSpecificationItem(row)}>Ver</Button>
+                          )}
                         </td>
                         <td className="px-3 py-3 text-center">{row.prioridad ?? index + 1}</td>
                         <td className="px-3 py-3 text-center">
@@ -1439,6 +1424,38 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
           <Button type="button" className="rounded-full" onClick={handleConfirmModuleMove} disabled={!moduleMoveTarget}>
             {moduleMoveTargetCount > 0 ? "Unir módulos" : "Cambiar módulo"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={Boolean(missingSpecificationItem)} onOpenChange={(open) => !open && setMissingSpecificationItem(null)}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Especificación técnica no cargada</DialogTitle>
+          <DialogDescription>
+            El ítem {missingSpecificationItem?.item || "seleccionado"} no tiene una especificación técnica cargada.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoadingItemContext ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Verificando permisos...
+          </div>
+        ) : canUploadMissingSpecification ? (
+          <p className="text-sm text-muted-foreground">Puedes cargar el PDF de especificación técnica para este ítem.</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">Necesitas permiso para editar ítems antes de poder adjuntar la especificación técnica.</p>
+        )}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" className="rounded-full" onClick={() => setMissingSpecificationItem(null)}>
+            Cerrar
+          </Button>
+          {canUploadMissingSpecification && (
+            <Button type="button" className="rounded-full" onClick={handleUploadMissingSpecification}>
+              Cargar especificación técnica
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

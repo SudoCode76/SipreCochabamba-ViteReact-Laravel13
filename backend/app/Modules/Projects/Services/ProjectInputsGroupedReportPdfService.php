@@ -75,7 +75,6 @@ class ProjectInputsGroupedReportPdfService
         return DB::table('proyecto_item_insumo_snapshot')
             ->join('proyecto_item', 'proyecto_item.id_proyecto_item', '=', 'proyecto_item_insumo_snapshot.id_proyecto_item')
             ->join('item', 'item.id_item', '=', 'proyecto_item.id_item')
-            ->where('proyecto_item_insumo_snapshot.estado', '<>', 'EX')
             ->where('proyecto_item.estado', 'AC')
             ->where('proyecto_item.id_proyecto', $project->id_proyecto)
             ->whereIn('proyecto_item_insumo_snapshot.tipo', [1, 2, 3])

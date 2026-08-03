@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, ChevronLeft, ChevronRight, Eye, Loader2, Package, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Package, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -85,7 +85,6 @@ export default function ItemsPage() {
   const view = duplicatesOnly ? "duplicates" : statusFilter === "DC" ? "inactive" : freshness || (reviewDays ? `review_${reviewDays}` : order);
   const [search, setSearch] = useState(guidedSearch);
   const [searchQuery, setSearchQuery] = useState(guidedSearch);
-  const [highlightMissingSpecifications, setHighlightMissingSpecifications] = useState(false);
   const [page, setPage] = useState(1);
   const [reportLoadingItemId, setReportLoadingItemId] = useState(null);
   const [reportFeedback, setReportFeedback] = useState(null);
@@ -1459,23 +1458,7 @@ export default function ItemsPage() {
               </div>
             </div>
 
-            <form className="flex w-full max-w-sm gap-2" onSubmit={handleSearchSubmit}>
-              <div className="flex flex-col gap-2">
-                <span className="invisible text-[11px] font-semibold uppercase tracking-[0.22em]" aria-hidden="true">
-                  Buscar
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={`h-12 w-12 rounded-2xl border-border/80 p-0 ${highlightMissingSpecifications ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800" : "bg-background/90 text-muted-foreground"}`}
-                  onClick={() => setHighlightMissingSpecifications((current) => !current)}
-                  title="Marcar items sin especificaciones"
-                  aria-pressed={highlightMissingSpecifications}
-                  aria-label="Marcar items sin especificaciones"
-                >
-                  <Eye className="size-4" />
-                </Button>
-              </div>
+            <form className="flex w-full max-w-sm" onSubmit={handleSearchSubmit}>
               <div className="flex flex-1 flex-col gap-2">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   Buscar
@@ -1536,7 +1519,6 @@ export default function ItemsPage() {
                   <tbody>
                     {items.map((item, index) => {
                       const isItemEnabled = String(item.status ?? item.estado ?? "").trim().toUpperCase() === "AC";
-                      const isMissingSpecification = !item.specification || String(item.specification).trim() === "";
                       const daysWithoutUpdate = item.days_without_update === null || item.days_without_update === undefined
                         ? null
                         : Number(item.days_without_update);
@@ -1563,8 +1545,7 @@ export default function ItemsPage() {
                               : null;
                       const rowClassName = [
                         index < items.length - 1 ? "border-b border-border/60" : "",
-                        item.is_duplicate && !(highlightMissingSpecifications && isMissingSpecification) ? "bg-amber-50/70" : "",
-                        highlightMissingSpecifications && isMissingSpecification ? "border-l-4 border-l-rose-500 bg-rose-50/90 [&>td]:!text-rose-950" : "",
+                        item.is_duplicate ? "bg-amber-50/70" : "",
                       ].filter(Boolean).join(" ");
                       const duplicateCount = item.duplicate_count ?? 0;
                       const duplicateKey = item.duplicate_key ?? item.name ?? "";
