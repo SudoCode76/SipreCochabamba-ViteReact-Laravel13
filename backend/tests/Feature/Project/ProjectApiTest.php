@@ -3240,6 +3240,10 @@ class ProjectApiTest extends TestCase
         $this->createItemInputRecord(['id_item_insumo' => 2, 'id_insumo' => 2]);
         $this->createItemInputRecord(['id_item_insumo' => 3, 'id_insumo' => 3]);
 
+        $this->getJson('/api/v1/search/items?search=ITEM')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.items');
+
         $this->getJson('/api/v1/projects/items/1/incidence-price?format=PCA')
             ->assertUnprocessable()
             ->assertJsonValidationErrors('item')
@@ -3274,6 +3278,11 @@ class ProjectApiTest extends TestCase
         $this->createItemRecord();
         $this->createItemInputRecord(['id_item_insumo' => 1, 'id_insumo' => 1]);
         $this->createItemInputRecord(['id_item_insumo' => 2, 'id_insumo' => 2, 'estado' => 'DC']);
+
+        $this->getJson('/api/v1/search/items?search=ITEM')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', 1);
 
         $this->postJson('/api/v1/projects/1/items/sync', [
             'items' => [

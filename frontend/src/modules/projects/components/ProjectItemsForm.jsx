@@ -1,7 +1,7 @@
 import { forwardRef, Fragment, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronsUpDown, GitCompare, History, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, CheckCircle2, GitCompare, History, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
@@ -241,6 +241,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const { data: searchData, isFetching: isSearching } = useQuery({
     queryKey: ["project-item-search", search],
     queryFn: () => projectService.searchItems(search.trim()),
+    enabled: search.trim().length > 0,
   });
 
   const { data: selectedItemData, isFetching: isLoadingItem, isError: selectedItemFailed, error: selectedItemError } = useQuery({
@@ -470,7 +471,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
 
   const handleItemSearchChange = (value) => {
     setSearch(value);
-    setItemComboboxOpen(true);
+    setItemComboboxOpen(value.trim().length > 0);
 
     if (draft.itemId) {
       handleDraftChange("itemId", "");
@@ -1134,31 +1135,19 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
               aria-controls="project-item-options"
               value={search || selectedOption?.text || ""}
               onChange={(event) => handleItemSearchChange(event.target.value)}
-              onFocus={() => setItemComboboxOpen(true)}
+              onFocus={() => setItemComboboxOpen(search.trim().length > 0)}
               placeholder="Buscar item..."
-              className="h-12 rounded-2xl border-border/80 bg-background/90 pr-20"
-              clearButtonClassName="right-10"
+              className="h-12 rounded-2xl border-border/80 bg-background/90"
               isLoading={isSearching}
-              loadingIndicatorClassName="right-16"
               onClear={() => {
                 setSearch("");
                 handleDraftChange("itemId", "");
-                setItemComboboxOpen(true);
+                setItemComboboxOpen(false);
               }}
               disabled={isReadOnly}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full text-muted-foreground"
-              onClick={() => setItemComboboxOpen((current) => !current)}
-              disabled={isReadOnly}
-            >
-              <ChevronsUpDown className="size-4" />
-            </Button>
 
-            {itemComboboxOpen && (
+            {itemComboboxOpen && search.trim().length > 0 && (
               <div
                 id="project-item-options"
                 className="absolute z-30 mt-2 max-h-64 w-full overflow-y-auto rounded-2xl border border-border/80 bg-white p-1 shadow-xl"

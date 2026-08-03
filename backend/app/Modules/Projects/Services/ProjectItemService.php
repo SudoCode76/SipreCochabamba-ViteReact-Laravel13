@@ -8,6 +8,7 @@ use App\Models\ProjectItem;
 use App\Models\User;
 use App\Modules\Parameters\Services\ModuleService;
 use App\Services\Files\PublicFileService;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -214,6 +215,14 @@ class ProjectItemService
     {
         return Item::query()
             ->whereRaw("UPPER(TRIM(estado)) = 'AC'")
+            ->whereNotExists(function (QueryBuilder $query): void {
+                $query->selectRaw('1')
+                    ->from('item_insumo')
+                    ->leftJoin('insumo', 'insumo.id_insumo', '=', 'item_insumo.id_insumo')
+                    ->whereColumn('item_insumo.id_item', 'item.id_item');
+
+                $this->whereInputIsUnavailable($query);
+            })
             ->whereRaw('LOWER(TRIM(item)) LIKE ?', ['%'.mb_strtolower(trim($search)).'%'])
             ->orderBy('item')
             ->limit(20)
@@ -295,14 +304,13 @@ class ProjectItemService
             ]);
         }
 
-        $unavailableInputs = DB::table('item_insumo')
+        $unavailableInputsQuery = DB::table('item_insumo')
             ->leftJoin('insumo', 'insumo.id_insumo', '=', 'item_insumo.id_insumo')
-            ->whereIn('item_insumo.id_item', $itemIds->all())
-            ->whereRaw("UPPER(TRIM(item_insumo.estado)) = 'AC'")
-            ->where(function ($query): void {
-                $query->whereNull('insumo.id_insumo')
-                    ->orWhereRaw("UPPER(TRIM(COALESCE(insumo.estado, ''))) <> 'AC'");
-            })
+            ->whereIn('item_insumo.id_item', $itemIds->all());
+
+        $this->whereInputIsUnavailable($unavailableInputsQuery);
+
+        $unavailableInputs = $unavailableInputsQuery
             ->orderBy('item_insumo.id_item')
             ->orderBy('item_insumo.id_item_insumo')
             ->get([
@@ -329,6 +337,15 @@ class ProjectItemService
         })->values()->all();
 
         throw ValidationException::withMessages([$field => $messages]);
+    }
+
+    private function whereInputIsUnavailable(QueryBuilder $query): void
+    {
+        $query->whereRaw("UPPER(TRIM(item_insumo.estado)) = 'AC'")
+            ->where(function (QueryBuilder $query): void {
+                $query->whereNull('insumo.id_insumo')
+                    ->orWhereRaw("UPPER(TRIM(COALESCE(insumo.estado, ''))) <> 'AC'");
+            });
     }
 
     private function isActiveItem(Item $item): bool
