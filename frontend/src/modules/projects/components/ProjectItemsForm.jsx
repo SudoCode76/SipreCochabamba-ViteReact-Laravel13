@@ -564,16 +564,6 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     toast.success("Ítems reasignados. Guarda los cambios para aplicarlos al proyecto.");
   };
 
-  const handleViewSpecification = (row) => {
-    if (!row.especificacion_url) {
-      setError("No existe el PDF de especificacion para este item.");
-      return;
-    }
-
-    setError(null);
-    window.open(row.especificacion_url, "_blank", "noopener,noreferrer");
-  };
-
   const runWithReportWarning = (action) => {
     if (!reportWarningsSummary?.has_warnings) {
       action();
@@ -1342,7 +1332,13 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
                         <td className="px-3 py-3 text-right">{formatNumber(row.precio, 2)}</td>
                         <td className="px-3 py-3 text-right">{formatNumber(partial, 2)}</td>
                         <td className="px-3 py-3">
-                          <Button type="button" variant="outline" className="rounded-full" onClick={() => handleViewSpecification(row)}>Ver</Button>
+                          {row.especificacion_url ? (
+                            <Button asChild variant="outline" className="rounded-full">
+                              <a href={row.especificacion_url} target="_blank" rel="noopener noreferrer">Ver</a>
+                            </Button>
+                          ) : (
+                            <Button type="button" variant="outline" className="rounded-full" disabled title="No existe el PDF de especificación para este ítem.">No disponible</Button>
+                          )}
                         </td>
                         <td className="px-3 py-3 text-center">{row.prioridad ?? index + 1}</td>
                         <td className="px-3 py-3 text-center">
