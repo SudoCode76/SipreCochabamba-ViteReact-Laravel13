@@ -3223,6 +3223,108 @@ class ProjectApiTest extends TestCase
         $this->assertEqualsWithDelta(11475.182, (float) Project::query()->findOrFail(1)->precio, 0.0001);
     }
 
+    public function test_project_rejects_new_items_with_unavailable_inputs(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->seedGeneralPercentages();
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'descripcion' => 'Insumo activo']);
+        $this->createInput(['id_insumo' => 2, 'descripcion' => 'Insumo inactivo', 'estado' => 'DC']);
+        $this->createInput(['id_insumo' => 3, 'descripcion' => 'Insumo eliminado', 'estado' => 'DP']);
+        $this->createItemRecord();
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_insumo' => 1]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_insumo' => 2]);
+        $this->createItemInputRecord(['id_item_insumo' => 3, 'id_insumo' => 3]);
+
+        $this->getJson('/api/v1/projects/items/1/incidence-price?format=PCA')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('item')
+            ->assertJsonPath('errors.item.0', 'El ítem "ITEM FNDR TEST" no puede agregarse porque tiene insumo(s) desactivado(s) o eliminados: Insumo inactivo, Insumo eliminado.');
+
+        $this->postJson('/api/v1/projects/1/items/sync', [
+            'items' => [
+                ['id_item' => 1, 'precio' => 10, 'cantidad' => 1, 'prioridad' => 1],
+            ],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('items');
+
+        $this->assertDatabaseMissing('proyecto_item', [
+            'id_proyecto' => 1,
+            'id_item' => 1,
+            'estado' => 'AC',
+        ]);
+    }
+
+    public function test_project_keeps_existing_items_and_ignores_inactive_input_relations(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->seedGeneralPercentages();
+        $this->createProjectRecord();
+        $this->createInput(['id_insumo' => 1, 'descripcion' => 'Insumo activo']);
+        $this->createInput(['id_insumo' => 2, 'descripcion' => 'Relación inactiva']);
+        $this->createItemRecord();
+        $this->createItemInputRecord(['id_item_insumo' => 1, 'id_insumo' => 1]);
+        $this->createItemInputRecord(['id_item_insumo' => 2, 'id_insumo' => 2, 'estado' => 'DC']);
+
+        $this->postJson('/api/v1/projects/1/items/sync', [
+            'items' => [
+                ['id_item' => 1, 'precio' => 10, 'cantidad' => 1, 'prioridad' => 1],
+            ],
+        ])->assertOk();
+
+        DB::table('insumo')->where('id_insumo', 1)->update(['estado' => 'DC']);
+
+        $this->postJson('/api/v1/projects/1/items/sync', [
+            'items' => [
+                ['id_proyecto_item' => 1, 'id_item' => 1, 'precio' => 10, 'cantidad' => 2, 'prioridad' => 1],
+            ],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('proyecto_item', [
+            'id_proyecto_item' => 1,
+            'id_proyecto' => 1,
+            'id_item' => 1,
+            'cantidad' => 2,
+            'estado' => 'AC',
+        ]);
+    }
+
+    public function test_project_rejects_project_items_from_another_project(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        $this->createProjectRecord([
+            'id_proyecto' => 2,
+            'id_proyecto_raiz' => 2,
+            'nombre_proyecto' => 'OTRO PROYECTO',
+        ]);
+        $this->createItemRecord();
+        $foreignProjectItem = $this->createProjectItemRecord([
+            'id_proyecto' => 2,
+        ]);
+
+        $this->postJson('/api/v1/projects/1/items/sync', [
+            'items' => [
+                ['id_proyecto_item' => $foreignProjectItem->id_proyecto_item, 'id_item' => 1, 'precio' => 10, 'cantidad' => 1, 'prioridad' => 1],
+            ],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('items');
+    }
+
     public function test_project_items_can_be_grouped_by_module_and_repeated(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

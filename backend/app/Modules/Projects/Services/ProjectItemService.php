@@ -8,6 +8,7 @@ use App\Models\ProjectItem;
 use App\Models\User;
 use App\Modules\Parameters\Services\ModuleService;
 use App\Services\Files\PublicFileService;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -28,7 +29,6 @@ class ProjectItemService
     public function sync(Project $project, array $items, User $user, ?string $ip = null): Project
     {
         $this->projectVersionService->assertEditable($project);
-        $this->assertItemsAreActive($items);
 
         $historySummary = [
             'added' => [],
@@ -51,6 +51,9 @@ class ProjectItemService
                 ->get()
                 ->keyBy(fn (ProjectItem $item): int => (int) $item->id_proyecto_item);
             $existingProjectItemIds = $existing->keys()->map(fn (int|string $id): int => (int) $id)->values();
+
+            $this->assertProjectItemsBelongToProject($incomingProjectItemIds, $existingProjectItemIds);
+            $this->assertNewItemsCanBeAdded($items, $existing);
 
             foreach ($items as $itemData) {
                 $itemId = (int) $itemData['id_item'];
@@ -187,11 +190,7 @@ class ProjectItemService
 
     public function incidenceItemDetail(Item $item, string $format): array
     {
-        if (! $this->isActiveItem($item)) {
-            throw ValidationException::withMessages([
-                'item' => 'El ítem seleccionado no está activo.',
-            ]);
-        }
+        $this->assertItemCanBeAdded($item);
 
         $item->load(['groupCatalog', 'subgroupCatalog', 'unitMeasure']);
 
@@ -228,10 +227,53 @@ class ProjectItemService
             ->all();
     }
 
-    private function assertItemsAreActive(array $items): void
+    private function assertProjectItemsBelongToProject(Collection $incomingIds, Collection $existingIds): void
+    {
+        if ($incomingIds->diff($existingIds)->isEmpty()) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'items' => ['Uno o más ítems no pertenecen a la versión seleccionada del proyecto.'],
+        ]);
+    }
+
+    private function assertNewItemsCanBeAdded(array $items, Collection $existing): void
     {
         $itemIds = collect($items)
+            ->filter(function (array $item) use ($existing): bool {
+                $projectItemId = isset($item['id_proyecto_item']) ? (int) $item['id_proyecto_item'] : null;
+                $existingItem = $projectItemId ? $existing->get($projectItemId) : null;
+
+                return ! $existingItem || (int) $existingItem->id_item !== (int) $item['id_item'];
+            })
             ->pluck('id_item')
+            ->filter()
+            ->map(fn (int|string $id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($itemIds->isEmpty()) {
+            return;
+        }
+
+        $this->assertItemIdsCanBeAdded($itemIds->all(), 'items');
+    }
+
+    private function assertItemCanBeAdded(Item $item): void
+    {
+        if (! $this->isActiveItem($item)) {
+            throw ValidationException::withMessages([
+                'item' => 'El ítem seleccionado no está activo.',
+            ]);
+        }
+
+        $this->assertItemIdsCanBeAdded([(int) $item->id_item], 'item');
+    }
+
+    private function assertItemIdsCanBeAdded(array $itemIds, string $field): void
+    {
+        $itemIds = collect($itemIds)
             ->filter()
             ->map(fn (int|string $id): int => (int) $id)
             ->unique()
@@ -249,9 +291,44 @@ class ProjectItemService
 
         if ($activeItemIds->count() !== $itemIds->count()) {
             throw ValidationException::withMessages([
-                'items' => 'El ítem seleccionado no está activo.',
+                $field => ['El ítem seleccionado no está activo.'],
             ]);
         }
+
+        $unavailableInputs = DB::table('item_insumo')
+            ->leftJoin('insumo', 'insumo.id_insumo', '=', 'item_insumo.id_insumo')
+            ->whereIn('item_insumo.id_item', $itemIds->all())
+            ->whereRaw("UPPER(TRIM(item_insumo.estado)) = 'AC'")
+            ->where(function ($query): void {
+                $query->whereNull('insumo.id_insumo')
+                    ->orWhereRaw("UPPER(TRIM(COALESCE(insumo.estado, ''))) <> 'AC'");
+            })
+            ->orderBy('item_insumo.id_item')
+            ->orderBy('item_insumo.id_item_insumo')
+            ->get([
+                'item_insumo.id_item',
+                'item_insumo.id_insumo',
+                'insumo.descripcion',
+            ])
+            ->groupBy('id_item');
+
+        if ($unavailableInputs->isEmpty()) {
+            return;
+        }
+
+        $itemNames = Item::query()
+            ->whereIn('id_item', $unavailableInputs->keys()->all())
+            ->pluck('item', 'id_item');
+        $messages = $unavailableInputs->map(function (Collection $inputs, int|string $itemId) use ($itemNames): string {
+            $inputNames = $inputs
+                ->map(fn ($input): string => (string) ($input->descripcion ?: 'Insumo #'.$input->id_insumo))
+                ->unique()
+                ->implode(', ');
+
+            return 'El ítem "'.($itemNames->get($itemId) ?? 'seleccionado').'" no puede agregarse porque tiene insumo(s) desactivado(s) o eliminados: '.$inputNames.'.';
+        })->values()->all();
+
+        throw ValidationException::withMessages([$field => $messages]);
     }
 
     private function isActiveItem(Item $item): bool
