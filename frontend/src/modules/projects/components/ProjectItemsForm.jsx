@@ -343,20 +343,6 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     },
   });
 
-  const excludeInputMutation = useMutation({
-    mutationFn: (snapshotId) => projectService.excludeVersionInput(projectId, snapshotId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["project-items", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["project-report-warnings", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Insumo excluido de esta versión.");
-    },
-    onError: (mutationError) => {
-      setError(mutationError.response?.data?.message || "No se pudo excluir el insumo de esta versión.");
-    },
-  });
-
   const itemOptions = (searchData?.data?.items ?? []).filter((option) => (
     !option.estado || String(option.estado).trim().toUpperCase() === "AC"
   ));
@@ -1337,17 +1323,6 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
                                 <span className="text-xs font-medium text-rose-700">
                                   {inputWarnings.length} insumo(s) desactivado(s) o eliminado(s)
                                 </span>
-                                {!isReadOnly && inputWarnings.map((warning) => (
-                                  <button
-                                    key={warning.id_snapshot}
-                                    type="button"
-                                    className="w-fit text-left text-xs font-semibold text-rose-700 underline underline-offset-2"
-                                    onClick={() => excludeInputMutation.mutate(warning.id_snapshot)}
-                                    disabled={excludeInputMutation.isPending}
-                                  >
-                                    Excluir {warning.description} de esta versión
-                                  </button>
-                                ))}
                               </div>
                             )}
                           </div>

@@ -16,7 +16,6 @@ use App\Http\Requests\Project\UpdateProjectRequest;
 use App\Http\Resources\Project\ProjectHistoryResource;
 use App\Models\Item;
 use App\Models\Project;
-use App\Models\ProjectItemInputSnapshot;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Modules\Projects\Services\ProjectBudgetService;
@@ -250,22 +249,6 @@ class ProjectController extends Controller
             'success' => true,
             'message' => 'Versión sincronizada correctamente.',
             'data' => ['project' => $this->serializeProject($version, true)],
-        ]);
-    }
-
-    public function excludeVersionInput(Request $request, Project $project, ProjectItemInputSnapshot $snapshot): JsonResponse
-    {
-        if ($response = $this->denyIfMissingPermission($request->user(), 'can_edit', 'No tiene permisos para modificar la versión del proyecto.')) {
-            return $response;
-        }
-
-        $snapshot = $this->snapshotService->exclude($project, $snapshot, $request->user());
-        $this->projectHistoryService->recordInputExcluded($project, $request->user(), $request->ip(), $snapshot->id_snapshot);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Insumo excluido de la versión correctamente.',
-            'data' => ['snapshot' => $snapshot],
         ]);
     }
 

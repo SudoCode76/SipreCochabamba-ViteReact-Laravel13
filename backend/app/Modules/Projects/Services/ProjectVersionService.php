@@ -176,9 +176,7 @@ class ProjectVersionService
                             'cantidad' => $snapshot->cantidad,
                             'precio_unitario' => $snapshot->precio_unitario,
                             'parcial' => $snapshot->parcial,
-                            'estado' => $snapshot->estado === 'EX' ? 'EX' : $snapshot->estado,
-                            'excluido_por' => $snapshot->excluido_por,
-                            'excluido_en' => $snapshot->excluido_en,
+                            'estado' => $snapshot->estado,
                         ]);
                     });
             });

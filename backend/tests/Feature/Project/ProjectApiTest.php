@@ -4804,4 +4804,10 @@ class ProjectApiTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('errors.version.0', 'Las versiones seleccionadas no pertenecen al mismo proyecto.');
     }
+
+    public function test_project_input_exclusion_endpoint_is_not_available(): void
+    {
+        $this->postJson('/api/v1/projects/1/input-snapshots/1/exclude')
+            ->assertNotFound();
+    }
 }

@@ -14,7 +14,6 @@ class ProjectSnapshotAnalysisService
     {
         $components = DB::table('proyecto_item_insumo_snapshot')
             ->where('id_proyecto_item', $projectItem->id_proyecto_item)
-            ->where('estado', '<>', 'EX')
             ->orderBy('tipo')
             ->orderBy('descripcion')
             ->get();

@@ -26,8 +26,6 @@ class ProjectItemInputSnapshot extends Model
         'parcial',
         'estado',
         'id_item_insumo_origen',
-        'excluido_por',
-        'excluido_en',
     ];
 
     protected function casts(): array
@@ -40,8 +38,6 @@ class ProjectItemInputSnapshot extends Model
             'precio_unitario' => 'float',
             'parcial' => 'float',
             'id_item_insumo_origen' => 'integer',
-            'excluido_por' => 'integer',
-            'excluido_en' => 'datetime',
         ];
     }
 

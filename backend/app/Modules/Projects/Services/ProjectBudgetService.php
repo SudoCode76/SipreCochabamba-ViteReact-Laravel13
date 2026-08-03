@@ -334,7 +334,6 @@ class ProjectBudgetService
     {
         $rows = DB::table('proyecto_item_insumo_snapshot')
             ->where('id_proyecto_item', $projectItem->id_proyecto_item)
-            ->where('estado', '<>', 'EX')
             ->where('tipo', $type)
             ->select(['cantidad', 'precio_unitario'])
             ->get();
@@ -358,7 +357,6 @@ class ProjectBudgetService
             ->join('tipo_insumo', 'tipo_insumo.id_tipo', '=', 'log_insumo.tipo')
             ->where('log_insumo.fecha', '<=', $date->toDateString())
             ->where('log_insumo.tipo', $type)
-            ->where('proyecto_item_insumo_snapshot.estado', '<>', 'EX')
             ->where('proyecto_item_insumo_snapshot.id_proyecto_item', $projectItem->id_proyecto_item)
             ->orderBy('log_insumo.tipo')
             ->orderBy('log_insumo.id_insumo')
