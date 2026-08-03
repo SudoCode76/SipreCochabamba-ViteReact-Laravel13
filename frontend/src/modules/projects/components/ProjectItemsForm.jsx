@@ -1,7 +1,7 @@
 import { forwardRef, Fragment, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, ChevronsUpDown, GitCompare, History, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronsUpDown, GitCompare, History, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ClearableSearchInput } from "@/components/ui/clearable-search-input";
@@ -201,6 +201,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const [compareBaseId, setCompareBaseId] = useState("");
   const [compareTargetId, setCompareTargetId] = useState("");
   const [showUnchanged, setShowUnchanged] = useState(false);
+  const [moduleMove, setModuleMove] = useState(null);
   const [error, setError] = useState(null);
   const [finalizingVersion, setFinalizingVersion] = useState(false);
   const [loadingReport, setLoadingReport] = useState(null);
@@ -454,6 +455,14 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     return Array.from(groups.values());
   }, [effectiveRows]);
 
+  const moduleMoveOptions = useMemo(() => (
+    moduleOptions.filter((module) => String(module.id_modulo) !== String(moduleMove?.sourceModuleId))
+  ), [moduleMove?.sourceModuleId, moduleOptions]);
+  const moduleMoveTarget = moduleMoveOptions.find((module) => String(module.id_modulo) === String(moduleMove?.targetModuleId));
+  const moduleMoveTargetCount = moduleMoveTarget
+    ? effectiveRows.filter((row) => String(row.id_modulo) === String(moduleMoveTarget.id_modulo)).length
+    : 0;
+
   const handleDraftChange = (field, value) => {
     setError(null);
     setDraft((current) => ({ ...current, [field]: value }));
@@ -516,6 +525,42 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
 
     setRows(effectiveRows.filter((row) => (row.id_proyecto_item ?? row.client_row_id) !== rowKey));
     setRowsDirty(true);
+  };
+
+  const handleOpenModuleMove = (group) => {
+    if (isReadOnly || !moduleOptions.some((module) => String(module.id_modulo) !== String(group.id))) {
+      return;
+    }
+
+    setModuleMove({
+      sourceModuleId: group.id,
+      sourceModuleName: group.name,
+      sourceItemCount: group.rows.length,
+      targetModuleId: "",
+    });
+  };
+
+  const handleConfirmModuleMove = () => {
+    if (!moduleMoveTarget || !moduleMove) {
+      return;
+    }
+
+    setRows(effectiveRows.map((row) => (
+      String(row.id_modulo ?? "sin-modulo") === String(moduleMove.sourceModuleId)
+        ? {
+          ...row,
+          id_modulo: Number(moduleMoveTarget.id_modulo),
+          modulo: {
+            id_modulo: moduleMoveTarget.id_modulo,
+            nombre_modulo: moduleMoveTarget.nombre_modulo,
+          },
+        }
+        : row
+    )));
+    setRowsDirty(true);
+    setModuleMove(null);
+    setError(null);
+    toast.success("Ítems reasignados. Guarda los cambios para aplicarlos al proyecto.");
   };
 
   const handleViewSpecification = (row) => {
@@ -1244,7 +1289,23 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
               ) : groupedRows.map((group) => (
                 <Fragment key={`module-${group.id}`}>
                   <tr className="border-t border-border/60 bg-teal-800 text-white">
-                    <td colSpan={7} className="px-3 py-3 font-semibold uppercase tracking-[0.12em]">{group.name}</td>
+                    <td colSpan={7} className="px-3 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold uppercase tracking-[0.12em]">{group.name}</span>
+                        {!isReadOnly && moduleOptions.some((module) => String(module.id_modulo) !== String(group.id)) && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                            onClick={() => handleOpenModuleMove(group)}
+                          >
+                            <ArrowRightLeft className="mr-2 size-4" />
+                            Cambiar módulo
+                          </Button>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-3 py-3 text-right font-semibold">{formatNumber(group.subtotal, 2)}</td>
                     <td colSpan={3} className="px-3 py-3" />
                   </tr>
@@ -1338,6 +1399,49 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
         )}
       </div>
     </form>
+
+    <Dialog open={Boolean(moduleMove)} onOpenChange={(open) => !open && setModuleMove(null)}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{moduleMoveTargetCount > 0 ? "Unir módulos" : "Cambiar módulo"}</DialogTitle>
+          <DialogDescription>
+            Selecciona el módulo que recibirá los {moduleMove?.sourceItemCount ?? 0} ítems de {moduleMove?.sourceModuleName ?? "este módulo"}.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="module-move-target">Módulo destino</Label>
+          <select
+            id="module-move-target"
+            value={moduleMove?.targetModuleId ?? ""}
+            onChange={(event) => setModuleMove((current) => ({ ...current, targetModuleId: event.target.value }))}
+            className="h-12 rounded-2xl border border-border/80 bg-background px-4"
+          >
+            <option value="">Selecciona un módulo</option>
+            {moduleMoveOptions.map((module) => (
+              <option key={module.id_modulo} value={module.id_modulo}>{module.nombre_modulo}</option>
+            ))}
+          </select>
+        </div>
+
+        {moduleMoveTarget && (
+          <div className={`rounded-2xl border px-4 py-3 text-sm ${moduleMoveTargetCount > 0 ? "border-amber-200 bg-amber-50 text-amber-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
+            {moduleMoveTargetCount > 0
+              ? `${moduleMoveTarget.nombre_modulo} ya contiene ${moduleMoveTargetCount} ítem(s). Al confirmar se unirán los grupos y cada ítem se conservará por separado.`
+              : `Los ítems se moverán a ${moduleMoveTarget.nombre_modulo} sin eliminar ni modificar sus datos.`}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" className="rounded-full" onClick={() => setModuleMove(null)}>
+            Cancelar
+          </Button>
+          <Button type="button" className="rounded-full" onClick={handleConfirmModuleMove} disabled={!moduleMoveTarget}>
+            {moduleMoveTargetCount > 0 ? "Unir módulos" : "Cambiar módulo"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <Dialog open={Boolean(reportErrorDialog)}>
       <DialogContent className="max-w-2xl">
