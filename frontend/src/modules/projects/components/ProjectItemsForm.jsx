@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import apiClient from "@/lib/api/client";
 import { openPdfViewer } from "@/lib/utils/pdf";
+import { itemsService } from "@/modules/dashboard/services/items.service";
 import { modulesService } from "@/modules/modules/services/modules.service";
 import { getProjectApprovalLabel } from "../lib/project-status";
 import { projectService } from "../services/project.service";
@@ -202,6 +203,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const [compareTargetId, setCompareTargetId] = useState("");
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [moduleMove, setModuleMove] = useState(null);
+  const [missingSpecificationItem, setMissingSpecificationItem] = useState(null);
   const [error, setError] = useState(null);
   const [finalizingVersion, setFinalizingVersion] = useState(false);
   const [loadingReport, setLoadingReport] = useState(null);
@@ -236,6 +238,13 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const { data: modulesData } = useQuery({
     queryKey: ["project-modules"],
     queryFn: modulesService.activeForProjects,
+  });
+
+  const { data: itemContextData, isLoading: isLoadingItemContext } = useQuery({
+    queryKey: ["items-context-for-project-specification"],
+    queryFn: itemsService.context,
+    enabled: Boolean(missingSpecificationItem),
+    retry: false,
   });
 
   const { data: searchData, isFetching: isSearching } = useQuery({
@@ -379,6 +388,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const uploadedReportItemIds = reportErrorDialog?.uploadedItemIds ?? [];
   const allReportItemsUploaded = Boolean(reportErrorDialog?.items?.length)
     && reportErrorDialog.items.every((item) => uploadedReportItemIds.includes(Number(item.id_item)));
+  const canUploadMissingSpecification = Boolean(itemContextData?.data?.permissions?.can_edit);
 
   useEffect(() => {
     const uploadedItemId = location.state?.uploaded_item_id;
@@ -391,6 +401,11 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     const stored = readReportFilesSession(projectId);
 
     if (!stored?.items?.length) {
+      queueMicrotask(() => {
+        queryClient.invalidateQueries({ queryKey: ["project-items", projectId] });
+        toast.success("Especificación técnica cargada correctamente.");
+        navigate(location.pathname, { replace: true, state: null });
+      });
       return;
     }
 
@@ -409,7 +424,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
       setError(stored.message ?? null);
       navigate(location.pathname, { replace: true, state: null });
     });
-  }, [location.pathname, location.state, navigate, projectId]);
+  }, [location.pathname, location.state, navigate, projectId, queryClient, toast]);
 
   useEffect(() => {
     if (!selectedItemFailed || !draft.itemId) {
@@ -617,7 +632,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     }
 
     const query = new URLSearchParams();
-    query.set("search", item.name || "");
+    query.set("search", item.name || item.item || "");
     query.set("open_files_for", String(item.id_item ?? ""));
     query.set("return_to", `/Proyecto/${projectId}/items`);
     query.set("return_project_id", String(projectId));
@@ -628,6 +643,16 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
         source: "project-report-missing-files",
       },
     });
+  };
+
+  const handleUploadMissingSpecification = () => {
+    if (!missingSpecificationItem) {
+      return;
+    }
+
+    const item = missingSpecificationItem;
+    setMissingSpecificationItem(null);
+    handleGoToItemFiles(item);
   };
 
   const handleCloseReportErrorDialog = () => {
@@ -1337,7 +1362,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
                               <a href={row.especificacion_url} target="_blank" rel="noopener noreferrer">Ver</a>
                             </Button>
                           ) : (
-                            <Button type="button" variant="outline" className="rounded-full" disabled title="No existe el PDF de especificación para este ítem.">No disponible</Button>
+                            <Button type="button" variant="outline" className="rounded-full" onClick={() => setMissingSpecificationItem(row)}>Ver</Button>
                           )}
                         </td>
                         <td className="px-3 py-3 text-center">{row.prioridad ?? index + 1}</td>
@@ -1424,6 +1449,38 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
           <Button type="button" className="rounded-full" onClick={handleConfirmModuleMove} disabled={!moduleMoveTarget}>
             {moduleMoveTargetCount > 0 ? "Unir módulos" : "Cambiar módulo"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={Boolean(missingSpecificationItem)} onOpenChange={(open) => !open && setMissingSpecificationItem(null)}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Especificación técnica no cargada</DialogTitle>
+          <DialogDescription>
+            El ítem {missingSpecificationItem?.item || "seleccionado"} no tiene una especificación técnica cargada.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoadingItemContext ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Verificando permisos...
+          </div>
+        ) : canUploadMissingSpecification ? (
+          <p className="text-sm text-muted-foreground">Puedes cargar el PDF de especificación técnica para este ítem.</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">Necesitas permiso para editar ítems antes de poder adjuntar la especificación técnica.</p>
+        )}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" className="rounded-full" onClick={() => setMissingSpecificationItem(null)}>
+            Cerrar
+          </Button>
+          {canUploadMissingSpecification && (
+            <Button type="button" className="rounded-full" onClick={handleUploadMissingSpecification}>
+              Cargar especificación técnica
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
