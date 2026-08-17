@@ -38,6 +38,29 @@ export default function SignableProjectReportsPage() {
     { key: "item", title: "Ítems", items: items.filter((item) => item.scope === "item") },
   ].filter((group) => group.items.length > 0);
 
+  const handleValidityModeChange = (item, event) => {
+    const mode = event.currentTarget.value;
+
+    if (mode === "indefinite") {
+      if (item.validity_days === null) {
+        return;
+      }
+
+      updateMutation.mutate({
+        reportKey: item.report_key,
+        payload: { validity_days: null },
+      });
+      return;
+    }
+
+    if (item.validity_days === null) {
+      updateMutation.mutate({
+        reportKey: item.report_key,
+        payload: { validity_days: 30 },
+      });
+    }
+  };
+
   const handleValidityBlur = (item, event) => {
     const currentValue = Number(item.validity_days ?? 30);
     const nextValue = Number(event.currentTarget.value);
@@ -48,7 +71,7 @@ export default function SignableProjectReportsPage() {
       return;
     }
 
-    if (nextValue === currentValue) {
+    if (nextValue === currentValue && item.validity_days !== null) {
       return;
     }
 
@@ -125,22 +148,36 @@ export default function SignableProjectReportsPage() {
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-2">
-                            <Input
-                              type="number"
-                              min="1"
-                              max="3650"
-                              defaultValue={item.validity_days ?? 30}
+                            <select
+                              value={item.validity_days === null ? "indefinite" : "days"}
                               disabled={!canManage || isBusy}
-                              className="h-10 w-28 rounded-xl"
-                              aria-label={`Vigencia en días para ${item.name}`}
-                              onBlur={(event) => handleValidityBlur(item, event)}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.currentTarget.blur();
-                                }
-                              }}
-                            />
-                            <span className="text-sm text-muted-foreground">días</span>
+                              className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                              aria-label={`Tipo de vigencia para ${item.name}`}
+                              onChange={(event) => handleValidityModeChange(item, event)}
+                            >
+                              <option value="indefinite">Indefinido</option>
+                              <option value="days">Por días</option>
+                            </select>
+                            {item.validity_days !== null && (
+                              <>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  max="3650"
+                                  defaultValue={item.validity_days}
+                                  disabled={!canManage || isBusy}
+                                  className="h-10 w-28 rounded-xl"
+                                  aria-label={`Vigencia en días para ${item.name}`}
+                                  onBlur={(event) => handleValidityBlur(item, event)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.currentTarget.blur();
+                                    }
+                                  }}
+                                />
+                                <span className="text-sm text-muted-foreground">días</span>
+                              </>
+                            )}
                           </div>
                         </td>
                         <td className="px-5 py-4 text-right">
