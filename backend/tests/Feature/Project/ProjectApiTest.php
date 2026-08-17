@@ -29,6 +29,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Sanctum;
@@ -3552,6 +3553,91 @@ class ProjectApiTest extends TestCase
             ->assertHeader('content-disposition', 'inline; filename="especificaciones_proyecto.pdf"');
 
         $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_can_generate_project_specifications_pdf_from_a_remote_repository_url(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        config()->set('services.repository.endpoint', 'https://repository.test/api/v1/repository/sipre');
+        $remoteUrl = 'https://repository.test/files/specification.pdf';
+        $pdf = $this->fakePdf('Especificación remota');
+
+        Http::fake([
+            $remoteUrl => Http::response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Length' => (string) strlen($pdf),
+            ]),
+        ]);
+
+        $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'ITEM REMOTO',
+            'especificacion' => $remoteUrl,
+        ]);
+        $this->createProjectItemRecord(['id_item' => 1, 'prioridad' => 1]);
+
+        $response = $this->get('/api/v1/projects/1/specifications/pdf');
+
+        $response->assertOk()->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+        Http::assertSent(fn ($request): bool => $request->url() === $remoteUrl);
+    }
+
+    public function test_project_specifications_pdf_rejects_an_invalid_remote_pdf(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        config()->set('services.repository.endpoint', 'https://repository.test/api/v1/repository/sipre');
+        $remoteUrl = 'https://repository.test/files/not-a-pdf.pdf';
+
+        Http::fake([
+            $remoteUrl => Http::response('not a PDF', 200, ['Content-Type' => 'application/pdf']),
+        ]);
+
+        $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'ITEM REMOTO INVÁLIDO',
+            'especificacion' => $remoteUrl,
+        ]);
+        $this->createProjectItemRecord(['id_item' => 1, 'prioridad' => 1]);
+
+        $this->getJson('/api/v1/projects/1/specifications/pdf')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('specifications')
+            ->assertJsonPath('items.0.status', 'remote_unavailable');
+    }
+
+    public function test_project_specifications_pdf_normalizes_a_repository_pdf_for_fpdi(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        config()->set('services.repository.endpoint', 'https://repository.test/api/v1/repository/sipre');
+        $remoteUrl = 'https://repository.test/files/unreadable.pdf';
+
+        Http::fake([
+            $remoteUrl => Http::response("%PDF-1.4\n%%EOF\n", 200, ['Content-Type' => 'application/pdf']),
+        ]);
+
+        $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'ITEM REMOTO NO LEGIBLE',
+            'especificacion' => $remoteUrl,
+        ]);
+        $this->createProjectItemRecord(['id_item' => 1, 'prioridad' => 1]);
+
+        $this->get('/api/v1/projects/1/specifications/pdf')
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
     }
 
     public function test_specification_signers_assign_pages_and_only_move_shared_page_signatures(): void

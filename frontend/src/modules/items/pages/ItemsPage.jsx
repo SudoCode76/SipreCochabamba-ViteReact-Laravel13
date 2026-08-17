@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Package, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Package, MoreHorizontal, Pencil, Package2, Users, Wrench, FileText, TrendingUp, RefreshCw, BarChart3, Hammer, Trash2, X, Plus, FileDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -75,6 +75,7 @@ export default function ItemsPage() {
   const guidedSearch = searchParams.get("search") ?? "";
   const guidedReturnTo = searchParams.get("return_to") || location.state?.return_to || "";
   const guidedReturnProjectId = searchParams.get("return_project_id") || location.state?.return_project_id || "";
+  const guidedFileAction = searchParams.get("file_action") || "";
   const initialFreshness = location.state?.freshness === "outdated" ? "outdated" : "";
   const [perPage, setPerPage] = useState(10);
   const [order, setOrder] = useState(() => loadListOrder("items"));
@@ -2282,8 +2283,10 @@ export default function ItemsPage() {
 
                   <div className="grid gap-5 sm:grid-cols-2">
                     <div className="flex flex-col gap-2">
-                      <Label htmlFor="specification_file" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Especificaciones Tecnicas</Label>
-                      <Input id="specification_file" name="specification_file" type="file" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                      <Label htmlFor="specification_file" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                        {guidedFileAction === "replace" ? "Reemplazar especificaciones tecnicas" : "Especificaciones Tecnicas"}
+                      </Label>
+                      <Input id="specification_file" name="specification_file" type="file" accept="application/pdf,.pdf" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
                     </div>
                     <div className="flex flex-col gap-2">
                       <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Especificaciones Tecnicas Cargada</span>
@@ -2296,7 +2299,7 @@ export default function ItemsPage() {
 
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="sheet_file" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Ficha Tecnica</Label>
-                      <Input id="sheet_file" name="sheet_file" type="file" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
+                      <Input id="sheet_file" name="sheet_file" type="file" accept="application/pdf,.pdf" className="h-12 rounded-2xl border-border/80 bg-background/90 file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-4 file:py-2" />
                     </div>
                     <div className="flex flex-col gap-2">
                       <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Ficha Tecnica Cargada</span>
@@ -2307,6 +2310,13 @@ export default function ItemsPage() {
                       )}
                     </div>
                   </div>
+
+                  {guidedFileAction === "replace" && (
+                    <Alert>
+                      <AlertTriangle className="size-4" />
+                      <AlertDescription>La especificación actual no permite generar el reporte. Selecciona un PDF legible para reemplazarla.</AlertDescription>
+                    </Alert>
+                  )}
 
                   {filesError && (
                     <Alert variant="destructive">

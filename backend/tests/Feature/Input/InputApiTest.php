@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\InteractsWithLegacyAuth;
@@ -554,9 +555,9 @@ class InputApiTest extends TestCase
             ->assertJsonPath('data.quote.id_log_insumo', 1)
             ->assertJsonPath('data.quote.id_solicitud', 8)
             ->assertJsonPath('data.quote.archivo_available', true)
-            ->assertJsonPath('data.quote.archivo', 'archivos/cotizaciones/cotizacion_valida_quote.pdf')
-            ->assertJsonPath('data.quote.archivo1', 'archivos/cotizaciones/cotizacion_propuesto1_quote_a.pdf')
-            ->assertJsonPath('data.quote.archivo2', 'archivos/cotizaciones/cotizacion_propuesto2_quote_b.pdf')
+            ->assertJsonPath('data.quote.archivo', 'https://repository.test/files/document-1.pdf')
+            ->assertJsonPath('data.quote.archivo1', 'https://repository.test/files/document-2.pdf')
+            ->assertJsonPath('data.quote.archivo2', 'https://repository.test/files/document-3.pdf')
             ->assertJsonPath('data.quote.archivo_label', 'Propuesta oficial vigente')
             ->assertJsonPath('data.quote.archivo1_label', 'Propuesta alternativa 1 vigente')
             ->assertJsonPath('data.quote.archivo2_label', 'Propuesta alternativa 2 vigente');
@@ -567,6 +568,23 @@ class InputApiTest extends TestCase
             'id_log_insumo' => 1,
             'id_solicitud' => 8,
         ]);
+    }
+
+    public function test_quote_upload_persists_repository_metadata_before_creating_the_local_quote(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createInput();
+        Schema::drop('cotizaciones');
+
+        $this->postJson('/api/v1/inputs/1/quotes', [
+            'valido' => UploadedFile::fake()->create('quote.pdf', 100, 'application/pdf'),
+        ])->assertServerError();
+
+        $this->assertDatabaseHas('repository_files', [
+            'repository_id' => 'test-repository-file-1',
+            'url_file' => 'https://repository.test/files/document-1.pdf',
+        ]);
+        $this->assertDatabaseCount('repository_file_links', 0);
     }
 
     public function test_standalone_quote_without_log_remains_unassigned(): void
@@ -720,13 +738,13 @@ class InputApiTest extends TestCase
         $this->assertDatabaseHas('cotizaciones', [
             'id_insumo' => 1,
             'id_log_insumo' => $logId,
-            'archivo' => 'archivos/cotizaciones/cotizacion_valida_quote.pdf',
+            'archivo' => 'https://repository.test/files/document-1.pdf',
         ]);
 
         $this->getJson('/api/v1/inputs/1/history')
             ->assertOk()
             ->assertJsonPath('data.items.0.id_log_insumo', $logId)
-            ->assertJsonPath('data.items.0.quotes.0.archivo', 'archivos/cotizaciones/cotizacion_valida_quote.pdf');
+            ->assertJsonPath('data.items.0.quotes.0.archivo', 'https://repository.test/files/document-1.pdf');
     }
 
     public function test_quote_upload_requires_pdf_under_legacy_limit_and_at_least_one_file(): void

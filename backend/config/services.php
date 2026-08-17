@@ -48,4 +48,13 @@ return [
         'timeout' => env('CIUDADANIA_DIGITAL_TIMEOUT', 30),
     ],
 
+    'repository' => [
+        'endpoint' => env('REPOSITORY_API_URL', 'https://repositoriogamcdev.cochabamba.bo/api/v1/repository/sipre'),
+        'system_id' => env('REPOSITORY_SYSTEM_ID', '00e8a371-8927-49b6-a6aa-0c600e4b6a19'),
+        'collector' => env('REPOSITORY_COLLECTOR', 'SISTEMA SIPRE'),
+        'timeout' => env('REPOSITORY_TIMEOUT', 60),
+        'connect_timeout' => env('REPOSITORY_CONNECT_TIMEOUT', 10),
+        'max_pdf_download_bytes' => env('REPOSITORY_MAX_PDF_DOWNLOAD_BYTES', 25 * 1024 * 1024),
+    ],
+
 ];

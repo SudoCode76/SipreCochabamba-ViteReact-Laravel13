@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Item;
 
+use App\Models\Item;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SystemFunction;
@@ -442,14 +443,18 @@ class GeneralAndObrasItemApiTest extends TestCase
         ]);
 
         $response->assertOk()
-            ->assertJsonPath('data.item.specification', 'archivos/especificaciones/especificacion_1.pdf')
+            ->assertJsonPath('data.item.specification', 'https://repository.test/files/document-1.pdf')
             ->assertJsonPath('data.item.sheet', 'archivos/items/fichas/ficha-anterior.pdf');
 
         $this->assertDatabaseHas('item', [
             'id_item' => 1,
             'ficha' => 'archivos/items/fichas/ficha-anterior.pdf',
         ]);
-        Storage::disk('public')->assertExists($response->json('data.item.specification'));
+        $this->assertDatabaseHas('repository_file_links', [
+            'linkable_type' => Item::class,
+            'linkable_id' => 1,
+            'field' => 'especificacion',
+        ]);
     }
 
     public function test_can_update_both_item_files_and_reject_oversized_upload(): void
@@ -469,10 +474,10 @@ class GeneralAndObrasItemApiTest extends TestCase
         ]);
 
         $response->assertOk()
-            ->assertJsonPath('data.item.specification', 'archivos/especificaciones/especificacion_1.pdf')
-            ->assertJsonPath('data.item.sheet', 'archivos/fichas_tecnicas/ficha_1.pdf');
-        Storage::disk('public')->assertExists($response->json('data.item.specification'));
-        Storage::disk('public')->assertExists($response->json('data.item.sheet'));
+            ->assertJsonPath('data.item.specification', 'https://repository.test/files/document-1.pdf')
+            ->assertJsonPath('data.item.sheet', 'https://repository.test/files/document-2.pdf');
+        $this->assertDatabaseCount('repository_files', 2);
+        $this->assertDatabaseCount('repository_file_links', 2);
 
         $this->withHeaders(['Accept' => 'application/json'])->post('/api/v1/items/1/files', [
             'item' => 'ITEM FNDR TEST',

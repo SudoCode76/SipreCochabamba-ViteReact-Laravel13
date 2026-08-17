@@ -31,6 +31,7 @@ use App\Modules\Items\Services\MachineryBreakdownPdfService;
 use App\Modules\Items\Services\MaterialBreakdownPdfService;
 use App\Services\AuditService;
 use App\Services\Files\PublicFileService;
+use App\Services\Repository\RepositoryFileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Request as HttpRequest;
@@ -57,6 +58,7 @@ class ItemController extends Controller
         private readonly ItemBudgetXlsxService $itemBudgetXlsxService,
         private readonly AuditService $auditService,
         private readonly PublicFileService $publicFileService,
+        private readonly RepositoryFileService $repositoryFiles,
     ) {}
 
     public function fndrContext(Request $request): JsonResponse
@@ -433,25 +435,30 @@ class ItemController extends Controller
             $item->id_usuario = $request->user()->id_usuario;
         }
 
+        $repositoryFiles = [];
+
         if ($request->hasFile('specification_file')) {
-            $item->especificacion = $this->publicFileService->storeItemSpecification(
-                $request->file('specification_file'),
-                (int) $item->id_item,
-            );
+            $source = $request->file('specification_file');
+            $upload = $this->repositoryFiles->upload($source, ['document_type' => 'especificacion']);
+            $item->especificacion = $upload->fileUrl;
+            $repositoryFiles['especificacion'] = $this->repositoryFiles->persist($upload, $source);
         } elseif ($request->filled('specification')) {
             $item->especificacion = trim((string) $request->input('specification'));
         }
 
         if ($request->hasFile('sheet_file')) {
-            $item->ficha = $this->publicFileService->storeItemTechnicalSheet(
-                $request->file('sheet_file'),
-                (int) $item->id_item,
-            );
+            $source = $request->file('sheet_file');
+            $upload = $this->repositoryFiles->upload($source, ['document_type' => 'ficha_tecnica']);
+            $item->ficha = $upload->fileUrl;
+            $repositoryFiles['ficha'] = $this->repositoryFiles->persist($upload, $source);
         } elseif ($request->filled('sheet')) {
             $item->ficha = trim((string) $request->input('sheet'));
         }
 
         $item->save();
+        foreach ($repositoryFiles as $field => $repositoryFile) {
+            $this->repositoryFiles->link($repositoryFile, $item, $field);
+        }
         $item->load(['groupCatalog', 'subgroupCatalog', 'unitMeasure']);
         $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se actualizo el item '.$item->item);
 
@@ -599,21 +606,26 @@ class ItemController extends Controller
             return $this->forbiddenResponse('No tiene permisos para adjuntar archivos al item.');
         }
 
+        $repositoryFiles = [];
+
         if ($request->hasFile('specification_file')) {
-            $item->especificacion = $this->publicFileService->storeItemSpecification(
-                $request->file('specification_file'),
-                (int) $item->id_item,
-            );
+            $source = $request->file('specification_file');
+            $upload = $this->repositoryFiles->upload($source, ['document_type' => 'especificacion']);
+            $item->especificacion = $upload->fileUrl;
+            $repositoryFiles['especificacion'] = $this->repositoryFiles->persist($upload, $source);
         }
 
         if ($request->hasFile('sheet_file')) {
-            $item->ficha = $this->publicFileService->storeItemTechnicalSheet(
-                $request->file('sheet_file'),
-                (int) $item->id_item,
-            );
+            $source = $request->file('sheet_file');
+            $upload = $this->repositoryFiles->upload($source, ['document_type' => 'ficha_tecnica']);
+            $item->ficha = $upload->fileUrl;
+            $repositoryFiles['ficha'] = $this->repositoryFiles->persist($upload, $source);
         }
 
         $item->save();
+        foreach ($repositoryFiles as $field => $repositoryFile) {
+            $this->repositoryFiles->link($repositoryFile, $item, $field);
+        }
         $this->auditService->record($request->user(), $request->ip(), 'ITEMS: se actualizaron los archivos del item '.$item->item);
 
         return response()->json([
