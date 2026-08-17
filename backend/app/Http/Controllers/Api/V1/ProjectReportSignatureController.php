@@ -115,10 +115,16 @@ class ProjectReportSignatureController extends Controller
         }
 
         $validated = $request->validate([
-            'is_enabled' => ['required_without_all:requires_finalized_project,validity_days', 'boolean'],
-            'requires_finalized_project' => ['required_without_all:is_enabled,validity_days', 'boolean'],
-            'validity_days' => ['required_without_all:is_enabled,requires_finalized_project', 'integer', 'min:1', 'max:3650'],
+            'is_enabled' => ['sometimes', 'boolean'],
+            'requires_finalized_project' => ['sometimes', 'boolean'],
+            'validity_days' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:3650'],
         ]);
+
+        if ($validated === []) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'configuration' => ['Debe proporcionar al menos una configuración para actualizar.'],
+            ]);
+        }
 
         $report = ProjectSignableReport::query()
             ->where('report_key', $reportKey)
@@ -126,7 +132,9 @@ class ProjectReportSignatureController extends Controller
 
         $updates = collect($validated)
             ->except('requires_finalized_project')
-            ->map(fn ($value, string $key) => $key === 'validity_days' ? (int) $value : (bool) $value)
+            ->map(fn ($value, string $key) => $key === 'validity_days'
+                ? ($value === null ? null : (int) $value)
+                : (bool) $value)
             ->all();
 
         $scope = ProjectSignableReportService::REPORTS[$report->report_key]['scope'] ?? 'project';
@@ -142,7 +150,7 @@ class ProjectReportSignatureController extends Controller
                 'description' => $report->description,
                 'is_enabled' => (bool) $report->is_enabled,
                 'requires_finalized_project' => $scope !== 'item',
-                'validity_days' => (int) ($report->validity_days ?? 30),
+                'validity_days' => $report->validity_days === null ? null : (int) $report->validity_days,
             ],
         ], 'Configuración de firma actualizada correctamente.');
     }

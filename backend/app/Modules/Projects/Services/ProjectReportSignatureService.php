@@ -2751,7 +2751,8 @@ class ProjectReportSignatureService
         $accessToken = $this->accessTokenFrom($parameters);
         $signatureCode = $this->signatureCode($signature);
         $validFrom = now();
-        $validTo = $validFrom->copy()->addDays($this->validityDaysFor($signature));
+        $validityDays = $this->validityDaysFor($signature);
+        $validTo = $validityDays === null ? '' : $validFrom->copy()->addDays($validityDays)->toIso8601String();
         $previousSigned = $this->previousSignedFor($signature);
         $signAllPages = $this->shouldSignAllPages($parameters)
             || (bool) data_get($signature->request_payload, 'sign_all_pages');
@@ -2773,7 +2774,7 @@ class ProjectReportSignatureService
             'asignaciones' => '',
             'num_documento' => '',
             'valid_from' => $validFrom->toIso8601String(),
-            'valid_to' => $validTo->toIso8601String(),
+            'valid_to' => $validTo,
             'signed_position' => 'BOTTOM',
         ];
 
@@ -2863,13 +2864,13 @@ class ProjectReportSignatureService
         }
     }
 
-    private function validityDaysFor(ProjectReportSignature $signature): int
+    private function validityDaysFor(ProjectReportSignature $signature): ?int
     {
         $days = ProjectSignableReport::query()
             ->where('report_key', $signature->report_key)
             ->value('validity_days');
 
-        return max(1, min(3650, (int) ($days ?? 30)));
+        return $days === null ? null : max(1, min(3650, (int) $days));
     }
 
     private function resolvedApprovalSignature(ProjectReportSignature $signature): ?ProjectReportSignature
