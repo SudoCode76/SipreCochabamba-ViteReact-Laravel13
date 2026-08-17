@@ -20,6 +20,14 @@ function parseMessageFromPayload(payload) {
     return "";
   }
 
+  const fieldError = payload.errors && typeof payload.errors === "object"
+    ? Object.values(payload.errors).flat().find((error) => typeof error === "string" && error)
+    : "";
+
+  if (fieldError) {
+    return fieldError;
+  }
+
   if (typeof payload.message === "string") {
     return payload.message;
   }

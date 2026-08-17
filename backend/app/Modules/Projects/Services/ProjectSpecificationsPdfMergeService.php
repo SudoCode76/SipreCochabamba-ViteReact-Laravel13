@@ -167,6 +167,16 @@ class ProjectSpecificationsPdfMergeService
                 continue;
             }
 
+            $sourceHash = hash_file('sha256', $resolvedFile['path']);
+            if ($sourceHash === false) {
+                if ($resolvedFile['temporary']) {
+                    @unlink($resolvedFile['path']);
+                }
+                $errors[] = $this->itemError($projectItem, 'No se pudo verificar la especificación técnica.', 'specification', 'invalid_pdf');
+
+                continue;
+            }
+
             $compatibleFile = $this->openFpdiCompatiblePdf($pdf, $resolvedFile['path']);
 
             if ($compatibleFile === null) {
@@ -182,18 +192,6 @@ class ProjectSpecificationsPdfMergeService
                 @unlink($resolvedFile['path']);
             }
 
-            try {
-                $fileHash = hash_file('sha256', $compatibleFile['path']);
-                if ($fileHash === false) {
-                    throw new \RuntimeException('No se pudo calcular la huella del PDF.');
-                }
-            } catch (Throwable) {
-                $this->deleteTemporaryFiles([$compatibleFile]);
-                $errors[] = $this->itemError($projectItem, 'La especificación técnica no es un PDF legible o está dañada.', 'specification', 'invalid_pdf');
-
-                continue;
-            }
-
             $entries[] = [
                 'project_item' => $projectItem,
                 'path' => $compatibleFile['path'],
@@ -201,7 +199,7 @@ class ProjectSpecificationsPdfMergeService
                 'page_count' => $compatibleFile['page_count'],
                 'start_page' => $nextPage,
                 'end_page' => $nextPage + $compatibleFile['page_count'] - 1,
-                'file_hash' => $fileHash,
+                'file_hash' => $sourceHash,
             ];
             $nextPage += $compatibleFile['page_count'];
         }
