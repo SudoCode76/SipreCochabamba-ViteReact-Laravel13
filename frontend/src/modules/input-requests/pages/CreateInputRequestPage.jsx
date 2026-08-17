@@ -353,7 +353,7 @@ export default function CreateInputRequestPage() {
                     <input
                       type="file"
                       className="hidden"
-                      accept=".pdf,.jpg,.jpeg,.png"
+                      accept="application/pdf,.pdf"
                       onChange={(e) => handleFileChange(e, setArchivoValid)}
                     />
                   </label>
@@ -370,7 +370,7 @@ export default function CreateInputRequestPage() {
                     <input
                       type="file"
                       className="hidden"
-                      accept=".pdf"
+                      accept="application/pdf,.pdf"
                       onChange={(e) => handleFileChange(e, setArchivoPropuesto1)}
                     />
                   </label>
@@ -387,7 +387,7 @@ export default function CreateInputRequestPage() {
                     <input
                       type="file"
                       className="hidden"
-                      accept=".pdf"
+                      accept="application/pdf,.pdf"
                       onChange={(e) => handleFileChange(e, setArchivoPropuesto2)}
                     />
                   </label>

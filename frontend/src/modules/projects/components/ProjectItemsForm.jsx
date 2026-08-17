@@ -93,6 +93,22 @@ function writeReportFilesSession(projectId, payload) {
   }
 }
 
+function reportFileActionLabel(item) {
+  return item?.status === "missing" ? "Cargar archivo" : "Reemplazar archivo";
+}
+
+function reportFileResolutionMessage(item) {
+  if (item?.status === "invalid_pdf") {
+    return "El archivo actual debe reemplazarse por un PDF legible para poder generar el reporte.";
+  }
+
+  if (item?.status === "remote_unavailable") {
+    return "El archivo actual debe reemplazarse porque no se puede descargar desde el repositorio externo.";
+  }
+
+  return null;
+}
+
 async function extractReportErrorPayload(error, fallback) {
   const data = error?.response?.data;
 
@@ -620,6 +636,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     const query = new URLSearchParams();
     query.set("search", item.name || item.item || "");
     query.set("open_files_for", String(item.id_item ?? ""));
+    query.set("file_action", item.status === "missing" ? "upload" : "replace");
     query.set("return_to", `/Proyecto/${projectId}/items`);
     query.set("return_project_id", String(projectId));
     navigate(`/items?${query.toString()}`, {
@@ -1493,15 +1510,18 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
                     )}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">{item.reason || "Tiene datos pendientes para generar el reporte."}</p>
+                  {reportFileResolutionMessage(item) && (
+                    <p className="mt-1 text-sm font-medium text-amber-700">{reportFileResolutionMessage(item)}</p>
+                  )}
                 </div>
                 {isUploaded ? (
                   <div className="inline-flex shrink-0 items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
                     <CheckCircle2 className="size-4" />
-                    Listo
+                    Archivo reemplazado
                   </div>
                 ) : (
                 <Button type="button" className="shrink-0 rounded-full" onClick={() => handleGoToItemFiles(item)}>
-                  Cargar archivo
+                  {reportFileActionLabel(item)}
                 </Button>
                 )}
               </div>

@@ -25,8 +25,8 @@ function buildInitialForm(request) {
   };
 }
 
-function QuoteCard({ title, file, replacementName, onChange }) {
-  const fileUrl = storageUrl(file);
+function QuoteCard({ title, file, fileUrl: providedFileUrl, replacementName, onChange }) {
+  const fileUrl = storageUrl(providedFileUrl ?? file);
 
   return (
     <div className="flex flex-col items-center gap-4 rounded-[28px] border border-border/70 bg-background/80 px-6 py-7 text-center">
@@ -46,7 +46,7 @@ function QuoteCard({ title, file, replacementName, onChange }) {
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border/80 px-4 py-2 text-sm hover:bg-muted/40">
             <Upload className="size-4" />
             Reemplazar archivo
-            <input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx" onChange={onChange} />
+            <input type="file" className="hidden" accept="application/pdf,.pdf" onChange={onChange} />
           </label>
         ) : null}
         {replacementName ? <p className="text-xs text-muted-foreground">Nuevo: {replacementName}</p> : null}
@@ -264,18 +264,21 @@ export default function EditInputRequestPage() {
                 <QuoteCard
                   title="Cotización Válida"
                   file={request.archivo}
+                  fileUrl={request.archivo_url}
                   replacementName={archivoValid?.name}
                   onChange={replaceQuotes ? (e) => setArchivoValid(e.target.files?.[0] ?? null) : null}
                 />
                 <QuoteCard
                   title="Cotización Propuesta 1"
                   file={request.archivo1}
+                  fileUrl={request.archivo1_url}
                   replacementName={archivoPropuesto1?.name}
                   onChange={replaceQuotes ? (e) => setArchivoPropuesto1(e.target.files?.[0] ?? null) : null}
                 />
                 <QuoteCard
                   title="Cotización Propuesta 2"
                   file={request.archivo2}
+                  fileUrl={request.archivo2_url}
                   replacementName={archivoPropuesto2?.name}
                   onChange={replaceQuotes ? (e) => setArchivoPropuesto2(e.target.files?.[0] ?? null) : null}
                 />

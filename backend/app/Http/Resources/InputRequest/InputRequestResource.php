@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\InputRequest;
 
+use App\Services\Files\PublicFileService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -40,8 +41,14 @@ class InputRequestResource extends JsonResource
             'usuario_aprobacion' => $this->when(isset($this->usuario_aprobacion), $this->usuario_aprobacion),
             'fecha_aprobacion' => $this->when(isset($this->fecha_aprobacion) && $this->fecha_aprobacion !== null, fn () => $this->fecha_aprobacion?->toDateString()),
             'archivo' => $this->archivo,
+            'archivo_url' => app(PublicFileService::class)->url($this->archivo),
+            'archivo_available' => app(PublicFileService::class)->exists($this->archivo),
             'archivo1' => $this->archivo1,
+            'archivo1_url' => app(PublicFileService::class)->url($this->archivo1),
+            'archivo1_available' => app(PublicFileService::class)->exists($this->archivo1),
             'archivo2' => $this->archivo2,
+            'archivo2_url' => app(PublicFileService::class)->url($this->archivo2),
+            'archivo2_available' => app(PublicFileService::class)->exists($this->archivo2),
             'unidad_medida' => $this->unidad_medida,
             'tipo' => $this->tipo,
             'fecha_modificacion' => $updatedAt?->toIso8601String(),
