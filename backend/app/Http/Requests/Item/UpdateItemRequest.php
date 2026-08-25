@@ -34,8 +34,8 @@ class UpdateItemRequest extends FormRequest
         if ($isFileUpdate && ! $this->hasAny(['group_id', 'subgroup_id', 'status', 'unit_measure_id'])) {
             return [
                 'item' => ['required', 'string', 'max:100'],
-                'specification' => ['nullable', 'string', 'max:200'],
-                'sheet' => ['nullable', 'string', 'max:200'],
+                'specification' => ['nullable', 'string', 'max:2048'],
+                'sheet' => ['nullable', 'string', 'max:2048'],
                 'specification_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
                 'sheet_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
             ];
@@ -52,8 +52,8 @@ class UpdateItemRequest extends FormRequest
             ],
             'unit_measure_id' => ['nullable', 'integer', 'exists:unidad_medida,id_unidad_medida'],
             'status' => ['required', 'string', 'size:2', 'in:AC,DC'],
-            'specification' => ['nullable', 'string', 'max:200'],
-            'sheet' => ['nullable', 'string', 'max:200'],
+            'specification' => ['nullable', 'string', 'max:2048'],
+            'sheet' => ['nullable', 'string', 'max:2048'],
             'specification_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
             'sheet_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
         ];

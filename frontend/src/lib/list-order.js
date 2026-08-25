@@ -1,4 +1,4 @@
-const VALID_ORDERS = new Set(["legacy", "recent", "oldest"]);
+const VALID_ORDERS = new Set(["legacy", "recent", "oldest", "missing_specifications"]);
 
 export function loadListOrder(page) {
   try {

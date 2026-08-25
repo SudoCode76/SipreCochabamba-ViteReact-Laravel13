@@ -29,6 +29,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Sanctum;
@@ -188,7 +189,7 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.permissions.can_manage', true)
             ->assertJsonPath('data.items.0.is_enabled', false)
             ->assertJsonPath('data.items.0.requires_finalized_project', true)
-            ->assertJsonPath('data.items.0.validity_days', 30);
+            ->assertJsonPath('data.items.0.validity_days', null);
 
         $this->patchJson('/api/v1/signable-project-reports/general_budget', [
             'is_enabled' => true,
@@ -214,6 +215,12 @@ class ProjectApiTest extends TestCase
         $this->patchJson('/api/v1/signable-project-reports/general_budget', [
             'validity_days' => 0,
         ])->assertUnprocessable();
+
+        $this->patchJson('/api/v1/signable-project-reports/general_budget', [
+            'validity_days' => null,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.report.validity_days', null);
 
         $this->createProjectRecord(['aprobado' => 'PD']);
 
@@ -1744,6 +1751,7 @@ class ProjectApiTest extends TestCase
         $this->assertSame('BOTTOM', $capturedPayload['signed_position']);
         $this->assertArrayHasKey('valid_from', $capturedPayload);
         $this->assertArrayHasKey('valid_to', $capturedPayload);
+        $this->assertSame('', $capturedPayload['valid_to']);
         $this->assertSame($capturedPayload['code'], $signature->request_payload['code']);
         $this->assertArrayNotHasKey('code ', $signature->request_payload);
         $this->assertArrayNotHasKey('id_system', $signature->request_payload);
@@ -1753,9 +1761,7 @@ class ProjectApiTest extends TestCase
         $this->assertSame($capturedPayload['valid_from'], $signature->request_payload['valid_from']);
         $this->assertSame($capturedPayload['valid_to'], $signature->request_payload['valid_to']);
         $this->assertArrayNotHasKey('acces_token', $signature->request_payload);
-        $this->assertTrue(Carbon::parse($capturedPayload['valid_to'])->greaterThan(
-            Carbon::parse($capturedPayload['valid_from'])
-        ));
+        $this->assertSame('', $signature->request_payload['valid_to']);
     }
 
     public function test_report_signing_uses_exact_backend_login_callback_without_query(): void
@@ -3552,6 +3558,91 @@ class ProjectApiTest extends TestCase
             ->assertHeader('content-disposition', 'inline; filename="especificaciones_proyecto.pdf"');
 
         $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_can_generate_project_specifications_pdf_from_a_remote_repository_url(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        config()->set('services.repository.endpoint', 'https://repository.test/api/v1/repository/sipre');
+        $remoteUrl = 'https://repository.test/files/specification.pdf';
+        $pdf = $this->fakePdf('Especificación remota');
+
+        Http::fake([
+            $remoteUrl => Http::response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Length' => (string) strlen($pdf),
+            ]),
+        ]);
+
+        $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'ITEM REMOTO',
+            'especificacion' => $remoteUrl,
+        ]);
+        $this->createProjectItemRecord(['id_item' => 1, 'prioridad' => 1]);
+
+        $response = $this->get('/api/v1/projects/1/specifications/pdf');
+
+        $response->assertOk()->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+        Http::assertSent(fn ($request): bool => $request->url() === $remoteUrl);
+    }
+
+    public function test_project_specifications_pdf_rejects_an_invalid_remote_pdf(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        config()->set('services.repository.endpoint', 'https://repository.test/api/v1/repository/sipre');
+        $remoteUrl = 'https://repository.test/files/not-a-pdf.pdf';
+
+        Http::fake([
+            $remoteUrl => Http::response('not a PDF', 200, ['Content-Type' => 'application/pdf']),
+        ]);
+
+        $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'ITEM REMOTO INVÁLIDO',
+            'especificacion' => $remoteUrl,
+        ]);
+        $this->createProjectItemRecord(['id_item' => 1, 'prioridad' => 1]);
+
+        $this->getJson('/api/v1/projects/1/specifications/pdf')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('specifications')
+            ->assertJsonPath('items.0.status', 'remote_unavailable');
+    }
+
+    public function test_project_specifications_pdf_normalizes_a_repository_pdf_for_fpdi(): void
+    {
+        Sanctum::actingAs($this->createLegacyAuthUser());
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->createProjectRecord();
+        config()->set('services.repository.endpoint', 'https://repository.test/api/v1/repository/sipre');
+        $remoteUrl = 'https://repository.test/files/unreadable.pdf';
+
+        Http::fake([
+            $remoteUrl => Http::response("%PDF-1.4\n%%EOF\n", 200, ['Content-Type' => 'application/pdf']),
+        ]);
+
+        $this->createItemRecord([
+            'id_item' => 1,
+            'item' => 'ITEM REMOTO NO LEGIBLE',
+            'especificacion' => $remoteUrl,
+        ]);
+        $this->createProjectItemRecord(['id_item' => 1, 'prioridad' => 1]);
+
+        $this->get('/api/v1/projects/1/specifications/pdf')
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
     }
 
     public function test_specification_signers_assign_pages_and_only_move_shared_page_signatures(): void

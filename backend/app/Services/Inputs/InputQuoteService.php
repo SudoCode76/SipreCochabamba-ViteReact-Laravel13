@@ -6,7 +6,8 @@ use App\Http\Requests\Input\StoreInputQuoteRequest;
 use App\Http\Requests\Input\UpdateInputPriceRequest;
 use App\Models\Input;
 use App\Models\InputQuote;
-use App\Services\Files\PublicFileService;
+use App\Models\RepositoryFile;
+use App\Services\Repository\RepositoryFileService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
@@ -15,31 +16,36 @@ use Illuminate\Validation\ValidationException;
 class InputQuoteService
 {
     public function __construct(
-        private readonly PublicFileService $publicFileService,
+        private readonly RepositoryFileService $repositoryFiles,
     ) {}
 
     public function create(Input $input, StoreInputQuoteRequest $request): InputQuote
     {
-        return $input->quotes()->create($this->quotePayload($request, $request->filled('log_id')
+        $uploads = $this->uploads($request);
+
+        $quote = $input->quotes()->create($this->quotePayload($request, $request->filled('log_id')
             ? (int) $request->integer('log_id')
-            : null));
+            : null, $uploads));
+        $this->linkUploads($quote, $uploads);
+
+        return $quote;
     }
 
-    private function quotePayload(StoreInputQuoteRequest|UpdateInputPriceRequest $request, ?int $logId): array
+    private function quotePayload(StoreInputQuoteRequest|UpdateInputPriceRequest $request, ?int $logId, array $uploads = []): array
     {
         $payload = [
             'condicion' => $request->filled('condition') ? trim($request->string('condition')->toString()) : 'VG',
             'estado' => $request->filled('status') ? strtoupper($request->string('status')->toString()) : 'AC',
             'id_log_insumo' => $logId,
-            'archivo' => $this->resolveFilePath($request->file('valido'), $request->input('file'), 'valido'),
+            'archivo' => $this->resolveFilePath($request->file('valido'), $request->input('file'), 'valido', $uploads),
             'fecha' => $request->filled('date') ? $request->date('date')->toDateString() : now()->toDateString(),
-            'archivo1' => $this->resolveFilePath($request->file('propuesto_1'), $request->input('file_1'), 'propuesto_1'),
-            'archivo2' => $this->resolveFilePath($request->file('propuesto_2'), $request->input('file_2'), 'propuesto_2'),
+            'archivo1' => $this->resolveFilePath($request->file('propuesto_1'), $request->input('file_1'), 'propuesto_1', $uploads),
+            'archivo2' => $this->resolveFilePath($request->file('propuesto_2'), $request->input('file_2'), 'propuesto_2', $uploads),
             'id_solicitud' => $request->filled('request_id') ? (int) $request->integer('request_id') : null,
         ];
 
         if (Schema::hasColumn('cotizaciones', 'archivo3')) {
-            $payload['archivo3'] = $this->resolveFilePath($request->file('propuesto_3'), $request->input('file_3'), 'propuesto_3');
+            $payload['archivo3'] = $this->resolveFilePath($request->file('propuesto_3'), $request->input('file_3'), 'propuesto_3', $uploads);
         }
 
         return $payload;
@@ -51,7 +57,12 @@ class InputQuoteService
             return null;
         }
 
-        return $input->quotes()->create($this->quotePayload($request, $logId));
+        $uploads = $this->uploads($request);
+
+        $quote = $input->quotes()->create($this->quotePayload($request, $logId, $uploads));
+        $this->linkUploads($quote, $uploads);
+
+        return $quote;
     }
 
     public function unassigned(Input $input): Collection
@@ -150,14 +161,50 @@ class InputQuoteService
         return false;
     }
 
-    private function resolveFilePath(?UploadedFile $uploadedFile, mixed $fallbackPath, string $prefix): ?string
+    /** @return array<string, RepositoryFile> */
+    private function uploads(StoreInputQuoteRequest|UpdateInputPriceRequest $request): array
+    {
+        $uploads = [];
+
+        foreach (['valido', 'propuesto_1', 'propuesto_2', 'propuesto_3'] as $field) {
+            $file = $request->file($field);
+
+            if ($file instanceof UploadedFile) {
+                $upload = $this->repositoryFiles->upload($file, ['document_type' => $field]);
+                $uploads[$field] = $this->repositoryFiles->persist($upload, $file);
+            }
+        }
+
+        return $uploads;
+    }
+
+    /** @param array<string, RepositoryFile> $uploads */
+    private function resolveFilePath(?UploadedFile $uploadedFile, mixed $fallbackPath, string $field, array $uploads): ?string
     {
         if ($uploadedFile instanceof UploadedFile) {
-            return $this->publicFileService->storeQuote($uploadedFile, $prefix);
+            return $uploads[$field]->url_file;
         }
 
         return is_string($fallbackPath) && trim($fallbackPath) !== ''
             ? trim($fallbackPath)
             : null;
+    }
+
+    /** @param array<string, RepositoryFile> $uploads */
+    private function linkUploads(InputQuote $quote, array $uploads): void
+    {
+        foreach ($uploads as $field => $file) {
+            $this->repositoryFiles->link($file, $quote, $this->quoteColumn($field));
+        }
+    }
+
+    private function quoteColumn(string $field): string
+    {
+        return match ($field) {
+            'valido' => 'archivo',
+            'propuesto_1' => 'archivo1',
+            'propuesto_2' => 'archivo2',
+            default => 'archivo3',
+        };
     }
 }

@@ -8,6 +8,9 @@ use App\Models\InputQuote;
 use App\Models\InputRequest;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Services\Repository\RepositoryFileService;
+use App\Services\Repository\RepositoryUploadResult;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -15,12 +18,15 @@ class InputRequestCrudService
 {
     public function __construct(
         private readonly InputRequestFileService $fileService,
+        private readonly RepositoryFileService $repositoryFiles,
     ) {}
 
     public function create(StoreInputSolicitationRequest $request, User $user): InputRequest
     {
-        return DB::transaction(function () use ($request, $user): InputRequest {
-            $files = $this->storeFiles($request);
+        $uploads = $this->persistUploads($this->uploads($request));
+
+        return DB::transaction(function () use ($request, $user, $uploads): InputRequest {
+            $files = $this->fileUrls($uploads);
 
             $inputRequest = InputRequest::query()->create([
                 'descripcion' => strtoupper(trim($request->string('description')->toString())),
@@ -40,7 +46,8 @@ class InputRequestCrudService
                 ...$this->modificationTimestampPayload(),
             ]);
 
-            $this->registerQuoteHistory($inputRequest, $files);
+            $quote = $this->registerQuoteHistory($inputRequest, $files);
+            $this->linkUploads($uploads, $inputRequest, $quote);
             $this->registerAudit($user, $request->ip(), 'Registro de solicitud de insumo '.$inputRequest->descripcion);
 
             return $inputRequest;
@@ -49,9 +56,13 @@ class InputRequestCrudService
 
     public function update(UpdateInputSolicitationRequest $request, InputRequest $inputRequest, User $user): InputRequest
     {
-        return DB::transaction(function () use ($request, $inputRequest, $user): InputRequest {
+        $uploads = $this->shouldReplaceFiles($request)
+            ? $this->persistUploads($this->uploads($request))
+            : [];
+
+        return DB::transaction(function () use ($request, $inputRequest, $user, $uploads): InputRequest {
             $files = $this->shouldReplaceFiles($request)
-                ? $this->storeFiles($request, $inputRequest)
+                ? $this->fileUrls($uploads, $inputRequest)
                 : [
                     'archivo' => $inputRequest->archivo,
                     'archivo1' => $inputRequest->archivo1,
@@ -76,7 +87,8 @@ class InputRequestCrudService
             ]);
 
             if ($this->shouldReplaceFiles($request)) {
-                $this->registerQuoteHistory($inputRequest->refresh(), $files);
+                $quote = $this->registerQuoteHistory($inputRequest->refresh(), $files);
+                $this->linkUploads($uploads, $inputRequest, $quote);
             }
 
             $this->registerAudit($user, $request->ip(), 'Actualizacion de solicitud de insumo '.$inputRequest->descripcion);
@@ -85,12 +97,22 @@ class InputRequestCrudService
         });
     }
 
-    private function storeFiles(StoreInputSolicitationRequest|UpdateInputSolicitationRequest $request, ?InputRequest $current = null): array
+    /** @return array<string, array{source: UploadedFile, upload: RepositoryUploadResult}> */
+    private function uploads(StoreInputSolicitationRequest|UpdateInputSolicitationRequest $request): array
+    {
+        return array_filter([
+            'archivo' => $this->fileService->upload($request->file('valido'), 'valido'),
+            'archivo1' => $this->fileService->upload($request->file('propuesto_1'), 'propuesto_1'),
+            'archivo2' => $this->fileService->upload($request->file('propuesto_2'), 'propuesto_2'),
+        ]);
+    }
+
+    private function fileUrls(array $uploads, ?InputRequest $current = null): array
     {
         return [
-            'archivo' => $this->fileService->store($request->file('valido'), 'valido') ?? $current?->archivo,
-            'archivo1' => $this->fileService->store($request->file('propuesto_1'), 'propuesto_1') ?? $current?->archivo1,
-            'archivo2' => $this->fileService->store($request->file('propuesto_2'), 'propuesto_2') ?? $current?->archivo2,
+            'archivo' => $uploads['archivo']['upload']->fileUrl ?? $current?->archivo,
+            'archivo1' => $uploads['archivo1']['upload']->fileUrl ?? $current?->archivo1,
+            'archivo2' => $uploads['archivo2']['upload']->fileUrl ?? $current?->archivo2,
         ];
     }
 
@@ -102,9 +124,9 @@ class InputRequestCrudService
             || $request->hasFile('propuesto_2');
     }
 
-    private function registerQuoteHistory(InputRequest $inputRequest, array $files): void
+    private function registerQuoteHistory(InputRequest $inputRequest, array $files): InputQuote
     {
-        InputQuote::query()->create([
+        return InputQuote::query()->create([
             'id_insumo' => null,
             'condicion' => 'VALIDO',
             'estado' => 'AC',
@@ -115,6 +137,25 @@ class InputRequestCrudService
             'archivo2' => $files['archivo2'],
             'id_solicitud' => $inputRequest->id_solicitud,
         ]);
+    }
+
+    /** @param array<string, array{source: UploadedFile, upload: RepositoryUploadResult, repository_file: \App\Models\RepositoryFile}> $uploads */
+    private function linkUploads(array $uploads, InputRequest $inputRequest, InputQuote $quote): void
+    {
+        foreach ($uploads as $field => $data) {
+            $this->repositoryFiles->link($data['repository_file'], $inputRequest, $field);
+            $this->repositoryFiles->link($data['repository_file'], $quote, $field);
+        }
+    }
+
+    /** @param array<string, array{source: UploadedFile, upload: RepositoryUploadResult}> $uploads */
+    private function persistUploads(array $uploads): array
+    {
+        foreach ($uploads as $field => $data) {
+            $uploads[$field]['repository_file'] = $this->repositoryFiles->persist($data['upload'], $data['source']);
+        }
+
+        return $uploads;
     }
 
     private function registerAudit(User $user, ?string $ip, string $process): void

@@ -37,11 +37,27 @@ class ProjectIncidenceSummaryPdfService
             } elseif ($items === []) {
                 $pdf->writeHTML('<div><h1>El proyecto no tiene items disponibles para resumir incidencias.</h1></div>', true, false, true, false, '');
             } else {
-                $pdf->writeHTML($this->buildHtml($project, $items, $percentages), true, false, true, false, '');
+                $this->writeCenteredHtml($pdf, $this->buildHtml($project, $items, $percentages));
             }
         }, $signatureLayout);
 
         return MunicipalReportPdfFactory::inlineResponse($pdf, 'resumen_incidencia.pdf');
+    }
+
+    private function writeCenteredHtml($pdf, string $html): void
+    {
+        $margins = $pdf->getMargins();
+        $tableWidth = $pdf->pixelsToUnits(680);
+        $leftMargin = max(0, ($pdf->getPageWidth() - $tableWidth) / 2);
+
+        $pdf->SetLeftMargin($leftMargin);
+        $pdf->SetX($leftMargin);
+
+        try {
+            $pdf->writeHTML($html, true, false, true, false, '');
+        } finally {
+            $pdf->SetMargins($margins['left'], $margins['top'], $margins['right']);
+        }
     }
 
     private function resolvePercentages(Project $project, string $format): array
@@ -107,13 +123,13 @@ class ProjectIncidenceSummaryPdfService
 <table cellpadding="6px" border="1">
 <tr bgcolor="#55827e">
 <td width="25"><b><font color="#fcfdfd">Nº</font></b></td>
-<td width="180"><b><font color="#fcfdfd">Descripcion Item</font></b></td>
-<td><b><font color="#fcfdfd">(F) '.LegacyPdfFormat::number($percentages['cs'], 2).' %</font></b></td>
-<td><b><font color="#fcfdfd">(H) '.LegacyPdfFormat::number($percentages['hm'], 2).' %</font></b></td>
-<td><b><font color="#fcfdfd">(L) '.LegacyPdfFormat::number($percentages['adm'], 2).' %</font></b></td>
-<td><b><font color="#fcfdfd">(M) '.LegacyPdfFormat::number($percentages['util'], 2).' %</font></b></td>
-<td><b><font color="#fcfdfd">(O) '.LegacyPdfFormat::number($percentages['iva'], 2).' %</font></b></td>
-<td><b><font color="#fcfdfd">(P) '.LegacyPdfFormat::number($percentages['it'], 2).' %</font></b></td>
+<td width="280"><b><font color="#fcfdfd">Descripcion Item</font></b></td>
+<td width="62"><b><font color="#fcfdfd">(F) '.LegacyPdfFormat::number($percentages['cs'], 2).' %</font></b></td>
+<td width="62"><b><font color="#fcfdfd">(H) '.LegacyPdfFormat::number($percentages['hm'], 2).' %</font></b></td>
+<td width="62"><b><font color="#fcfdfd">(L) '.LegacyPdfFormat::number($percentages['adm'], 2).' %</font></b></td>
+<td width="62"><b><font color="#fcfdfd">(M) '.LegacyPdfFormat::number($percentages['util'], 2).' %</font></b></td>
+<td width="62"><b><font color="#fcfdfd">(O) '.LegacyPdfFormat::number($percentages['iva'], 2).' %</font></b></td>
+<td width="65"><b><font color="#fcfdfd">(P) '.LegacyPdfFormat::number($percentages['it'], 2).' %</font></b></td>
 </tr>';
 
         $lastGroupId = null;
@@ -133,26 +149,26 @@ class ProjectIncidenceSummaryPdfService
 
             if ($lastGroupId !== $item['id_grupo']) {
                 $html .= '
-<tr bgcolor="#99a3a2"><td class="grupo" colspan="8"><h4><font color="#fcfdfd">'.htmlentities((string) $item['grupo']).'</font></h4></td></tr>
-<tr bgcolor="#55827e"><td class="subgrupo" colspan="8"><h4><font color="#fcfdfd">'.htmlentities((string) $item['subgrupo']).'</font></h4></td></tr>';
+<tr bgcolor="#99a3a2"><td class="grupo" width="680" colspan="8"><h4><font color="#fcfdfd">'.htmlentities((string) $item['grupo']).'</font></h4></td></tr>
+<tr bgcolor="#55827e"><td class="subgrupo" width="680" colspan="8"><h4><font color="#fcfdfd">'.htmlentities((string) $item['subgrupo']).'</font></h4></td></tr>';
                 $lastGroupId = $item['id_grupo'];
                 $lastSubgroupId = $item['id_subgrupo'];
             } elseif ($lastSubgroupId !== $item['id_subgrupo']) {
                 $html .= '
-<tr><td class="tab"></td><td colspan="7">'.htmlentities((string) $item['subgrupo']).'</td></tr>';
+<tr><td class="tab" width="25"></td><td width="655" colspan="7">'.htmlentities((string) $item['subgrupo']).'</td></tr>';
                 $lastSubgroupId = $item['id_subgrupo'];
             }
 
             $html .= '
 <tr>
 <td width="25">'.($index + 1).'</td>
-<td width="180">'.htmlentities((string) $item['descripcion']).'</td>
-<td align="right">'.LegacyPdfFormat::number($f, 2).'</td>
-<td align="right">'.LegacyPdfFormat::number($h, 2).'</td>
-<td align="right">'.LegacyPdfFormat::number($l, 2).'</td>
-<td align="right">'.LegacyPdfFormat::number($m, 2).'</td>
-<td align="right">'.LegacyPdfFormat::number($o, 2).'</td>
-<td align="right">'.LegacyPdfFormat::number($p, 2).'</td>
+<td width="280">'.htmlentities((string) $item['descripcion']).'</td>
+<td width="62" align="right">'.LegacyPdfFormat::number($f, 2).'</td>
+<td width="62" align="right">'.LegacyPdfFormat::number($h, 2).'</td>
+<td width="62" align="right">'.LegacyPdfFormat::number($l, 2).'</td>
+<td width="62" align="right">'.LegacyPdfFormat::number($m, 2).'</td>
+<td width="62" align="right">'.LegacyPdfFormat::number($o, 2).'</td>
+<td width="65" align="right">'.LegacyPdfFormat::number($p, 2).'</td>
 </tr>';
 
             $totals['f'] += $f;
@@ -165,13 +181,13 @@ class ProjectIncidenceSummaryPdfService
 
         $html .= '
 <tr class="totales">
-<td colspan="2">Totales (Bs): </td>
-<td align="right">'.LegacyPdfFormat::number($totals['f'], 2).'</td>
-<td align="right">'.LegacyPdfFormat::number($totals['h'], 2).'</td>
-<td align="right">'.LegacyPdfFormat::number($totals['l'], 2).'</td>
-<td align="right">'.LegacyPdfFormat::number($totals['m'], 2).'</td>
-<td align="right">'.LegacyPdfFormat::number($totals['o'], 2).'</td>
-<td align="right">'.LegacyPdfFormat::number($totals['p'], 2).'</td>
+<td width="305" colspan="2">Totales (Bs): </td>
+<td width="62" align="right">'.LegacyPdfFormat::number($totals['f'], 2).'</td>
+<td width="62" align="right">'.LegacyPdfFormat::number($totals['h'], 2).'</td>
+<td width="62" align="right">'.LegacyPdfFormat::number($totals['l'], 2).'</td>
+<td width="62" align="right">'.LegacyPdfFormat::number($totals['m'], 2).'</td>
+<td width="62" align="right">'.LegacyPdfFormat::number($totals['o'], 2).'</td>
+<td width="65" align="right">'.LegacyPdfFormat::number($totals['p'], 2).'</td>
 </tr>
 </tbody>
 </table>

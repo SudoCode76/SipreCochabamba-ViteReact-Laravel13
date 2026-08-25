@@ -15,6 +15,8 @@ test("guarda solo órdenes válidos y usa el valor predeterminado ante errores",
   assert.equal(loadListOrder("projects"), "legacy");
   assert.equal(saveListOrder("projects", "recent"), true);
   assert.equal(loadListOrder("projects"), "recent");
+  assert.equal(saveListOrder("items", "missing_specifications"), true);
+  assert.equal(loadListOrder("items"), "missing_specifications");
   assert.equal(saveListOrder("projects", "invalid"), false);
 
   globalThis.window.localStorage.getItem = () => {

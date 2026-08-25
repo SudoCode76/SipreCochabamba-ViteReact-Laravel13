@@ -27,9 +27,21 @@ services:
 
   frontend:
     build:
+      target: dev
       args:
         VITE_API_URL: http://localhost:8011/api
         VITE_STORAGE_BASE_URL: http://localhost:8011
         VITE_GIS_BASE_URL: ""
         VITE_REVERB_APP_KEY: sipre-dev-key
         VITE_REVERB_URL: http://localhost:8011
+    ports: !override
+      - "8010:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    command: >
+      sh -c 'if [ ! -d node_modules/laravel-echo ]; then npm ci; fi;
+      exec npm run dev -- --host 0.0.0.0 --port 5173'
+
+volumes:
+  frontend_node_modules:

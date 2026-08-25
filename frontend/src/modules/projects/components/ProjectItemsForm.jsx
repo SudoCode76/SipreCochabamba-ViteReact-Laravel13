@@ -93,6 +93,22 @@ function writeReportFilesSession(projectId, payload) {
   }
 }
 
+function reportFileActionLabel(item) {
+  return item?.status === "missing" ? "Cargar archivo" : "Reemplazar archivo";
+}
+
+function reportFileResolutionMessage(item) {
+  if (item?.status === "invalid_pdf") {
+    return "El archivo actual debe reemplazarse por un PDF legible para poder generar el reporte.";
+  }
+
+  if (item?.status === "remote_unavailable") {
+    return "El archivo actual debe reemplazarse porque no se puede descargar desde el repositorio externo.";
+  }
+
+  return null;
+}
+
 async function extractReportErrorPayload(error, fallback) {
   const data = error?.response?.data;
 
@@ -187,6 +203,10 @@ function buildRow(detail, draft, module) {
   };
 }
 
+function hasTechnicalSpecification(item) {
+  return Boolean(String(item?.especificacion_url ?? "").trim());
+}
+
 const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, projectName, onCancel, onSuccess }, ref) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -204,6 +224,9 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [moduleMove, setModuleMove] = useState(null);
   const [missingSpecificationItem, setMissingSpecificationItem] = useState(null);
+  const [pendingMissingSpecificationRow, setPendingMissingSpecificationRow] = useState(null);
+  const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);
+  const [creatingVersion, setCreatingVersion] = useState(false);
   const [error, setError] = useState(null);
   const [finalizingVersion, setFinalizingVersion] = useState(false);
   const [loadingReport, setLoadingReport] = useState(null);
@@ -333,8 +356,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
         };
       });
 
-      toast.success("Ítems del proyecto guardados correctamente.");
-      onSuccess?.();
+      setSaveSuccessOpen(true);
     },
     onError: (mutationError) => {
       const fieldErrors = mutationError.response?.data?.errors;
@@ -361,6 +383,17 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
   const effectivePrice = draft.precio || (selectedDetail?.precio != null ? String(selectedDetail.precio) : "");
   const canCompareVersions = versions.length > 1;
   const currentVersionOption = versions.find((version) => Number(version.id_proyecto) === Number(projectId)) ?? currentProject;
+  const canFinalizeCurrentVersion = Boolean(
+    canModifyProject
+      && currentProject?.is_current_version
+      && !currentProject?.is_frozen
+      && ["PD", "AP"].includes(String(currentProject?.aprobado ?? "").toUpperCase()),
+  );
+  const canCreateUpdatedVersion = Boolean(
+    canModifyProject
+      && currentProject?.is_current_version
+      && currentProject?.is_frozen,
+  );
   const hasPreviousVersion = versions.length > 1 && Number(currentProject?.version_number || 1) > 1;
   const shouldAskBeforeLeavingUpdatedVersion = Boolean(
     canModifyProject
@@ -433,6 +466,21 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     [effectiveRows],
   );
 
+  const visibleReportWarningsSummary = useMemo(() => {
+    if (!rowsDirty) {
+      return reportWarningsSummary;
+    }
+
+    const itemsCount = effectiveRows.filter((row) => Boolean(row.warnings?.item)).length;
+    const inputsCount = effectiveRows.reduce((count, row) => count + (row.warnings?.inputs?.length ?? 0), 0);
+
+    return {
+      items_count: itemsCount,
+      inputs_count: inputsCount,
+      has_warnings: itemsCount > 0 || inputsCount > 0,
+    };
+  }, [effectiveRows, reportWarningsSummary, rowsDirty]);
+
   const groupedRows = useMemo(() => {
     const groups = new Map();
 
@@ -485,6 +533,15 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     handleDraftChange("itemId", String(option.id));
   };
 
+  const addRowToProject = (row) => {
+    setRows([...effectiveRows, row]);
+    setRowsDirty(true);
+    setDraft(emptyDraft);
+    setSearch("");
+    setItemComboboxOpen(false);
+    setError(null);
+  };
+
   const handleAdd = () => {
     if (isReadOnly) {
       return;
@@ -511,13 +568,21 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
       precio: effectivePrice,
     }, selectedModule);
 
-    setRows([...effectiveRows, nextRow]);
-    setRowsDirty(true);
+    if (!hasTechnicalSpecification(nextRow)) {
+      setPendingMissingSpecificationRow(nextRow);
+      return;
+    }
 
-    setDraft(emptyDraft);
-    setSearch("");
-    setItemComboboxOpen(false);
-    setError(null);
+    addRowToProject(nextRow);
+  };
+
+  const handleConfirmMissingSpecificationAdd = () => {
+    if (!pendingMissingSpecificationRow) {
+      return;
+    }
+
+    addRowToProject(pendingMissingSpecificationRow);
+    setPendingMissingSpecificationRow(null);
   };
 
   const handleRemove = (rowKey) => {
@@ -620,6 +685,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     const query = new URLSearchParams();
     query.set("search", item.name || item.item || "");
     query.set("open_files_for", String(item.id_item ?? ""));
+    query.set("file_action", item.status === "missing" ? "upload" : "replace");
     query.set("return_to", `/Proyecto/${projectId}/items`);
     query.set("return_project_id", String(projectId));
     navigate(`/items?${query.toString()}`, {
@@ -753,6 +819,52 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
     }
   };
 
+  const handleFinalizeCurrentVersion = () => {
+    const message = rowsDirty
+      ? "Hay cambios sin guardar. Al finalizar se congelará la versión con los datos ya guardados. ¿Deseas continuar?"
+      : "Al finalizar, esta versión quedará congelada y no podrá editarse. ¿Deseas continuar?";
+
+    if (!window.confirm(message)) {
+      return;
+    }
+
+    void handleFinalizeUpdatedVersion({
+      skipDirtyConfirmation: true,
+      afterFinalize: () => {},
+    });
+  };
+
+  const handleCreateUpdatedVersion = async () => {
+    if (!window.confirm("Se creará una nueva versión actualizada con los ítems de esta versión finalizada. ¿Deseas continuar?")) {
+      return;
+    }
+
+    setError(null);
+    setCreatingVersion(true);
+
+    try {
+      const response = await projectService.createUpdatedVersion(projectId);
+      const newProjectId = response?.data?.project?.id_proyecto;
+
+      if (!newProjectId) {
+        throw new Error("No se recibió la nueva versión del proyecto.");
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["project-versions", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["projects"] }),
+      ]);
+      toast.success("Nueva versión creada correctamente.");
+      navigate(`/Proyecto/${newProjectId}/items`);
+    } catch (mutationError) {
+      const fieldErrors = mutationError.response?.data?.errors;
+      const firstFieldError = fieldErrors ? Object.values(fieldErrors).flat().find(Boolean) : null;
+      setError(firstFieldError || mutationError.response?.data?.message || mutationError.message || "No se pudo crear la nueva versión.");
+    } finally {
+      setCreatingVersion(false);
+    }
+  };
+
   const requestUpdatedExitDecision = ({ proceed } = {}) => new Promise((resolve) => {
     updatedExitResolverRef.current = resolve;
     setUpdatedExitDialog({ proceed });
@@ -865,16 +977,16 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
 
   return (
     <>
-    <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+    <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
       {error && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
 
-      <div className="grid gap-4 rounded-2xl border border-border/70 bg-muted/30 p-4 lg:grid-cols-[1fr_auto] lg:items-end">
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-          <div className="flex flex-col gap-2">
+      <div className="grid gap-3 rounded-xl border border-border/70 bg-muted/30 p-3 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="project-version" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Versión del proyecto
             </Label>
@@ -882,7 +994,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
               id="project-version"
               value={projectId}
               onChange={(event) => handleVersionChange(event.target.value)}
-              className="h-12 w-full rounded-2xl border border-border/80 bg-background px-3 text-sm"
+              className="h-10 w-full rounded-xl border border-border/80 bg-background px-3 text-sm"
             >
               {versions.map((version) => (
                 <option key={version.id_proyecto} value={version.id_proyecto}>
@@ -893,7 +1005,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
           </div>
 
           {currentVersionOption && (
-            <div className={`inline-flex h-12 items-center gap-2 rounded-full border px-4 text-sm font-semibold ${versionBadgeClass(currentVersionOption)}`}>
+            <div className={`inline-flex h-10 items-center gap-2 rounded-full border px-3 text-sm font-semibold ${versionBadgeClass(currentVersionOption)}`}>
               <History className="size-4" />
               {currentVersionOption.is_current_version ? "Vigente" : "Histórica"}
               {currentVersionOption.is_frozen ? " · Congelada" : ""}
@@ -901,17 +1013,40 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
           )}
         </div>
 
-        <div className="flex flex-col items-start gap-2 lg:items-end">
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
           <Button
             type="button"
             variant="outline"
-            className="rounded-full"
+            className="h-9 rounded-full px-3"
             onClick={handleOpenComparison}
-            disabled={!canCompareVersions}
+            disabled={!canCompareVersions || finalizingVersion || creatingVersion}
           >
             <GitCompare className="mr-2 size-4" />
             Comparar versiones
           </Button>
+          {canFinalizeCurrentVersion && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 rounded-full border-amber-300 bg-amber-50 px-3 text-amber-800 hover:bg-amber-100 hover:text-amber-900"
+              onClick={handleFinalizeCurrentVersion}
+              disabled={finalizingVersion || creatingVersion}
+            >
+              {finalizingVersion ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              {finalizingVersion ? "Finalizando..." : "Finalizar proyecto"}
+            </Button>
+          )}
+          {canCreateUpdatedVersion && (
+            <Button
+              type="button"
+              className="h-9 rounded-full px-3"
+              onClick={handleCreateUpdatedVersion}
+              disabled={creatingVersion || finalizingVersion}
+            >
+              {creatingVersion ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              {creatingVersion ? "Creando..." : "Crear nueva versión"}
+            </Button>
+          )}
           {!canCompareVersions && (
             <span className="text-xs text-muted-foreground">Solo existe una versión.</span>
           )}
@@ -1061,14 +1196,14 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
         </div>
       )}
 
-      {reportWarningsSummary?.has_warnings && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+      {visibleReportWarningsSummary?.has_warnings && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
           <div className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <div>
               <p className="font-semibold">Este proyecto tiene elementos desactivados.</p>
               <p>
-                Hay {reportWarningsSummary.items_count} item(s) y {reportWarningsSummary.inputs_count} insumo(s) que ya no estan activos. Los reportes usaran los datos registrados del proyecto.
+                Hay {visibleReportWarningsSummary.items_count} item(s) y {visibleReportWarningsSummary.inputs_count} insumo(s) que ya no estan activos. Los reportes usaran los datos registrados del proyecto.
               </p>
             </div>
           </div>
@@ -1084,38 +1219,40 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
-        <div className="rounded-2xl border border-border/70 bg-background/70 px-4 py-3">
+      <div className="grid gap-3 lg:grid-cols-[1.35fr_0.65fr]">
+        <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2">
           <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Proyecto</span>
-          <p className="mt-2 text-base font-semibold text-foreground">{displayProjectName}</p>
+          <p className="mt-1 text-sm font-semibold text-foreground">{displayProjectName}</p>
         </div>
 
-        <div className="rounded-2xl border border-slate-300 bg-slate-500 px-4 py-3 text-center text-white shadow-sm">
+        <div className="rounded-xl border border-slate-300 bg-slate-500 px-3 py-2 text-center text-white shadow-sm">
           <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-100">Precio actual proyecto</span>
-          <p className="mt-2 text-2xl font-semibold">Bs {formatNumber(total)}</p>
+          <p className="mt-1 text-xl font-semibold">Bs {formatNumber(total)}</p>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <Label className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Grupo</Label>
-          <Input value={selectedDetail?.nombre_grupo ?? ""} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled readOnly />
-        </div>
+      {selectedDetail && (
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Grupo</Label>
+            <Input value={selectedDetail.nombre_grupo ?? ""} className="h-10 rounded-xl border-border/80 bg-background/90" disabled readOnly />
+          </div>
 
-        <div className="flex flex-col gap-2">
-          <Label className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Subgrupo</Label>
-          <Input value={selectedDetail?.descripcion ?? ""} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled readOnly />
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Subgrupo</Label>
+            <Input value={selectedDetail.descripcion ?? ""} className="h-10 rounded-xl border-border/80 bg-background/90" disabled readOnly />
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="grid gap-4 lg:grid-cols-[0.75fr_1.3fr_0.55fr_0.55fr_0.55fr_0.55fr]">
-        <div className="flex flex-col gap-2">
+      <div className="grid gap-3 lg:grid-cols-[0.75fr_1.3fr_0.55fr_0.55fr_0.55fr_0.55fr]">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="modulo" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Módulo</Label>
           <select
             id="modulo"
             value={effectiveModuleId}
             onChange={(event) => handleDraftChange("moduleId", event.target.value)}
-            className="h-12 rounded-2xl border border-border/80 bg-background/90 px-4"
+            className="h-10 rounded-xl border border-border/80 bg-background/90 px-3"
             disabled={isReadOnly}
           >
             {moduleOptions.map((module) => (
@@ -1126,7 +1263,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
           </select>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="project-item-search" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Item</Label>
           <div className="relative">
             <ClearableSearchInput
@@ -1138,7 +1275,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
               onChange={(event) => handleItemSearchChange(event.target.value)}
               onFocus={() => setItemComboboxOpen(search.trim().length > 0)}
               placeholder="Buscar item..."
-              className="h-12 rounded-2xl border-border/80 bg-background/90"
+              className="h-10 rounded-xl border-border/80 bg-background/90"
               isLoading={isSearching}
               onClear={() => {
                 setSearch("");
@@ -1177,7 +1314,7 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="precio" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Precio</Label>
           <Input
             id="precio"
@@ -1185,31 +1322,31 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
             min="0"
             step="0.0001"
             value={effectivePrice}
-            className="h-12 rounded-2xl border-border/80 bg-muted/40 text-muted-foreground"
+            className="h-10 rounded-xl border-border/80 bg-muted/40 text-muted-foreground"
             disabled
             readOnly
           />
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="cantidad" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cantidad</Label>
-          <Input id="cantidad" type="number" min="0" step="0.01" value={draft.cantidad} onChange={(event) => handleDraftChange("cantidad", event.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled={isReadOnly} />
+          <Input id="cantidad" type="number" min="0" step="0.01" value={draft.cantidad} onChange={(event) => handleDraftChange("cantidad", event.target.value)} className="h-10 rounded-xl border-border/80 bg-background/90" disabled={isReadOnly} />
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="prioridad" className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Prioridad</Label>
-          <Input id="prioridad" type="number" min="1" step="1" value={draft.prioridad} onChange={(event) => handleDraftChange("prioridad", event.target.value)} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled={isReadOnly} />
+          <Input id="prioridad" type="number" min="1" step="1" value={draft.prioridad} onChange={(event) => handleDraftChange("prioridad", event.target.value)} className="h-10 rounded-xl border-border/80 bg-background/90" disabled={isReadOnly} />
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           <Label className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Unidad de medida</Label>
-          <Input value={selectedDetail?.abreviatura_unidad_medida ?? ""} className="h-12 rounded-2xl border-border/80 bg-background/90" disabled readOnly />
+          <Input value={selectedDetail?.abreviatura_unidad_medida ?? ""} className="h-10 rounded-xl border-border/80 bg-background/90" disabled readOnly />
           {isLoadingItem && <span className="text-xs text-muted-foreground">Cargando precio actual...</span>}
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-background/70 p-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-wrap gap-4">
+      <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-background/70 p-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-wrap gap-3">
           {formatOptions.map((option) => (
             <label key={option.value} className="flex items-center gap-2 text-sm text-muted-foreground">
               <input
@@ -1225,21 +1362,21 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
           ))}
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <Button type="button" variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700" onClick={handlePrintUnitPrices} disabled={!hasSavedRows || Boolean(loadingReport)}>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" className="h-9 rounded-full border-emerald-200 bg-emerald-50 px-3 text-emerald-700" onClick={handlePrintUnitPrices} disabled={!hasSavedRows || Boolean(loadingReport)}>
             {loadingReport === "unit-prices" && <Loader2 className="mr-2 size-4 animate-spin" />}
             {loadingReport === "unit-prices" ? "Validando..." : "Imprimir Precios Unitarios"}
           </Button>
-          <Button type="button" variant="outline" className="rounded-full border-slate-300 bg-slate-100 text-slate-700" onClick={handleOrder} disabled={isReadOnly}>
+          <Button type="button" variant="outline" className="h-9 rounded-full border-slate-300 bg-slate-100 px-3 text-slate-700" onClick={handleOrder} disabled={isReadOnly}>
             Ordenar
           </Button>
-          <Button type="button" variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700" onClick={handlePrintSpecifications} disabled={!hasSavedRows || Boolean(loadingReport)}>
+          <Button type="button" variant="outline" className="h-9 rounded-full border-emerald-200 bg-emerald-50 px-3 text-emerald-700" onClick={handlePrintSpecifications} disabled={!hasSavedRows || Boolean(loadingReport)}>
             {loadingReport === "specifications" && <Loader2 className="mr-2 size-4 animate-spin" />}
             {loadingReport === "specifications" ? "Validando..." : "Imprimir Todas Las Especificaciones"}
           </Button>
         </div>
         {rowsDirty && (
-          <p className="text-sm font-medium text-amber-700">
+          <p className="text-xs font-medium text-amber-700">
             Guarda los ítems antes de imprimir para incluir los cambios.
           </p>
         )}
@@ -1332,12 +1469,19 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
                         <td className="px-3 py-3 text-right">{formatNumber(row.precio, 2)}</td>
                         <td className="px-3 py-3 text-right">{formatNumber(partial, 2)}</td>
                         <td className="px-3 py-3">
-                          {row.especificacion_url ? (
+                          {hasTechnicalSpecification(row) ? (
                             <Button asChild variant="outline" className="rounded-full">
                               <a href={row.especificacion_url} target="_blank" rel="noopener noreferrer">Ver</a>
                             </Button>
                           ) : (
-                            <Button type="button" variant="outline" className="rounded-full" onClick={() => setMissingSpecificationItem(row)}>Ver</Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="rounded-full border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800"
+                              onClick={() => setMissingSpecificationItem(row)}
+                            >
+                              Ver
+                            </Button>
                           )}
                         </td>
                         <td className="px-3 py-3 text-center">{row.prioridad ?? index + 1}</td>
@@ -1384,6 +1528,26 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
         )}
       </div>
     </form>
+
+    <Dialog open={saveSuccessOpen} onOpenChange={setSaveSuccessOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Ítems guardados correctamente</DialogTitle>
+          <DialogDescription>
+            ¿Deseas continuar editando este proyecto o volver al listado de proyectos?
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" className="rounded-full" onClick={() => setSaveSuccessOpen(false)}>
+            Seguir en esta página
+          </Button>
+          <Button type="button" className="rounded-full" onClick={() => onSuccess?.()}>
+            Volver a proyectos
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <Dialog open={Boolean(moduleMove)} onOpenChange={(open) => !open && setModuleMove(null)}>
       <DialogContent className="max-w-lg">
@@ -1460,6 +1624,26 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
       </DialogContent>
     </Dialog>
 
+    <Dialog open={Boolean(pendingMissingSpecificationRow)} onOpenChange={(open) => !open && setPendingMissingSpecificationRow(null)}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Especificación técnica no cargada</DialogTitle>
+          <DialogDescription>
+            El ítem {pendingMissingSpecificationRow?.item || "seleccionado"} no tiene una especificación técnica cargada. ¿Deseas agregarlo de todos modos?
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" className="rounded-full" onClick={() => setPendingMissingSpecificationRow(null)}>
+            Cancelar
+          </Button>
+          <Button type="button" className="rounded-full bg-rose-600 text-white hover:bg-rose-500" onClick={handleConfirmMissingSpecificationAdd}>
+            Agregar de todos modos
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     <Dialog open={Boolean(reportErrorDialog)}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
@@ -1493,15 +1677,18 @@ const ProjectItemsForm = forwardRef(function ProjectItemsForm({ projectId, proje
                     )}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">{item.reason || "Tiene datos pendientes para generar el reporte."}</p>
+                  {reportFileResolutionMessage(item) && (
+                    <p className="mt-1 text-sm font-medium text-amber-700">{reportFileResolutionMessage(item)}</p>
+                  )}
                 </div>
                 {isUploaded ? (
                   <div className="inline-flex shrink-0 items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
                     <CheckCircle2 className="size-4" />
-                    Listo
+                    Archivo reemplazado
                   </div>
                 ) : (
                 <Button type="button" className="shrink-0 rounded-full" onClick={() => handleGoToItemFiles(item)}>
-                  Cargar archivo
+                  {reportFileActionLabel(item)}
                 </Button>
                 )}
               </div>

@@ -36,8 +36,8 @@ class StoreItemRequest extends FormRequest
             'unit_measure_id' => ['required', 'integer', 'exists:unidad_medida,id_unidad_medida'],
             'status' => ['required', 'string', 'size:2', 'in:AC,DC'],
             'code' => ['nullable', 'string', 'max:30'],
-            'specification' => ['nullable', 'string', 'max:200'],
-            'sheet' => ['nullable', 'string', 'max:200'],
+            'specification' => ['nullable', 'string', 'max:2048'],
+            'sheet' => ['nullable', 'string', 'max:2048'],
         ];
     }
 

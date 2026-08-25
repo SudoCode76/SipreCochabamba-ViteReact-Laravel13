@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Item;
 
+use App\Models\Item;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SystemFunction;
@@ -114,6 +115,36 @@ class GeneralAndObrasItemApiTest extends TestCase
             ->assertJsonPath('data.items.0.id_item', 1)
             ->assertJsonPath('data.items.1.id_item', 2)
             ->assertJsonPath('data.items.2.id_item', 3);
+    }
+
+    public function test_general_list_filters_active_items_without_specifications(): void
+    {
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->seedGeneralPercentages();
+
+        $this->createItemRecord(['id_item' => 1, 'item' => 'A SIN ARCHIVO', 'especificacion' => null]);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'B SIN ARCHIVO', 'especificacion' => '']);
+        $this->createItemRecord(['id_item' => 3, 'item' => 'C SIN ARCHIVO', 'especificacion' => '   ']);
+        $this->createItemRecord(['id_item' => 4, 'item' => 'D REMOTO', 'especificacion' => 'https://repositorio.test/especificacion.pdf']);
+        $this->createItemRecord(['id_item' => 5, 'item' => 'E LOCAL', 'especificacion' => 'archivos/especificaciones/item.pdf']);
+        $this->createItemRecord(['id_item' => 6, 'item' => 'F INACTIVO', 'especificacion' => null, 'estado' => 'DC']);
+
+        $this->getJson('/api/v1/items?per_page=2&order=missing_specifications')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 3)
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.items.0.id_item', 1)
+            ->assertJsonPath('data.items.1.id_item', 2);
+
+        $this->getJson('/api/v1/items?per_page=2&page=2&order=missing_specifications')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 3)
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id_item', 3);
     }
 
     public function test_general_list_calculated_price_matches_legacy_pca_rules(): void
@@ -442,14 +473,18 @@ class GeneralAndObrasItemApiTest extends TestCase
         ]);
 
         $response->assertOk()
-            ->assertJsonPath('data.item.specification', 'archivos/especificaciones/especificacion_1.pdf')
+            ->assertJsonPath('data.item.specification', 'https://repository.test/files/document-1.pdf')
             ->assertJsonPath('data.item.sheet', 'archivos/items/fichas/ficha-anterior.pdf');
 
         $this->assertDatabaseHas('item', [
             'id_item' => 1,
             'ficha' => 'archivos/items/fichas/ficha-anterior.pdf',
         ]);
-        Storage::disk('public')->assertExists($response->json('data.item.specification'));
+        $this->assertDatabaseHas('repository_file_links', [
+            'linkable_type' => Item::class,
+            'linkable_id' => 1,
+            'field' => 'especificacion',
+        ]);
     }
 
     public function test_can_update_both_item_files_and_reject_oversized_upload(): void
@@ -469,10 +504,10 @@ class GeneralAndObrasItemApiTest extends TestCase
         ]);
 
         $response->assertOk()
-            ->assertJsonPath('data.item.specification', 'archivos/especificaciones/especificacion_1.pdf')
-            ->assertJsonPath('data.item.sheet', 'archivos/fichas_tecnicas/ficha_1.pdf');
-        Storage::disk('public')->assertExists($response->json('data.item.specification'));
-        Storage::disk('public')->assertExists($response->json('data.item.sheet'));
+            ->assertJsonPath('data.item.specification', 'https://repository.test/files/document-1.pdf')
+            ->assertJsonPath('data.item.sheet', 'https://repository.test/files/document-2.pdf');
+        $this->assertDatabaseCount('repository_files', 2);
+        $this->assertDatabaseCount('repository_file_links', 2);
 
         $this->withHeaders(['Accept' => 'application/json'])->post('/api/v1/items/1/files', [
             'item' => 'ITEM FNDR TEST',
