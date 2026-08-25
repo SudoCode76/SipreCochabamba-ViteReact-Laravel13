@@ -5,13 +5,13 @@ const Dialog = React.forwardRef(({ open, onOpenChange, children, ...props }, ref
   if (!open) return null
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center"
+      className="fixed inset-0 z-[2000] flex items-center justify-center"
       onClick={(e) => {
         if (e.target === e.currentTarget && onOpenChange) onOpenChange(false)
       }}
     >
       <div className="absolute inset-0 bg-background/45 backdrop-blur-sm" />
-      <div ref={ref} className="relative z-[61]" {...props}>
+      <div ref={ref} className="relative z-[2001]" {...props}>
         {children}
       </div>
     </div>
