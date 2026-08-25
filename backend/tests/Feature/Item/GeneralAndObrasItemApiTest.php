@@ -117,6 +117,36 @@ class GeneralAndObrasItemApiTest extends TestCase
             ->assertJsonPath('data.items.2.id_item', 3);
     }
 
+    public function test_general_list_filters_active_items_without_specifications(): void
+    {
+        Sanctum::actingAs($this->createGeneralUserWithPermissions(['INDEX']));
+
+        $this->createUnitMeasure();
+        $this->createGroup();
+        $this->createSubgroup();
+        $this->seedGeneralPercentages();
+
+        $this->createItemRecord(['id_item' => 1, 'item' => 'A SIN ARCHIVO', 'especificacion' => null]);
+        $this->createItemRecord(['id_item' => 2, 'item' => 'B SIN ARCHIVO', 'especificacion' => '']);
+        $this->createItemRecord(['id_item' => 3, 'item' => 'C SIN ARCHIVO', 'especificacion' => '   ']);
+        $this->createItemRecord(['id_item' => 4, 'item' => 'D REMOTO', 'especificacion' => 'https://repositorio.test/especificacion.pdf']);
+        $this->createItemRecord(['id_item' => 5, 'item' => 'E LOCAL', 'especificacion' => 'archivos/especificaciones/item.pdf']);
+        $this->createItemRecord(['id_item' => 6, 'item' => 'F INACTIVO', 'especificacion' => null, 'estado' => 'DC']);
+
+        $this->getJson('/api/v1/items?per_page=2&order=missing_specifications')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 3)
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.items.0.id_item', 1)
+            ->assertJsonPath('data.items.1.id_item', 2);
+
+        $this->getJson('/api/v1/items?per_page=2&page=2&order=missing_specifications')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 3)
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id_item', 3);
+    }
+
     public function test_general_list_calculated_price_matches_legacy_pca_rules(): void
     {
         Sanctum::actingAs($this->createLegacyAuthUser());

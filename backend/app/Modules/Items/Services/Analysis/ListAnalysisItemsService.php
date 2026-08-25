@@ -30,8 +30,10 @@ class ListAnalysisItemsService
         if ($this->wantsDuplicates($filters)) {
             // The duplicate view applies its own order after all filters are in place.
         } elseif ($order === 'missing_specifications') {
-            $query->orderByRaw("CASE WHEN item.especificacion IS NULL OR TRIM(item.especificacion) = '' THEN 0 ELSE 1 END")
-                ->orderBy('groupCatalog.nombre_grupo')
+            $query->where(function (Builder $query): void {
+                $query->whereNull('item.especificacion')
+                    ->orWhereRaw("TRIM(item.especificacion) = ''");
+            })->orderBy('groupCatalog.nombre_grupo')
                 ->orderBy('subgroupCatalog.descripcion')
                 ->orderBy('item.item')
                 ->orderBy('item.id_item');
